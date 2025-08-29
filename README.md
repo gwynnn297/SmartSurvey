@@ -1,4 +1,4 @@
-# JobHunter - Hướng dẫn cài đặt và chạy dự án
+# smartservey - Hướng dẫn cài đặt và chạy dự án
 
 ## Yêu cầu hệ thống
 
@@ -40,7 +40,7 @@
   ```bash
   mvn spring-boot:run
   ```
-- Hoặc chạy file main: `vn.hoidanit.jobhunter.JobhunterApplication` (cài đặt Spring Boot Extension Pack) để có thể chạy được
+- Hoặc chạy file main: `/Users/tt/Documents/SmartServey/backend/src/main/resources/application.properties` (cài đặt Spring Boot Extension Pack) để có thể chạy được
 
 ### 6. Truy cập API
 
