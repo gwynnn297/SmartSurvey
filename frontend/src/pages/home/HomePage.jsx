@@ -222,7 +222,7 @@ const HomePage = () => {
                             <a href="#contact">Liên hệ</a>
                             <a href="#support">Hỗ trợ</a>
                         </div>
-                    </div>
+                    </div>  
                 </div>
                 <div className="footer-bottom">
                     <p>© 2025 SmartSurvey. Tất cả quyền được bảo lưu.</p>
