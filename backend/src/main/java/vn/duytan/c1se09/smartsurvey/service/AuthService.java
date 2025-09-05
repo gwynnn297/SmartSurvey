@@ -58,8 +58,8 @@ public class AuthService {
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        // Tạo JWT token
-        String jwt = jwtUtils.generateJwtToken(authentication);
+        // Tạo JWT token với role
+        String jwt = jwtUtils.generateJwtToken(authentication, savedUser.getRole().name());
 
         // Trả về response
         return new AuthResponse(
@@ -92,8 +92,8 @@ public class AuthService {
         User user = userRepository.findByEmail(springUser.getUsername())
                 .orElseThrow(() -> new RuntimeException("User không tồn tại"));
 
-        // Tạo JWT token
-        String jwt = jwtUtils.generateJwtToken(authentication);
+        // Tạo JWT token với role
+        String jwt = jwtUtils.generateJwtToken(authentication, user.getRole().name());
 
         // Trả về response
         return new AuthResponse(

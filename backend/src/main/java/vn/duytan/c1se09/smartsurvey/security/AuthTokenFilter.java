@@ -31,6 +31,12 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
+        String path = request.getServletPath();
+        // Bỏ qua kiểm tra JWT cho các endpoint public
+        if (path.startsWith("/auth/") || path.startsWith("/api/public/") || path.startsWith("/actuator/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         try {
             String jwt = parseJwt(request);
             if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
@@ -59,4 +65,5 @@ public class AuthTokenFilter extends OncePerRequestFilter {
 
         return null;
     }
+
 }
