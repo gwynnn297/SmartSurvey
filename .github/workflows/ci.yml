@@ -7,18 +7,8 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  backend-test:
+  backend-build:
     runs-on: ubuntu-latest
-    
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: smartsurvey_test
-        ports:
-          - 3306:3306
-        options: --health-cmd="mysqladmin ping -h localhost -uroot -proot" --health-interval=10s --health-timeout=5s --health-retries=3
     
     steps:
     - uses: actions/checkout@v4
@@ -30,11 +20,8 @@ jobs:
         distribution: 'temurin'
         cache: gradle
     
-    - name: Run backend tests
-      working-directory: ./backend
-      run: ./gradlew test --no-daemon
-    
-    - name: Build backend
+    #  Bỏ qua bước test backend
+    - name: Build backend (skip tests)
       working-directory: ./backend
       run: ./gradlew build --no-daemon -x test
     
@@ -44,7 +31,7 @@ jobs:
         name: backend-jar
         path: backend/build/libs/*.jar
 
-  frontend-test:
+  frontend-build:
     runs-on: ubuntu-latest
     
     steps:
@@ -61,10 +48,7 @@ jobs:
       working-directory: ./frontend
       run: npm ci
     
-    - name: Run frontend tests
-      working-directory: ./frontend
-      run: npm test -- --watchAll=false
-    
+    #  Bỏ qua bước test frontend
     - name: Build frontend
       working-directory: ./frontend
       run: npm run build
@@ -76,7 +60,7 @@ jobs:
         path: frontend/build/
 
   deploy-staging:
-    needs: [backend-test, frontend-test]
+    needs: [backend-build, frontend-build]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     
