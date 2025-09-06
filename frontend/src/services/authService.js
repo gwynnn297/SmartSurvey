@@ -1,8 +1,6 @@
 import axios from "axios";
+import { API_URL_LOGIN, API_URL_REGISTER } from '../api/Api_Login_Register';
 
-
-const API_URL_LOGIN = 'https://www.apirequest.in/user/api/login';
-const API_URL_REGISTER = 'https://www.apirequest.in/user/api';
 export const register = async (fullName, email, password) => {
   try {
     console.log('Attempting register with:', { fullName, email, password });
