@@ -9,6 +9,16 @@
             "projectName": "backend",
             "args": "",
             "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "java",
+            "name": "Spring Boot-SmartsurveyApplication<SmartSurvey-backend>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "vn.duytan.c1se09.smartsurvey.SmartsurveyApplication",
+            "projectName": "SmartSurvey-backend",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
         }
     ]
 }

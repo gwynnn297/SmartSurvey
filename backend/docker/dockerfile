@@ -1,0 +1,17 @@
+FROM openjdk:17-jdk-slim
+
+WORKDIR /app
+
+COPY build.gradle.kts settings.gradle.kts ./
+COPY gradle gradle
+COPY gradlew .
+
+RUN ./gradlew dependencies --no-daemon
+
+COPY src ./src
+
+RUN ./gradlew build --no-daemon -x test
+
+EXPOSE 8080
+
+CMD ["java", "-jar", "build/libs/smartsurvey-0.0.1-SNAPSHOT.jar"]
