@@ -3,11 +3,12 @@ package vn.duytan.c1se09.smartsurvey.controller;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import vn.duytan.c1se09.smartsurvey.domain.response.auth.AuthResponseDTO;
 import vn.duytan.c1se09.smartsurvey.service.AuthService;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
-import vn.duytan.c1se09.smartsurvey.util.dto.auth.AuthResponse;
-import vn.duytan.c1se09.smartsurvey.util.dto.auth.LoginRequest;
-import vn.duytan.c1se09.smartsurvey.util.dto.auth.RegisterRequest;
+import vn.duytan.c1se09.smartsurvey.domain.request.auth.LoginRequestDTO;
+import vn.duytan.c1se09.smartsurvey.domain.request.auth.RegisterRequestDTO;
 
 import jakarta.validation.Valid;
 import java.util.HashMap;
@@ -25,9 +26,9 @@ public class AuthController {
 
     @PostMapping("/register")
     @ApiMessage("Register a new user")
-    public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest registerRequest) {
+    public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequestDTO registerRequest) {
         try {
-            AuthResponse authResponse = authService.registerUser(registerRequest);
+            AuthResponseDTO authResponse = authService.registerUser(registerRequest);
             return ResponseEntity.ok(authResponse);
         } catch (RuntimeException e) {
             Map<String, String> errorResponse = new HashMap<>();
@@ -39,9 +40,9 @@ public class AuthController {
 
     @PostMapping("/login")
     @ApiMessage("Login a user")
-    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
+    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequestDTO loginRequest) {
         try {
-            AuthResponse authResponse = authService.authenticateUser(loginRequest);
+            AuthResponseDTO authResponse = authService.authenticateUser(loginRequest);
             return ResponseEntity.ok(authResponse);
         } catch (Exception e) {
             Map<String, String> errorResponse = new HashMap<>();
