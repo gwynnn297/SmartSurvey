@@ -51,10 +51,12 @@ export const register = async (fullName, email, password) => {
     });
     console.log('Register response:', response.data);
     return response.data; // AuthResponse với token
-  } catch (error) {
-    console.error('Register error:', error.response?.data || error.message);
-    throw error;
-  }
+} catch (error) {
+    const backendMessage = error.response?.data?.message;
+    console.error("Register API error:", error); // log toàn bộ error gốc
+    throw new Error(backendMessage || "Có lỗi xảy ra, vui lòng thử lại");
+}
+
 };
 
 export const login = async (email, password) => {
@@ -64,8 +66,9 @@ export const login = async (email, password) => {
     console.log('Login response:', response.data);
     return response.data; // { token, user }
   } catch (error) {
-    console.error('Login error:', error.response?.data || error.message);
-    throw error;
+    const backendMessage = error.response?.data?.message;
+    console.error('Login error:', backendMessage || error.message);
+    throw new Error(backendMessage || "Đăng nhập thất bại");
   }
 };
 

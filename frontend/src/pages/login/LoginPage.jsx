@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from "../../services/authService";
-import HeaderComponent from "../../components/HeaderComponent";
 import './LoginPage.css';
 
 const Login = () => {
@@ -19,12 +18,10 @@ const Login = () => {
         try {
             const data = await login(email, password);
 
-            // Backend trả về token trong data.token
             const token = data.token;
             if (token) {
                 localStorage.setItem('token', token);
 
-                // Lưu thông tin user từ response
                 const userInfo = {
                     name: data.fullName || email?.split('@')[0] || 'User',
                     email: data.email,
@@ -61,9 +58,15 @@ const Login = () => {
     const handleRegister = () => {
         navigate("/register");
     };
+
     const handleHome = () => {
         navigate("/home");
     };
+
+    const handleForgotPassword = () => {
+        navigate("/forgot-password");
+    };
+
     return (
         <div className="login-container">
             {/* Header */}
@@ -115,7 +118,13 @@ const Login = () => {
                             <label>
                                 <input type="checkbox" /> Ghi nhớ đăng nhập
                             </label>
-                            <a href="#">Quên mật khẩu?</a>
+                            <button 
+                                type="button" 
+                                className="link-button" 
+                                onClick={handleForgotPassword}
+                            >
+                                Quên mật khẩu?
+                            </button>
                         </div>
 
                         <button type="submit" className="btn-primary" disabled={isLoading}>
@@ -124,11 +133,6 @@ const Login = () => {
                     </form>
 
                     {error && <p className="error">{error}</p>}
-
-                    {/* <div className="divider">hoặc</div>
-
-                    <button className="btn-google" disabled={isLoading}>Đăng nhập với Google</button>
-                    <button className="btn-facebook" disabled={isLoading}>Đăng nhập với Facebook</button> */}
 
                     <p className="register-text">
                         Chưa có tài khoản? <a href="/register">Đăng ký ngay</a>

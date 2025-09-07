@@ -22,49 +22,49 @@ const Register = () => {
         });
     };
 
+const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
-        setSuccess('');
+    if (formData.password !== formData.confirmPassword) {
+        setError('Mật khẩu xác nhận không khớp!');
+        return;
+    }
 
-        if (formData.password !== formData.confirmPassword) {
-            setError('Mật khẩu xác nhận không khớp!');
-            return;
+    setIsLoading(true);
+    try {
+        const response = await register(
+            formData.fullName,
+            formData.email,
+            formData.password
+        );
+
+        if (response?.token) {
+            setSuccess('🎉 Đăng ký thành công! Đang chuyển đến trang đăng nhập...');
+            setTimeout(() => {
+                navigate('/login');
+            }, 2000);
+        } else {
+            setError('Đăng ký thất bại: API không trả dữ liệu hợp lệ!');
         }
+    } catch (err) {
+        console.error("Register page error:", err);
 
-        setIsLoading(true);
-        try {
-            const response = await register(
-                formData.fullName,
-                formData.email,
-                formData.password
-            );
+        setError(err.message || "Đăng ký thất bại! Vui lòng kiểm tra lại thông tin.");
 
-            // Backend trả về AuthResponse với token
-            if (response?.token) {
-                setIsLoading(false);
-                setSuccess('🎉 Đăng ký thành công! Đang chuyển đến trang đăng nhập...');
+        // Reset password để nhập lại
+        setFormData((prev) => ({
+            ...prev,
+            password: '',
+            confirmPassword: ''
+        }));
 
-                // Delay 2 giây trước khi chuyển trang để người dùng đọc được thông báo
-                setTimeout(() => {
-                    navigate('/login');
-                }, 2000);
-            } else {
-                setIsLoading(false);
-                setError('Đăng ký thất bại: API không trả dữ liệu hợp lệ!');
-            }
-        } catch (err) {
-            setIsLoading(false);
-            if (err.response?.data?.error) {
-                setError(`Đăng ký thất bại: ${err.response.data.error}`);
-            } else if (err.message) {
-                setError(`Lỗi: ${err.message}`);
-            } else {
-                setError('Đăng ký thất bại! Vui lòng kiểm tra lại thông tin.');
-            }
-        }
-    };
+        setIsLoading(false); // mở lại input để nhập tiếp
+    }
+};
+
+
 
 
     const handleLogin = () => {
