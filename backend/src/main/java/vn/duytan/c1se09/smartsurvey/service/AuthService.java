@@ -10,12 +10,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 import vn.duytan.c1se09.smartsurvey.domain.User;
+import vn.duytan.c1se09.smartsurvey.domain.response.auth.AuthResponseDTO;
 import vn.duytan.c1se09.smartsurvey.repository.UserRepository;
 import vn.duytan.c1se09.smartsurvey.security.JwtUtils;
 import vn.duytan.c1se09.smartsurvey.util.constant.RoleEnum;
-import vn.duytan.c1se09.smartsurvey.util.dto.auth.AuthResponse;
-import vn.duytan.c1se09.smartsurvey.util.dto.auth.LoginRequest;
-import vn.duytan.c1se09.smartsurvey.util.dto.auth.RegisterRequest;
+import vn.duytan.c1se09.smartsurvey.domain.request.auth.LoginRequestDTO;
+import vn.duytan.c1se09.smartsurvey.domain.request.auth.RegisterRequestDTO;
 
 /**
  * Service xử lý logic authentication
@@ -30,7 +30,7 @@ public class AuthService {
     private final JwtUtils jwtUtils;
 
     @Transactional
-    public AuthResponse registerUser(RegisterRequest registerRequest) {
+    public AuthResponseDTO registerUser(RegisterRequestDTO registerRequest) {
         // Kiểm tra email tồn tại
         if (userRepository.existsByEmail(registerRequest.getEmail())) {
             throw new RuntimeException("Email đã được sử dụng: " + registerRequest.getEmail());
@@ -62,7 +62,7 @@ public class AuthService {
         String jwt = jwtUtils.generateJwtToken(authentication, savedUser.getRole().name());
 
         // Trả về response
-        return new AuthResponse(
+        return new AuthResponseDTO(
                 jwt,
                 savedUser.getUserId(),
                 savedUser.getEmail(),
@@ -71,7 +71,7 @@ public class AuthService {
                 savedUser.getIsActive());
     }
 
-    public AuthResponse authenticateUser(LoginRequest loginRequest) {
+    public AuthResponseDTO authenticateUser(LoginRequestDTO loginRequest) {
         // Authentication
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
@@ -96,7 +96,7 @@ public class AuthService {
         String jwt = jwtUtils.generateJwtToken(authentication, user.getRole().name());
 
         // Trả về response
-        return new AuthResponse(
+        return new AuthResponseDTO(
                 jwt,
                 user.getUserId(),
                 user.getEmail(),

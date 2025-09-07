@@ -1,4 +1,4 @@
-package vn.duytan.c1se09.smartsurvey.util.dto.auth;
+package vn.duytan.c1se09.smartsurvey.domain.response.auth;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -8,7 +8,7 @@ import lombok.Setter;
  */
 @Getter
 @Setter
-public class AuthResponse {
+public class AuthResponseDTO {
 
     private String token;
     private String type = "Bearer";
@@ -18,10 +18,10 @@ public class AuthResponse {
     private String role;
     private Boolean isActive;
 
-    public AuthResponse() {
+    public AuthResponseDTO() {
     }
 
-    public AuthResponse(String token, Long userId, String email, String fullName, String role, Boolean isActive) {
+    public AuthResponseDTO(String token, Long userId, String email, String fullName, String role, Boolean isActive) {
         this.token = token;
         this.id = userId;
         this.email = email;

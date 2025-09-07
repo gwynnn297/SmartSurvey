@@ -1,4 +1,4 @@
-package vn.duytan.c1se09.smartsurvey.util.dto.auth;
+package vn.duytan.c1se09.smartsurvey.domain.request.auth;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -11,7 +11,7 @@ import lombok.Setter;
  */
 @Getter
 @Setter
-public class RegisterRequest {
+public class RegisterRequestDTO {
 
     @Email(message = "Email không hợp lệ")
     @NotBlank(message = "Email không được để trống")
