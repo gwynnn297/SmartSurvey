@@ -11,6 +11,7 @@ const Register = () => {
         confirmPassword: ''
     });
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
 
@@ -22,42 +23,48 @@ const Register = () => {
     };
 
 
-   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
 
-    if (formData.password !== formData.confirmPassword) {
-        setError('Mật khẩu xác nhận không khớp!');
-        return;
-    }
-
-    setIsLoading(true);
-    try {
-        const response = await register(
-            formData.fullName,
-            formData.email,
-            formData.password
-        );
-
-        if (response?.msg) {
-            setIsLoading(false);
-            alert("Đăng ký thành công!"); // Hoặc dùng setSuccess nếu bạn muốn hiện trong giao diện
-            navigate('/login');
-        } else {
-            setIsLoading(false);
-            setError('Đăng ký thất bại: API không trả dữ liệu hợp lệ!');
+        if (formData.password !== formData.confirmPassword) {
+            setError('Mật khẩu xác nhận không khớp!');
+            return;
         }
-    } catch (err) {
-        setIsLoading(false);
-        if (err.response?.data?.error) {
-            setError(`Đăng ký thất bại: ${err.response.data.error}`);
-        } else if (err.message) {
-            setError(`Lỗi: ${err.message}`);
-        } else {
-            setError('Đăng ký thất bại! Vui lòng kiểm tra lại thông tin.');
+
+        setIsLoading(true);
+        try {
+            const response = await register(
+                formData.fullName,
+                formData.email,
+                formData.password
+            );
+
+            // Backend trả về AuthResponse với token
+            if (response?.token) {
+                setIsLoading(false);
+                setSuccess('🎉 Đăng ký thành công! Đang chuyển đến trang đăng nhập...');
+
+                // Delay 2 giây trước khi chuyển trang để người dùng đọc được thông báo
+                setTimeout(() => {
+                    navigate('/login');
+                }, 2000);
+            } else {
+                setIsLoading(false);
+                setError('Đăng ký thất bại: API không trả dữ liệu hợp lệ!');
+            }
+        } catch (err) {
+            setIsLoading(false);
+            if (err.response?.data?.error) {
+                setError(`Đăng ký thất bại: ${err.response.data.error}`);
+            } else if (err.message) {
+                setError(`Lỗi: ${err.message}`);
+            } else {
+                setError('Đăng ký thất bại! Vui lòng kiểm tra lại thông tin.');
+            }
         }
-    }
-};
+    };
 
 
     const handleLogin = () => {
@@ -148,12 +155,13 @@ const Register = () => {
                             />
                         </div>
 
-                        <button type="submit" className="btn-primary" disabled={isLoading}>
-                            {isLoading ? 'Đang đăng ký...' : 'Đăng Ký'}
+                        <button type="submit" className="btn-primary" disabled={isLoading || success}>
+                            {isLoading ? 'Đang đăng ký...' : success ? 'Đang chuyển trang...' : 'Đăng Ký'}
                         </button>
                     </form>
 
                     {error && <p className="error">{error}</p>}
+                    {success && <p className="success">{success}</p>}
 
                     {/* <div className="divider">hoặc</div>
 

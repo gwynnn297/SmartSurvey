@@ -1,27 +1,66 @@
 import axios from "axios";
-import { API_URL_LOGIN, API_URL_REGISTER } from '../api/Api_Login_Register';
+
+// Tạo axios instance với base config
+const apiClient = axios.create({
+  baseURL: 'http://localhost:8080',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  }
+});
+
+// Request interceptor để tự động thêm token vào header
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor để xử lý lỗi 401
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token hết hạn hoặc không hợp lệ
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      // Redirect về login nếu không phải đang ở trang login
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export const register = async (fullName, email, password) => {
   try {
     console.log('Attempting register with:', { fullName, email, password });
-    const response = await axios.post(API_URL_REGISTER, {
-      name: fullName,
+    const response = await apiClient.post('/auth/register', {
+      fullName,
       email,
-      password
+      password,
+      confirmPassword: password // Backend yêu cầu confirmPassword
     });
     console.log('Register response:', response.data);
-    return response.data; // { msg: "user is created" }
+    return response.data; // AuthResponse với token
   } catch (error) {
     console.error('Register error:', error.response?.data || error.message);
     throw error;
   }
 };
 
-
 export const login = async (email, password) => {
   try {
     console.log('Attempting login with:', { email, password });
-    const response = await axios.post(API_URL_LOGIN, { email, password });
+    const response = await apiClient.post('/auth/login', { email, password });
     console.log('Login response:', response.data);
     return response.data; // { token, user }
   } catch (error) {
@@ -34,3 +73,6 @@ export const logout = () => {
   localStorage.removeItem("token");
   localStorage.removeItem("user");
 };
+
+// Export apiClient để sử dụng cho các API khác
+export { apiClient };

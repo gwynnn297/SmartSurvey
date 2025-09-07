@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from "../../services/authService";
+import HeaderComponent from "../../components/HeaderComponent";
 import './LoginPage.css';
 
 const Login = () => {
@@ -18,21 +19,33 @@ const Login = () => {
         try {
             const data = await login(email, password);
 
-            // reqres.in trả về token trong data.token
-            if (data.token) {
-                localStorage.setItem('token', data.token);
-                // Tạo thông tin user tối thiểu để hiển thị trên Header/Dashboard
-                const derivedName = email?.split('@')[0] || 'User';
-                const userObject = { name: derivedName, email };
-                localStorage.setItem('user', JSON.stringify(userObject));
+            // Backend trả về token trong data.token
+            const token = data.token;
+            if (token) {
+                localStorage.setItem('token', token);
+
+                // Lưu thông tin user từ response
+                const userInfo = {
+                    name: data.fullName || email?.split('@')[0] || 'User',
+                    email: data.email,
+                    id: data.id,
+                    role: data.role
+                };
+                localStorage.setItem('user', JSON.stringify(userInfo));
+
+                console.log('Login successful, token saved:', token);
                 navigate('/dashboard');
             } else {
-                setError('Đăng nhập thất bại: Không nhận được token!');
+                setError('Đăng nhập thất bại: Không nhận được token từ server!');
             }
         } catch (err) {
             console.error('Login error:', err);
-            if (err.response?.data?.error) {
+            if (err.response?.data?.message) {
+                setError(`Đăng nhập thất bại: ${err.response.data.message}`);
+            } else if (err.response?.data?.error) {
                 setError(`Đăng nhập thất bại: ${err.response.data.error}`);
+            } else if (err.message) {
+                setError(`Lỗi kết nối: ${err.message}`);
             } else {
                 setError('Đăng nhập thất bại! Vui lòng kiểm tra email và mật khẩu.');
             }

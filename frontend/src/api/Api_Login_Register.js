@@ -1,2 +1,2 @@
-export const API_URL_LOGIN = 'https://www.apirequest.in/user/api/login';
-export const API_URL_REGISTER = 'https://www.apirequest.in/user/api';
+export const API_URL_LOGIN = 'http://localhost:8080/auth/login';
+export const API_URL_REGISTER = 'http://localhost:8080/auth/register';

@@ -122,6 +122,15 @@
     font-size: 20px;
 }
 
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 200px;
+    font-size: 18px;
+    color: #666;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .dashboard-content {

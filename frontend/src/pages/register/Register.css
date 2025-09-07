@@ -2,6 +2,7 @@
     min-height: 100vh;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
+
 /* Header */
 .header {
     display: flex;
@@ -189,6 +190,29 @@
     margin-bottom: 20px;
     font-size: 14px;
     border: 1px solid #fecaca;
+}
+
+.success {
+    color: #28a745;
+    background: #f0fff4;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 14px;
+    border: 1px solid #c3e6cb;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .divider {
