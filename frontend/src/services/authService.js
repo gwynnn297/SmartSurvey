@@ -28,6 +28,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+<<<<<<< HEAD
       // Token hết hạn hoặc không hợp lệ
       localStorage.removeItem('token');
       localStorage.removeItem('user');
@@ -36,6 +37,10 @@ apiClient.interceptors.response.use(
       if (window.location.pathname !== '/login' && window.location.pathname !== '/change-password') {
         window.location.href = '/login';
       }
+=======
+      // 401 từ các API không nên xóa token ngay.
+      // Trả lỗi về cho UI xử lý (ví dụ: hiển thị toast, yêu cầu đăng nhập lại khi cần).
+>>>>>>> 082d322bdfe3b4abcfb5d5766f62b56fc599ccd0
     }
     return Promise.reject(error);
   }

@@ -4,6 +4,8 @@ import LoginPage from "./pages/login/LoginPage";
 import Register from "./pages/register/Register";
 import Dashboard from "./pages/dashboard/DashboardPage";
 import ForgotPassword from "./pages/ForgotPassword/ForgotPassword";
+import CreateAI from "./pages/createsurvey/CreateAI";
+import CreateSurvey from "./pages/createsurvey/CreateSurvey";
 import Profile from "./pages/Profile/Profile";
 import ChangePassword from "./pages/ChangePassword/ChangePassword";
 
@@ -25,22 +27,6 @@ function App() {
           element={
             <PrivateRoute>
               <Dashboard />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/profile"
-          element={
-            <PrivateRoute>
-              <Profile />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/change-password"
-          element={
-            <PrivateRoute>
-              <ChangePassword />
             </PrivateRoute>
           }
         />

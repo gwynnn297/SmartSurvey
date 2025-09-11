@@ -2,6 +2,25 @@ import { apiClient } from './authService';
 
 // API service chung cho các endpoint khác
 export const apiService = {
+    // Lấy tổng quan dashboard
+    // Ví dụ API: GET /dashboard/overview
+    // Response mẫu:
+    // {
+    //   "totalSurveys": 25,
+    //   "totalResponses": 1342,
+    //   "activeSurveys": 6,
+    //   "completionRate": 78.5
+    // }
+    getDashboardOverview: async () => {
+        try {
+            const response = await apiClient.get('/dashboard/overview');
+            return response.data;
+        } catch (error) {
+            console.error('Get dashboard overview error:', error);
+            throw error;
+        }
+    },
+
     // Lấy thông tin user hiện tại
     getCurrentUser: async () => {
         try {
@@ -38,10 +57,21 @@ export const apiService = {
         }
     },
 
-    // Lấy danh sách khảo sát
-    getSurveys: async () => {
+    // Lấy danh sách khảo sát (hỗ trợ phân trang, tìm kiếm)
+    // Ví dụ API: GET /surveys?page=1&limit=10&search=customer
+    // Response mẫu:
+    // {
+    //   "items": [
+    //     { "id": 1, "title": "Khảo sát hài lòng KH", "status": "active", "createdAt": "2025-09-01T10:00:00Z", "responses": 124 },
+    //     ...
+    //   ],
+    //   "page": 1,
+    //   "limit": 10,
+    //   "total": 25
+    // }
+    getSurveys: async (params = {}) => {
         try {
-            const response = await apiClient.get('/surveys');
+            const response = await apiClient.get('/surveys', { params });
             return response.data;
         } catch (error) {
             console.error('Get surveys error:', error);
