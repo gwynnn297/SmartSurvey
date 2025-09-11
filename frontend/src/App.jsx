@@ -4,6 +4,8 @@ import LoginPage from "./pages/login/LoginPage";
 import Register from "./pages/register/Register";
 import Dashboard from "./pages/dashboard/DashboardPage";
 import ForgotPassword from "./pages/ForgotPassword/ForgotPassword";
+import CreateAI from "./pages/createsurvey/CreateAI";
+import CreateSurvey from "./pages/createsurvey/CreateSurvey";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -23,6 +25,22 @@ function App() {
           element={
             <PrivateRoute>
               <Dashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/create-ai"
+          element={
+            <PrivateRoute>
+              <CreateAI />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/create-survey"
+          element={
+            <PrivateRoute>
+              <CreateSurvey />
             </PrivateRoute>
           }
         />

@@ -28,13 +28,8 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token hết hạn hoặc không hợp lệ
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      // Redirect về login nếu không phải đang ở trang login
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
+      // 401 từ các API không nên xóa token ngay.
+      // Trả lỗi về cho UI xử lý (ví dụ: hiển thị toast, yêu cầu đăng nhập lại khi cần).
     }
     return Promise.reject(error);
   }
@@ -51,11 +46,11 @@ export const register = async (fullName, email, password) => {
     });
     console.log('Register response:', response.data);
     return response.data; // AuthResponse với token
-} catch (error) {
+  } catch (error) {
     const backendMessage = error.response?.data?.message;
     console.error("Register API error:", error); // log toàn bộ error gốc
     throw new Error(backendMessage || "Có lỗi xảy ra, vui lòng thử lại");
-}
+  }
 
 };
 
