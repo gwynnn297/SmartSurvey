@@ -10,6 +10,7 @@ import vn.duytan.c1se09.smartsurvey.service.AuthService;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
 import vn.duytan.c1se09.smartsurvey.domain.request.auth.LoginRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.auth.RegisterRequestDTO;
+import vn.duytan.c1se09.smartsurvey.domain.request.auth.ChangePasswordRequestDTO;
 
 import jakarta.validation.Valid;
 import java.util.HashMap;
@@ -114,6 +115,60 @@ public class AuthController {
         return ResponseEntity.ok(Map.of(
                 "status", "success",
                 "message", "Đã gửi email khôi phục mật khẩu cho " + email));
+    }
+
+    @PostMapping("/test-token")
+    @ApiMessage("Test token validation")
+    public ResponseEntity<?> testToken() {
+        System.out.println("=== Test Token API Called ===");
+
+        // Test authentication
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        System.out.println("Security Context Authentication: " + (auth != null ? auth.getName() : "null"));
+        System.out.println("Is authenticated: " + (auth != null ? auth.isAuthenticated() : "false"));
+
+        if (auth != null) {
+            System.out.println("Authorities: " + auth.getAuthorities());
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Token test successful",
+                "authenticated", auth != null && auth.isAuthenticated(),
+                "username", auth != null ? auth.getName() : "null"));
+    }
+
+    @PostMapping("/change-password")
+    @ApiMessage("Change password")
+    public ResponseEntity<?> changePassword(@Valid @RequestBody ChangePasswordRequestDTO changePasswordRequest,
+            BindingResult bindingResult) {
+        System.out.println("=== Change Password API Called ===");
+        System.out.println("Request data: " + changePasswordRequest);
+
+        // Test authentication
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        System.out.println("Security Context Authentication: " + (auth != null ? auth.getName() : "null"));
+        System.out.println("Is authenticated: " + (auth != null ? auth.isAuthenticated() : "false"));
+        // Bắt lỗi validation
+        if (bindingResult.hasErrors()) {
+            String errorMessage = bindingResult.getAllErrors().get(0).getDefaultMessage();
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("message", errorMessage);
+            errorResponse.put("status", "error");
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+
+        try {
+            authService.changePassword(changePasswordRequest);
+            Map<String, String> successResponse = new HashMap<>();
+            successResponse.put("message", "Đổi mật khẩu thành công");
+            successResponse.put("status", "success");
+            return ResponseEntity.ok(successResponse);
+        } catch (Exception e) {
+            Map<String, String> errorResponse = new HashMap<>();
+            errorResponse.put("message", e.getMessage());
+            errorResponse.put("status", "error");
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
     }
 
 }

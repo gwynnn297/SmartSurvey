@@ -16,6 +16,7 @@ import vn.duytan.c1se09.smartsurvey.security.JwtUtils;
 import vn.duytan.c1se09.smartsurvey.util.constant.RoleEnum;
 import vn.duytan.c1se09.smartsurvey.domain.request.auth.LoginRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.auth.RegisterRequestDTO;
+import vn.duytan.c1se09.smartsurvey.domain.request.auth.ChangePasswordRequestDTO;
 
 /**
  * Service xử lý logic authentication
@@ -107,16 +108,55 @@ public class AuthService {
 
     public User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        System.out.println("=== getCurrentUser called ===");
+        System.out.println("Authentication: " + (authentication != null ? authentication.getName() : "null"));
+        System.out
+                .println("Is authenticated: " + (authentication != null ? authentication.isAuthenticated() : "false"));
+
         if (authentication == null || !authentication.isAuthenticated()) {
+            System.out.println("No authentication found");
             return null;
         }
 
         String email = authentication.getName();
-        return userRepository.findByEmail(email).orElse(null);
+        System.out.println("Email from authentication: " + email);
+        User user = userRepository.findByEmail(email).orElse(null);
+        System.out.println("User found: " + (user != null ? user.getEmail() : "null"));
+        return user;
     }
 
     public boolean hasRole(RoleEnum role) {
         User currentUser = getCurrentUser();
         return currentUser != null && currentUser.getRole() == role;
+    }
+
+    @Transactional
+    public void changePassword(ChangePasswordRequestDTO changePasswordRequest) {
+        System.out.println("=== AuthService.changePassword called ===");
+        // Lấy user hiện tại
+        User currentUser = getCurrentUser();
+        System.out.println("Current user: " + (currentUser != null ? currentUser.getEmail() : "null"));
+        if (currentUser == null) {
+            throw new RuntimeException("Không tìm thấy thông tin user");
+        }
+
+        // Kiểm tra mật khẩu hiện tại
+        if (!passwordEncoder.matches(changePasswordRequest.getCurrentPassword(), currentUser.getPasswordHash())) {
+            throw new RuntimeException("Mật khẩu hiện tại không đúng");
+        }
+
+        // Kiểm tra mật khẩu mới và xác nhận
+        if (!changePasswordRequest.getNewPassword().equals(changePasswordRequest.getConfirmPassword())) {
+            throw new RuntimeException("Mật khẩu mới và xác nhận mật khẩu không khớp");
+        }
+
+        // Kiểm tra mật khẩu mới khác mật khẩu hiện tại
+        if (passwordEncoder.matches(changePasswordRequest.getNewPassword(), currentUser.getPasswordHash())) {
+            throw new RuntimeException("Mật khẩu mới phải khác mật khẩu hiện tại");
+        }
+
+        // Cập nhật mật khẩu mới
+        currentUser.setPasswordHash(passwordEncoder.encode(changePasswordRequest.getNewPassword()));
+        userRepository.save(currentUser);
     }
 }

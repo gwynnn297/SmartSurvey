@@ -32,16 +32,24 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
         String path = request.getServletPath();
+        log.info("Processing request to path: {}", path);
+
         // Chỉ bỏ qua kiểm tra JWT cho các endpoint public và auth không cần xác thực
         if (path.equals("/auth/login") || path.equals("/auth/register") || path.equals("/auth/forgot-password")
                 || path.startsWith("/api/public/") || path.startsWith("/actuator/")) {
+            log.info("Skipping JWT validation for public path: {}", path);
             filterChain.doFilter(request, response);
             return;
         }
+
         try {
             String jwt = parseJwt(request);
+            log.info("JWT token found: {}", jwt != null ? "Yes" : "No");
+
             if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
                 String username = jwtUtils.getUserNameFromJwtToken(jwt);
+                String role = jwtUtils.getRoleFromJwtToken(jwt);
+                log.info("JWT token valid for user: {} with role: {}", username, role);
 
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
@@ -49,9 +57,12 @@ public class AuthTokenFilter extends OncePerRequestFilter {
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                log.info("Authentication set for user: {}", username);
+            } else {
+                log.warn("JWT token validation failed for path: {}", path);
             }
         } catch (Exception e) {
-            log.error("Cannot set user authentication: {}", e.getMessage());
+            log.error("Cannot set user authentication: {}", e.getMessage(), e);
         }
 
         filterChain.doFilter(request, response);

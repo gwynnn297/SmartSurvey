@@ -4,6 +4,8 @@ import LoginPage from "./pages/login/LoginPage";
 import Register from "./pages/register/Register";
 import Dashboard from "./pages/dashboard/DashboardPage";
 import ForgotPassword from "./pages/ForgotPassword/ForgotPassword";
+import Profile from "./pages/Profile/Profile";
+import ChangePassword from "./pages/ChangePassword/ChangePassword";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -23,6 +25,22 @@ function App() {
           element={
             <PrivateRoute>
               <Dashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <PrivateRoute>
+              <Profile />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/change-password"
+          element={
+            <PrivateRoute>
+              <ChangePassword />
             </PrivateRoute>
           }
         />
