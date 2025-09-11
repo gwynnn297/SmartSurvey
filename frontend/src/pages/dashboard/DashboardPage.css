@@ -240,35 +240,7 @@
     border-radius: 16px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
     overflow: hidden;
-    position: relative; /* <-- THÊM DÒNG NÀY */
 }
-
-/* === KHỐI CSS MỚI CHO NÚT ĐÓNG === */
-.modal-close-btn {
-    position: absolute;
-    top: 12px;
-    right: 16px;
-    background: transparent;
-    border: none;
-    font-size: 28px;
-    line-height: 1;
-    color: #6b7280;
-    cursor: pointer;
-    padding: 4px;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-.modal-close-btn:hover {
-    background-color: #f3f4f6;
-    color: #111827;
-}
-/* === KẾT THÚC KHỐI CSS MỚI === */
 
 .modal-header {
     padding: 20px 24px;

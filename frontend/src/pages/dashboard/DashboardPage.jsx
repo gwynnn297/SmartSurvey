@@ -141,8 +141,6 @@ export default function DashboardPage() {
         {showCreateModal && (
           <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
-              {/* === NÚT X ĐÃ ĐƯỢC THÊM VÀO ĐÂY === */}
-              <button className="modal-close-btn" onClick={() => setShowCreateModal(false)}>&times;</button>
               <div className="modal-header">
                 <h3>Bạn muốn bắt đầu như thế nào?</h3>
                 <p>Chọn phương thức tạo khảo sát phù hợp với nhu cầu của bạn</p>
