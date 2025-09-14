@@ -66,9 +66,15 @@ const ChangePassword = () => {
         setMessage({ type: '', text: '' });
 
         try {
+            console.log('🏠 ChangePassword: Starting change password process...');
+
+            // Check token before making API call
+            const token = localStorage.getItem('token');
+            console.log('🔑 ChangePassword: Token check:', token ? 'Found' : 'Not found');
+
             const response = await changePasswordService.changePassword(formData);
 
-            console.log('Change password response:', response);
+            console.log('✅ ChangePassword: Change password response:', response);
 
             if (response && response.status === 'success') {
                 setMessage({ type: 'success', text: response.message });
@@ -97,8 +103,8 @@ const ChangePassword = () => {
                 }, 2000);
             }
         } catch (error) {
-            console.error('Change password error:', error);
-            console.error('Error response:', error.response);
+            console.error('❌ ChangePassword: Change password error:', error);
+            console.error('❌ ChangePassword: Error response:', error.response);
 
             // Check if it's a 401 error (unauthorized)
             if (error.response?.status === 401) {

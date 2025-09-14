@@ -19,11 +19,23 @@ const Profile = () => {
         try {
             setLoading(true);
             setError(null);
+            console.log('🏠 Profile: Starting to load profile...');
+
+            // Check token before making API call
+            const token = localStorage.getItem('token');
+            console.log('🔑 Profile: Token check:', token ? 'Found' : 'Not found');
+
             const profileData = await profileService.getProfile();
             setProfile(profileData);
+            console.log('🎉 Profile: Profile loaded successfully');
         } catch (err) {
-            console.error('Error loading profile:', err);
-            setError('Không thể tải thông tin profile. Vui lòng thử lại.');
+            console.error('❌ Profile: Error loading profile:', err);
+            console.error('❌ Profile: Error details:', err.response?.data);
+
+            // Không set error nếu là 401 - để interceptor xử lý
+            if (err.response?.status !== 401) {
+                setError('Không thể tải thông tin profile. Vui lòng thử lại.');
+            }
         } finally {
             setLoading(false);
         }

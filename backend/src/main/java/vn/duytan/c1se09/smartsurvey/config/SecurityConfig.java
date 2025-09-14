@@ -83,6 +83,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers("/auth/login", "/auth/register", "/auth/forgot-password").permitAll()
                         .requestMatchers("/auth/change-password", "/auth/me", "/auth/test-token").authenticated()
+                        .requestMatchers("/api/users").authenticated()
+                        .requestMatchers("/users/profile").authenticated()
+                        .requestMatchers("/dashboard/**").authenticated()
+                        .requestMatchers("/surveys/**").authenticated()
                         .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .anyRequest().authenticated());

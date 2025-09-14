@@ -13,26 +13,48 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+    console.log('🔑 Request interceptor - Token from localStorage:', token ? 'Found' : 'Not found');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('✅ Authorization header set:', config.headers.Authorization);
+    } else {
+      console.warn('⚠️ No token found in localStorage');
     }
+    console.log('📤 Request URL:', config.url);
+    console.log('📤 Request headers:', config.headers);
     return config;
   },
   (error) => {
+    console.error('❌ Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
 // Response interceptor để xử lý lỗi 401
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('✅ Response received:', response.status, response.config.url);
+    return response;
+  },
   (error) => {
+    console.log('❌ Response error:', error.response?.status, error.config?.url);
+    console.log('❌ Error details:', error.response?.data);
+
     if (error.response?.status === 401) {
-      // Token hết hạn hoặc không hợp lệ
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      // Không redirect ngay lập tức để tránh nhảy khỏi dashboard ngay sau khi đăng nhập.
-      // Để Route guard (PrivateRoute) xử lý điều hướng dựa vào token.
+      // ⚠️ Chỉ xóa token khi thực sự cần thiết
+      const url = error.config?.url || '';
+
+      // Chỉ xóa token khi gọi các endpoint quan trọng về authentication
+      if (url.includes('/auth/me') || url.includes('/auth/change-password')) {
+        console.log('🚫 401 Unauthorized on auth endpoint - Clearing tokens and redirecting');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        // Redirect to login
+        window.location.href = '/login';
+      } else {
+        console.log('⚠️ 401 Unauthorized on non-auth endpoint - Keeping token, might be endpoint not implemented yet');
+        // Không xóa token cho các endpoint khác (có thể chưa implement)
+      }
     }
     return Promise.reject(error);
   }

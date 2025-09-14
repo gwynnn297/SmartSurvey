@@ -7,7 +7,15 @@ const HeaderComponent = ({ showUserInfo = false, username }) => {
     const [showDropdown, setShowDropdown] = useState(false);
 
     const handleLogoClick = () => {
-        navigate('/');
+        // Kiểm tra xem user đã đăng nhập chưa
+        const token = localStorage.getItem('token');
+        if (token) {
+            // Nếu đã đăng nhập, chuyển về dashboard
+            navigate('/dashboard');
+        } else {
+            // Nếu chưa đăng nhập, chuyển về trang chủ
+            navigate('/');
+        }
     };
 
     const handleLogout = () => {

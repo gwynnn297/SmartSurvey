@@ -1,4 +1,4 @@
-package vn.duytan.c1se09.smartsurvey.domain.response.profile;
+package vn.duytan.c1se09.smartsurvey.domain.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,18 +8,20 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * DTO cho response profile
+ * DTO để trả về thông tin user (không bao gồm password)
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ProfileResponseDTO {
+public class UserResponseDTO {
 
     private Long userId;
     private String fullName;
     private String email;
     private String role;
+    private Boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
+

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import HeaderComponent from "../../components/HeaderComponent";
+import SurveyViewer from "../../components/Survey/SurveyViewer";
 import { apiService } from "../../services/apiService";
 import "./DashboardPage.css";
 
@@ -16,10 +17,14 @@ export default function DashboardPage() {
   const [surveys, setSurveys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showSurveyViewer, setShowSurveyViewer] = useState(false);
+  const [selectedSurvey, setSelectedSurvey] = useState(null);
 
   useEffect(() => {
     const loadData = async () => {
       try {
+        console.log('🏠 Dashboard: Starting to load data...');
+
         const storedUser = (() => {
           try {
             return JSON.parse(localStorage.getItem("user")) || null;
@@ -29,23 +34,39 @@ export default function DashboardPage() {
         })();
         if (storedUser) {
           setUser(storedUser);
+          console.log('👤 Dashboard: User loaded:', storedUser);
         }
 
-        const [overviewRes, surveysRes] = await Promise.all([
-          apiService.getDashboardOverview(),
-          apiService.getSurveys({ page: 1, limit: 10 })
-        ]);
+        // Check token before making API calls
+        const token = localStorage.getItem('token');
+        console.log('🔑 Dashboard: Token check:', token ? 'Found' : 'Not found');
+
+        console.log('📊 Dashboard: Calling getDashboardOverview...');
+        const overviewRes = await apiService.getDashboardOverview();
+        console.log('✅ Dashboard: Overview response:', overviewRes);
+
+        console.log('📋 Dashboard: Calling getSurveys...');
+        const surveysRes = await apiService.getSurveys({ page: 1, limit: 10 });
+        console.log('✅ Dashboard: Surveys response:', surveysRes);
+
+        // Load surveys from localStorage
+        const localSurveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
+        console.log('📋 Dashboard: Local surveys:', localSurveys);
 
         setOverview({
-          totalSurveys: Number(overviewRes?.totalSurveys) || 0,
-          totalResponses: Number(overviewRes?.totalResponses) || 0,
-          activeSurveys: Number(overviewRes?.activeSurveys) || 0,
-          completionRate: Number(overviewRes?.completionRate) || 0
+          totalSurveys: localSurveys.length,
+          totalResponses: localSurveys.reduce((sum, s) => sum + (s.responses || 0), 0),
+          activeSurveys: localSurveys.filter(s => s.status === 'active').length,
+          completionRate: localSurveys.length > 0 ? 75 : 0 // Mock completion rate
         });
-        const list = Array.isArray(surveysRes?.items) ? surveysRes.items : (Array.isArray(surveysRes) ? surveysRes : []);
+
+        // Use local surveys if available, otherwise use API response
+        const list = localSurveys.length > 0 ? localSurveys : (Array.isArray(surveysRes?.items) ? surveysRes.items : (Array.isArray(surveysRes) ? surveysRes : []));
         setSurveys(list);
+        console.log('🎉 Dashboard: Data loaded successfully');
       } catch (error) {
-        console.error('Error loading dashboard data:', error);
+        console.error('❌ Dashboard: Error loading data:', error);
+        console.error('❌ Dashboard: Error details:', error.response?.data);
       } finally {
         setLoading(false);
       }
@@ -55,6 +76,123 @@ export default function DashboardPage() {
   }, []);
 
   const displayName = user?.name || user?.username || user?.email || "User";
+
+  const handleViewSurvey = (survey) => {
+    // Sử dụng câu hỏi thực sự từ localStorage hoặc mock nếu không có
+    const surveyQuestions = survey.questions || [];
+
+    // Nếu không có câu hỏi thực sự, hiển thị thông báo
+    if (surveyQuestions.length === 0) {
+      alert('Khảo sát này chưa có câu hỏi nào. Vui lòng tạo câu hỏi trước.');
+      return;
+    }
+
+    setSelectedSurvey({
+      ...survey,
+      questions: surveyQuestions
+    });
+    setShowSurveyViewer(true);
+  };
+
+  const handleUpdateSurveyQuestions = (updatedQuestions) => {
+    if (selectedSurvey) {
+      const updatedSurvey = { ...selectedSurvey, questions: updatedQuestions };
+      setSelectedSurvey(updatedSurvey);
+
+      // Update in localStorage
+      const updatedSurveys = surveys.map(s =>
+        s.id === selectedSurvey.id
+          ? { ...s, questionsCount: updatedQuestions.length, questions: updatedQuestions }
+          : s
+      );
+      setSurveys(updatedSurveys);
+      localStorage.setItem('userSurveys', JSON.stringify(updatedSurveys));
+    }
+  };
+
+  const handleSaveSurveyChanges = async (updatedQuestions) => {
+    try {
+      if (selectedSurvey) {
+        // Update in localStorage
+        const updatedSurveys = surveys.map(s =>
+          s.id === selectedSurvey.id
+            ? { ...s, questionsCount: updatedQuestions.length, questions: updatedQuestions }
+            : s
+        );
+        setSurveys(updatedSurveys);
+        localStorage.setItem('userSurveys', JSON.stringify(updatedSurveys));
+
+        // Update selectedSurvey state
+        const updatedSurvey = { ...selectedSurvey, questions: updatedQuestions };
+        setSelectedSurvey(updatedSurvey);
+
+        console.log('Survey changes saved successfully');
+      }
+    } catch (error) {
+      console.error('Error saving survey changes:', error);
+      throw error; // Re-throw để SurveyViewer có thể handle
+    }
+  };
+
+  const createSampleSurvey = () => {
+    const sampleQuestions = [
+      {
+        id: 1,
+        question_text: "Bạn có hài lòng với dịch vụ của chúng tôi không?",
+        question_type: "multiple_choice",
+        is_required: true,
+        options: [
+          { option_text: "Rất hài lòng" },
+          { option_text: "Hài lòng" },
+          { option_text: "Bình thường" },
+          { option_text: "Không hài lòng" }
+        ]
+      },
+      {
+        id: 2,
+        question_text: "Bạn có muốn giới thiệu dịch vụ cho người khác không?",
+        question_type: "boolean",
+        is_required: true
+      },
+      {
+        id: 3,
+        question_text: "Vui lòng chia sẻ thêm ý kiến của bạn:",
+        question_type: "open_ended",
+        is_required: false
+      },
+      {
+        id: 4,
+        question_text: "Đánh giá tổng thể về dịch vụ (1-5 sao):",
+        question_type: "rating",
+        is_required: true
+      }
+    ];
+
+    const sampleSurvey = {
+      id: Date.now(),
+      title: "Khảo sát mẫu - Dịch vụ khách hàng",
+      description: "Đây là khảo sát mẫu để test chức năng xem khảo sát với câu hỏi thực sự",
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      responses: 0,
+      questionsCount: sampleQuestions.length,
+      questions: sampleQuestions
+    };
+
+    const existingSurveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
+    existingSurveys.unshift(sampleSurvey);
+    localStorage.setItem('userSurveys', JSON.stringify(existingSurveys));
+
+    // Reload surveys
+    setSurveys(existingSurveys);
+    setOverview(prev => ({
+      ...prev,
+      totalSurveys: existingSurveys.length,
+      activeSurveys: existingSurveys.filter(s => s.status === 'active').length
+    }));
+
+    alert('Đã tạo khảo sát mẫu thành công!');
+  };
 
   if (loading) {
     return (
@@ -111,7 +249,10 @@ export default function DashboardPage() {
         <div className="section">
           <div className="section-header">
             <h2>Danh sách khảo sát:</h2>
-            <button className="btn-primary" onClick={() => setShowCreateModal(true)}>+ Tạo khảo sát mới</button>
+            <div className="dashboard-actions">
+              <button className="btn-primary" onClick={() => setShowCreateModal(true)}>+ Tạo khảo sát mới</button>
+              <button className="btn-secondary" onClick={createSampleSurvey}>🧪 Tạo khảo sát mẫu</button>
+            </div>
           </div>
           <div className="survey-list">
             {surveys.length === 0 && (
@@ -121,18 +262,38 @@ export default function DashboardPage() {
               <div className="survey-item" key={s.id || s._id}>
                 <div className="survey-left">
                   <div className={`status-badge ${s.status || 'draft'}`}>
-                    {s.status === 'active' ? 'Đang hoạt động' : s.status === 'closed' ? 'Đã đóng' : 'Nháp'}
+                    {s.status === 'active' ? '🟢 Đang hoạt động' : s.status === 'closed' ? '🔴 Đã đóng' : '📝 Nháp'}
                   </div>
                   <div className="survey-title">{s.title || 'Không tiêu đề'}</div>
+                  {s.description && (
+                    <div className="survey-description">{s.description}</div>
+                  )}
                   <div className="survey-meta">
-                    <span>{new Date(s.createdAt || s.created_at || Date.now()).toLocaleDateString()}</span>
+                    <span>📅 {new Date(s.createdAt || s.created_at || Date.now()).toLocaleDateString('vi-VN')}</span>
                     <span>•</span>
-                    <span>{(s.responses ?? s.responseCount ?? 0)} phản hồi</span>
+                    <span>💬 {s.responses ?? s.responseCount ?? 0} phản hồi</span>
+                    {s.questionsCount && (
+                      <>
+                        <span>•</span>
+                        <span>❓ {s.questionsCount} câu hỏi</span>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="survey-right">
-                  <button className="btn-text">Xem</button>
-                  <button className="btn-text">Báo cáo</button>
+                  <button className="btn-text" onClick={() => handleViewSurvey(s)}>
+                    👁️ Xem
+                  </button>
+                  <button className="btn-text" onClick={() => alert('Chức năng báo cáo sẽ được phát triển')}>
+                    📊 Báo cáo
+                  </button>
+                  <button className="btn-text" onClick={() => {
+                    const updatedSurveys = surveys.filter(survey => survey.id !== s.id);
+                    localStorage.setItem('userSurveys', JSON.stringify(updatedSurveys));
+                    setSurveys(updatedSurveys);
+                  }}>
+                    🗑️ Xóa
+                  </button>
                 </div>
               </div>
             ))}
@@ -172,6 +333,20 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Survey Viewer Modal */}
+        {showSurveyViewer && selectedSurvey && (
+          <SurveyViewer
+            surveyData={selectedSurvey}
+            questions={selectedSurvey.questions || []}
+            onClose={() => {
+              setShowSurveyViewer(false);
+              setSelectedSurvey(null);
+            }}
+            onUpdateQuestions={handleUpdateSurveyQuestions}
+            onSaveChanges={handleSaveSurveyChanges}
+          />
         )}
       </div>
     </div>

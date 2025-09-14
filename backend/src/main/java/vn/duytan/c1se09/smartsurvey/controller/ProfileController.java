@@ -2,12 +2,11 @@ package vn.duytan.c1se09.smartsurvey.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
-import vn.duytan.c1se09.smartsurvey.domain.request.profile.UpdateProfileRequestDTO;
-import vn.duytan.c1se09.smartsurvey.domain.response.profile.ProfileResponseDTO;
-import vn.duytan.c1se09.smartsurvey.service.ProfileService;
+import vn.duytan.c1se09.smartsurvey.service.AuthService;
+import vn.duytan.c1se09.smartsurvey.service.UserService;
+import vn.duytan.c1se09.smartsurvey.domain.User;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
 
 import jakarta.validation.Valid;
@@ -22,13 +21,33 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ProfileController {
 
-    private final ProfileService profileService;
+    private final AuthService authService;
+    private final UserService userService;
 
+    /**
+     * Lấy thông tin profile của user hiện tại
+     */
     @GetMapping("/profile")
     @ApiMessage("Get user profile")
     public ResponseEntity<?> getProfile() {
         try {
-            ProfileResponseDTO profile = profileService.getCurrentUserProfile();
+            User currentUser = authService.getCurrentUser();
+            if (currentUser == null) {
+                Map<String, String> errorResponse = new HashMap<>();
+                errorResponse.put("message", "Không tìm thấy thông tin user");
+                errorResponse.put("status", "error");
+                return ResponseEntity.badRequest().body(errorResponse);
+            }
+
+            Map<String, Object> profile = new HashMap<>();
+            profile.put("userId", currentUser.getUserId());
+            profile.put("fullName", currentUser.getFullName());
+            profile.put("email", currentUser.getEmail());
+            profile.put("role", currentUser.getRole().name());
+            profile.put("isActive", currentUser.getIsActive());
+            profile.put("createdAt", currentUser.getCreatedAt());
+            profile.put("updatedAt", currentUser.getUpdatedAt());
+
             return ResponseEntity.ok(profile);
         } catch (Exception e) {
             Map<String, String> errorResponse = new HashMap<>();
@@ -38,22 +57,37 @@ public class ProfileController {
         }
     }
 
+    /**
+     * Cập nhật thông tin profile
+     */
     @PutMapping("/profile")
     @ApiMessage("Update user profile")
-    public ResponseEntity<?> updateProfile(@Valid @RequestBody UpdateProfileRequestDTO updateRequest,
-            BindingResult bindingResult) {
-        // Bắt lỗi validation
-        if (bindingResult.hasErrors()) {
-            String errorMessage = bindingResult.getAllErrors().get(0).getDefaultMessage();
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("message", errorMessage);
-            errorResponse.put("status", "error");
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
-
+    public ResponseEntity<?> updateProfile(@Valid @RequestBody Map<String, String> updateData) {
         try {
-            ProfileResponseDTO updatedProfile = profileService.updateProfile(updateRequest);
-            return ResponseEntity.ok(updatedProfile);
+            User currentUser = authService.getCurrentUser();
+            if (currentUser == null) {
+                Map<String, String> errorResponse = new HashMap<>();
+                errorResponse.put("message", "Không tìm thấy thông tin user");
+                errorResponse.put("status", "error");
+                return ResponseEntity.badRequest().body(errorResponse);
+            }
+
+            // Cập nhật full name nếu có
+            if (updateData.containsKey("fullName")) {
+                currentUser.setFullName(updateData.get("fullName"));
+            }
+
+            // Lưu lại user vào DB
+            User savedUser = userService.updateUser(currentUser);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Cập nhật profile thành công");
+            response.put("userId", savedUser.getUserId());
+            response.put("fullName", savedUser.getFullName());
+            response.put("email", savedUser.getEmail());
+            response.put("role", savedUser.getRole().name());
+
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             Map<String, String> errorResponse = new HashMap<>();
             errorResponse.put("message", "Lỗi khi cập nhật profile: " + e.getMessage());
@@ -62,3 +96,7 @@ public class ProfileController {
         }
     }
 }
+
+
+
+
