@@ -93,10 +93,8 @@ export const login = async (email, password) => {
 };
 
 export const logout = () => {
-  console.log("🚪 Logging out user - clearing tokens");
   localStorage.removeItem("token");
   localStorage.removeItem("user");
-  console.log("✅ Logout completed - tokens cleared");
 };
 
 // Export apiClient để sử dụng cho các API khác

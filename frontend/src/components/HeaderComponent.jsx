@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { logout } from '../services/authService';
 import './HeaderComponent.css';
 
 const HeaderComponent = ({ showUserInfo = false, username }) => {
@@ -20,7 +19,8 @@ const HeaderComponent = ({ showUserInfo = false, username }) => {
     };
 
     const handleLogout = () => {
-        logout(); // Sử dụng hàm logout từ authService
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
         navigate('/login');
     };
 
