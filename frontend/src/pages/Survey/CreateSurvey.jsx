@@ -1,18 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
-import QuestionList from '../../components/Survey/QuestionList';
-import PreviewSurvey from '../../components/Survey/PreviewSurvey';
 import { surveyService } from '../../services/surveyService';
 import './CreateSurvey.css';
+
+// 🧩 DND Kit
+import {
+    DndContext,
+    closestCenter,
+    PointerSensor,
+    useSensor,
+    useSensors
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    useSortable,
+    verticalListSortingStrategy,
+    arrayMove
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// Item trong sidebar
+function SortableSidebarItem({ id, index, text }) {
+    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition
+    };
+    return (
+        <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="sidebar-item">
+            <span className="sidebar-number">Câu {index + 1}:</span>
+            <span className="sidebar-text">{text?.slice(0, 20) || 'Chưa có nội dung'}</span>
+        </div>
+    );
+}
 
 const CreateSurvey = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [categories, setCategories] = useState([]);
-    const [showPreview, setShowPreview] = useState(false);
+    const [questions, setQuestions] = useState([]);
+    const [errors, setErrors] = useState({});
 
-    // Survey form data
     const [surveyData, setSurveyData] = useState({
         title: '',
         description: '',
@@ -20,13 +49,8 @@ const CreateSurvey = () => {
         status: 'draft'
     });
 
-    // Questions data
-    const [questions, setQuestions] = useState([]);
+    const sensors = useSensors(useSensor(PointerSensor));
 
-    // Form errors
-    const [errors, setErrors] = useState({});
-
-    // Load categories on component mount
     useEffect(() => {
         loadCategories();
     }, []);
@@ -37,7 +61,6 @@ const CreateSurvey = () => {
             setCategories(response.data || response || []);
         } catch (error) {
             console.error('Error loading categories:', error);
-            // Mock categories nếu API chưa có
             setCategories([
                 { id: 1, name: 'Khảo sát khách hàng' },
                 { id: 2, name: 'Khảo sát nhân viên' },
@@ -49,37 +72,24 @@ const CreateSurvey = () => {
     };
 
     const handleSurveyDataChange = (field, value) => {
-        setSurveyData(prev => ({
-            ...prev,
-            [field]: value
-        }));
-
-        // Clear error when user starts typing
+        setSurveyData(prev => ({ ...prev, [field]: value }));
         if (errors[field]) {
-            setErrors(prev => ({
-                ...prev,
-                [field]: ''
-            }));
+            setErrors(prev => ({ ...prev, [field]: '' }));
         }
     };
 
     const validateForm = () => {
         const newErrors = {};
-
         if (!surveyData.title.trim()) {
             newErrors.title = 'Tiêu đề khảo sát là bắt buộc';
         }
-
         if (questions.length === 0) {
             newErrors.questions = 'Khảo sát phải có ít nhất 1 câu hỏi';
         }
-
-        // Validate each question
         questions.forEach((question, index) => {
             if (!question.question_text.trim()) {
                 newErrors[`question_${index}`] = 'Nội dung câu hỏi là bắt buộc';
             }
-
             if (question.question_type === 'multiple_choice') {
                 const validOptions = question.options?.filter(opt => opt.option_text.trim());
                 if (!validOptions || validOptions.length < 2) {
@@ -87,24 +97,16 @@ const CreateSurvey = () => {
                 }
             }
         });
-
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
     const saveAsDraft = async () => {
         if (!validateForm()) return;
-
         setLoading(true);
         try {
-            const surveyPayload = {
-                ...surveyData,
-                status: 'draft'
-            };
-
+            const surveyPayload = { ...surveyData, status: 'draft' };
             const savedSurvey = await surveyService.createSurvey(surveyPayload);
-
-            // Save questions if any
             if (questions.length > 0 && savedSurvey.survey_id) {
                 for (const question of questions) {
                     await surveyService.addQuestion(savedSurvey.survey_id, {
@@ -114,10 +116,8 @@ const CreateSurvey = () => {
                     });
                 }
             }
-
-            // Lưu khảo sát vào localStorage để hiển thị trong dashboard
-            const existingSurveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
-            const newSurvey = {
+            const existing = JSON.parse(localStorage.getItem('userSurveys') || '[]');
+            existing.unshift({
                 id: savedSurvey.survey_id || Date.now(),
                 title: surveyData.title,
                 description: surveyData.description,
@@ -125,11 +125,9 @@ const CreateSurvey = () => {
                 createdAt: new Date().toISOString(),
                 responses: 0,
                 questionsCount: questions.length,
-                questions: questions // Lưu câu hỏi thực sự
-            };
-            existingSurveys.unshift(newSurvey);
-            localStorage.setItem('userSurveys', JSON.stringify(existingSurveys));
-
+                questions
+            });
+            localStorage.setItem('userSurveys', JSON.stringify(existing));
             alert('Lưu nháp thành công!');
             navigate('/dashboard');
         } catch (error) {
@@ -140,24 +138,12 @@ const CreateSurvey = () => {
         }
     };
 
-    const previewSurvey = () => {
-        if (!validateForm()) return;
-        setShowPreview(true);
-    };
-
     const publishSurvey = async () => {
         if (!validateForm()) return;
-
         setLoading(true);
         try {
-            const surveyPayload = {
-                ...surveyData,
-                status: 'active'
-            };
-
+            const surveyPayload = { ...surveyData, status: 'active' };
             const savedSurvey = await surveyService.createSurvey(surveyPayload);
-
-            // Save questions if any
             if (questions.length > 0 && savedSurvey.survey_id) {
                 for (const question of questions) {
                     await surveyService.addQuestion(savedSurvey.survey_id, {
@@ -167,10 +153,8 @@ const CreateSurvey = () => {
                     });
                 }
             }
-
-            // Lưu khảo sát vào localStorage để hiển thị trong dashboard
-            const existingSurveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
-            const newSurvey = {
+            const existing = JSON.parse(localStorage.getItem('userSurveys') || '[]');
+            existing.unshift({
                 id: savedSurvey.survey_id || Date.now(),
                 title: surveyData.title,
                 description: surveyData.description,
@@ -178,11 +162,9 @@ const CreateSurvey = () => {
                 createdAt: new Date().toISOString(),
                 responses: 0,
                 questionsCount: questions.length,
-                questions: questions // Lưu câu hỏi thực sự
-            };
-            existingSurveys.unshift(newSurvey);
-            localStorage.setItem('userSurveys', JSON.stringify(existingSurveys));
-
+                questions
+            });
+            localStorage.setItem('userSurveys', JSON.stringify(existing));
             alert('Xuất bản khảo sát thành công!');
             navigate('/dashboard');
         } catch (error) {
@@ -194,142 +176,206 @@ const CreateSurvey = () => {
     };
 
     return (
-        <div className="create-survey-container">
+        <div className="create-survey-wrapper">
             <MainLayout>
-                <div className="max-w-5xl mx-auto">
-                    <div className="survey-header fade-in">
-                        <h1>Tạo khảo sát thủ công</h1>
-                        <p>Tạo khảo sát chi tiết với các câu hỏi tùy chỉnh</p>
+                <div className="survey-topbar">
+                    <div className="survey-topbar-left">
+                        <button
+                            className="btn-top"
+                            onClick={() =>
+                                setQuestions(prev => [
+                                    ...prev,
+                                    {
+                                        id: Date.now(),
+                                        question_text: '',
+                                        question_type: 'multiple_choice',
+                                        options: [{ option_text: '' }, { option_text: '' }],
+                                        is_required: false
+                                    }
+                                ])
+                            }
+                        >
+                            + Thêm câu hỏi
+                        </button>
+                        <button
+                            className="btn-top"
+                            onClick={() => navigate('/create-ai')}
+                        >
+                            ⚡ Gợi ý bằng AI
+                        </button>
+                    </div>
+                    <div className="survey-topbar-right">
+                        <button className="btn-save" onClick={saveAsDraft} disabled={loading}>Lưu bản nháp</button>
+                        <button className="btn-publish" onClick={publishSurvey} disabled={loading}>Lưu</button>
+                    </div>
+                </div>
+
+                <div className="survey-editor">
+                    {/* Sidebar trái có kéo thả */}
+                    <div className="survey-sidebar">
+                        {questions.length === 0 ? (
+                            <div className="sidebar-empty">Chưa có câu hỏi</div>
+                        ) : (
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={({ active, over }) => {
+                                    if (active.id !== over.id) {
+                                        const oldIndex = questions.findIndex(q => q.id === active.id);
+                                        const newIndex = questions.findIndex(q => q.id === over.id);
+                                        setQuestions(arrayMove(questions, oldIndex, newIndex));
+                                    }
+                                }}
+                            >
+                                <SortableContext items={questions.map(q => q.id)} strategy={verticalListSortingStrategy}>
+                                    {questions.map((q, idx) => (
+                                        <SortableSidebarItem key={q.id} id={q.id} index={idx} text={q.question_text} />
+                                    ))}
+                                </SortableContext>
+                            </DndContext>
+                        )}
                     </div>
 
-                    <div className="survey-form-container slide-up">
-                        {/* Survey Information Form */}
-                        <div className="form-section">
-                            <h2 className="section-title">📋 Thông tin khảo sát</h2>
-
-                            <div className="form-group">
-                                <label className="form-label">
-                                    Tiêu đề khảo sát *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={surveyData.title}
-                                    onChange={(e) => handleSurveyDataChange('title', e.target.value)}
-                                    placeholder="Nhập tiêu đề khảo sát..."
-                                    className={`form-input ${errors.title ? 'error' : ''}`}
-                                />
-                                {errors.title && (
-                                    <div className="error-message">{errors.title}</div>
-                                )}
-                            </div>
-
-                            <div className="form-group">
-                                <label className="form-label">
-                                    Mô tả khảo sát
-                                </label>
-                                <textarea
-                                    value={surveyData.description}
-                                    onChange={(e) => handleSurveyDataChange('description', e.target.value)}
-                                    placeholder="Nhập mô tả khảo sát..."
-                                    rows={4}
-                                    className="form-input form-textarea"
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label className="form-label">
-                                    Danh mục
-                                </label>
-                                <select
-                                    value={surveyData.category_id}
-                                    onChange={(e) => handleSurveyDataChange('category_id', e.target.value)}
-                                    className="form-input form-select"
-                                >
-                                    <option value="">Chọn danh mục...</option>
-                                    {categories.map((category) => (
-                                        <option key={category.id} value={category.id}>
-                                            {category.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        {/* Questions Section */}
-                        <div className="questions-section">
-                            <div className="questions-header">
-                                <div className="questions-title">
-                                    📝 Danh sách câu hỏi
-                                    <span className="questions-count">{questions.length} câu hỏi</span>
-                                </div>
-                                <div className="questions-subtitle">
-                                    💡 <strong>Tạo câu hỏi thủ công:</strong> Bạn sẽ nhập từng câu hỏi và câu trả lời một cách thủ công. Không có câu hỏi tự động.
-                                </div>
-                            </div>
-
-                            <QuestionList
-                                questions={questions}
-                                onChangeQuestions={setQuestions}
+                    {/* Cột phải */}
+                    <div className="survey-main">
+                        <div className="survey-info-card">                           
+                            <input
+                                className="survey-title-input"
+                                value={surveyData.title}
+                                onChange={(e) => handleSurveyDataChange('title', e.target.value)}
+                                placeholder="Tiêu đề khảo sát"
                             />
-
-                            {errors.questions && (
-                                <div className="error-message">{errors.questions}</div>
-                            )}
+                            <textarea
+                                className="survey-desc-input"
+                                value={surveyData.description}
+                                onChange={(e) => handleSurveyDataChange('description', e.target.value)}
+                                placeholder="Mô tả khảo sát..."
+                            />
                         </div>
 
-                        {/* Action Buttons */}
-                        <div className="action-buttons">
-                            <div className="action-buttons-left">
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/dashboard')}
-                                    className="btn btn-cancel"
-                                >
-                                    <span>←</span> Hủy
-                                </button>
-                            </div>
+                        <div className="questions-container">
+                            {questions.length === 0 ? (
+                                <div className="questions-empty">
+                                    <p>Chưa có câu hỏi nào.</p>
+                                    <button
+                                        className="btn-add-question"
+                                        onClick={() =>
+                                            setQuestions([{
+                                                id: Date.now(),
+                                                question_text: '',
+                                                question_type: 'multiple_choice',
+                                                options: [{ option_text: '' }, { option_text: '' }],
+                                                is_required: false
+                                            }])
+                                        }
+                                    >
+                                        + Thêm câu hỏi đầu tiên
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    {questions.map((q, idx) => (
+                                        <div key={q.id} className="question-block">
+                                            <div className="question-header">
+                                                <span className="question-label">Câu {idx + 1}</span>
+                                                <div className="question-header-right">
+                                                    <select
+                                                        className="question-type"
+                                                        value={q.question_type}
+                                                        onChange={(e) => {
+                                                            const newQ = [...questions];
+                                                            newQ[idx].question_type = e.target.value;
+                                                            setQuestions(newQ);
+                                                        }}
+                                                    >
+                                                        <option value="multiple_choice">Trắc nghiệm</option>
+                                                        <option value="open_ended">Tự luận</option>
+                                                    </select>
+                                                    <button
+                                                        className="btn-delete-question"
+                                                        onClick={() => {
+                                                            const newQ = questions.filter((_, i) => i !== idx);
+                                                            setQuestions(newQ);
+                                                        }}
+                                                    >
+                                                        🗑
+                                                    </button>
+                                                </div>
+                                            </div>
 
-                            <div className="action-buttons-right">
-                                <button
-                                    type="button"
-                                    onClick={previewSurvey}
-                                    disabled={loading}
-                                    className="btn btn-preview"
-                                >
-                                    <span>👁️</span> Xem trước
-                                </button>
+                                            <input
+                                                className="question-input"
+                                                value={q.question_text}
+                                                onChange={(e) => {
+                                                    const newQ = [...questions];
+                                                    newQ[idx].question_text = e.target.value;
+                                                    setQuestions(newQ);
+                                                }}
+                                                placeholder="Nhập nội dung câu hỏi"
+                                            />
 
-                                <button
-                                    type="button"
-                                    onClick={saveAsDraft}
-                                    disabled={loading}
-                                    className={`btn btn-draft ${loading ? 'loading' : ''}`}
-                                >
-                                    <span>💾</span> {loading ? 'Đang lưu...' : 'Lưu nháp'}
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={publishSurvey}
-                                    disabled={loading}
-                                    className={`btn btn-publish ${loading ? 'loading' : ''}`}
-                                >
-                                    <span>🚀</span> {loading ? 'Đang xuất bản...' : 'Xuất bản'}
-                                </button>
-                            </div>
+                                            {q.question_type === 'multiple_choice' && (
+                                                <div className="options-list">
+                                                    {q.options?.map((opt, oIdx) => (
+                                                        <div key={oIdx} className="option-item">
+                                                            <input
+                                                                className="option-input"
+                                                                value={opt.option_text}
+                                                                onChange={(e) => {
+                                                                    const newQ = [...questions];
+                                                                    newQ[idx].options[oIdx].option_text = e.target.value;
+                                                                    setQuestions(newQ);
+                                                                }}
+                                                            />
+                                                            <button
+                                                                className="remove-option"
+                                                                onClick={() => {
+                                                                    const newQ = [...questions];
+                                                                    newQ[idx].options.splice(oIdx, 1);
+                                                                    setQuestions(newQ);
+                                                                }}
+                                                            >x</button>
+                                                        </div>
+                                                    ))}
+                                                    <button
+                                                        className="add-option"
+                                                        onClick={() => {
+                                                            const newQ = [...questions];
+                                                            newQ[idx].options.push({ option_text: '' });
+                                                            setQuestions(newQ);
+                                                        }}
+                                                    >
+                                                        + Thêm lựa chọn
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                    <div className="add-question-footer">
+                                        <button
+                                            className="btn-add-question"
+                                            onClick={() =>
+                                                setQuestions(prev => [
+                                                    ...prev,
+                                                    {
+                                                        id: Date.now(),
+                                                        question_text: '',
+                                                        question_type: 'multiple_choice',
+                                                        options: [{ option_text: '' }, { option_text: '' }],
+                                                        is_required: false
+                                                    }
+                                                ])
+                                            }
+                                        >
+                                            + Thêm câu hỏi
+                                        </button>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
             </MainLayout>
-
-            {/* Preview Modal */}
-            {showPreview && (
-                <PreviewSurvey
-                    surveyData={surveyData}
-                    questions={questions}
-                    onClose={() => setShowPreview(false)}
-                />
-            )}
         </div>
     );
 };

@@ -117,14 +117,15 @@
 
 .dashboard-actions {
     display: flex;
-    gap: 1rem;
+    gap: 1rem; 
     align-items: center;
-    margin-left: auto;
+    /* margin-left: auto; */
 }
 
 .dashboard-actions .btn-primary {
     width: 180px;
     height: 50px;
+    
 }
 
 .dashboard-actions .btn-secondary {
@@ -298,6 +299,11 @@
 }
 
 .create-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+ 
     border: 1px solid #e5e7eb;
     border-radius: 12px;
     padding: 16px;
@@ -332,7 +338,7 @@
 
 .option-title {
     font-size: 18px;
-    font-weight: 800;
+    font-weight: 800; 
     color: #111827;
     margin: 12px 0;
 }

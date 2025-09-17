@@ -6,7 +6,7 @@ const LoginPage = lazy(() => import('../pages/login/LoginPage'));
 const Register = lazy(() => import('../pages/register/Register'));
 const Dashboard = lazy(() => import('../pages/dashboard/DashboardPage'));
 const ForgotPassword = lazy(() => import('../pages/ForgotPassword/ForgotPassword'));
-const CreateAI = lazy(() => import('../pages/createsurvey/CreateAI'));
+const CreateAI = lazy(() => import('../pages/Survey/CreateAI'));
 const CreateSurvey = lazy(() => import('../pages/Survey/CreateSurvey'));
 const Profile = lazy(() => import('../pages/Profile/Profile'));
 const ChangePassword = lazy(() => import('../pages/ChangePassword/ChangePassword'));

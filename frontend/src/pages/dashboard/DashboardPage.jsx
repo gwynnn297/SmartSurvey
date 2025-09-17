@@ -65,8 +65,8 @@ export default function DashboardPage() {
         setSurveys(list);
         console.log('🎉 Dashboard: Data loaded successfully');
       } catch (error) {
-        console.error('❌ Dashboard: Error loading data:', error);
-        console.error('❌ Dashboard: Error details:', error.response?.data);
+        console.error('Dashboard: Error loading data:', error);
+        console.error('Dashboard: Error details:', error.response?.data);
       } finally {
         setLoading(false);
       }

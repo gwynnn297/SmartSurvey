@@ -1,0 +1,130 @@
+/* Lightweight styles matching the referenced design */
+.create-ai-page {
+    padding: 24px;
+}
+
+.ai-container {
+    max-width: 860px;
+    margin: 0 auto;
+}
+
+.ai-steps {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin: 8px 0 24px;
+}
+
+.ai-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #6b7280;
+}
+
+.ai-step.active {
+    color: #111827;
+    font-weight: 600;
+}
+
+.ai-step-index {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #e5e7eb;
+    font-size: 12px;
+}
+
+.ai-title {
+    font-size: 22px;
+    text-align: center;
+    margin: 8px 0;
+}
+
+.ai-subtitle {
+    text-align: center;
+    color: #6b7280;
+    margin-bottom: 16px;
+}
+
+.ai-form-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.ai-form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.ai-form-row label {
+    font-weight: 600;
+    color: #111827;
+}
+
+.ai-form-row input,
+.ai-form-row select,
+.ai-form-row textarea {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+}
+
+.ai-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.req {
+    color: #ef4444;
+}
+
+.ai-error {
+    color: #ef4444;
+    font-size: 12px;
+}
+
+.ai-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+.btn-primary {
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    padding: 10px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.ai-result-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 16px;
+}
+
+.ai-result-pre {
+    background: #0b1220;
+    color: #e5e7eb;
+    padding: 12px;
+    border-radius: 8px;
+    overflow: auto;
+}
