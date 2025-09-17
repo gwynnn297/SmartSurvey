@@ -25,11 +25,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={
-          <ProtectedHomeRoute>
-            <HomePage />
-          </ProtectedHomeRoute>
-        } />
+        <Route path="/" element={<Navigate to="/login" />} />
         <Route path="/login" element={<LoginPage />} />   {/* Dùng LoginPage */}
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} /> {/* Thêm forgot */}

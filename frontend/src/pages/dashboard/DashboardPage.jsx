@@ -251,7 +251,7 @@ export default function DashboardPage() {
             <h2>Danh sách khảo sát:</h2>
             <div className="dashboard-actions">
               <button className="btn-primary" onClick={() => setShowCreateModal(true)}>+ Tạo khảo sát mới</button>
-              <button className="btn-secondary" onClick={createSampleSurvey}>🧪 Tạo khảo sát mẫu</button>
+              <button className="btn-secondary" onClick={createSampleSurvey}>Tạo khảo sát mẫu</button>
             </div>
           </div>
           <div className="survey-list">
