@@ -54,3 +54,10 @@ dependencies {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+// Giữ lại tên tham số method để Spring đọc @PathVariable khi không chỉ rõ hoặc khi build không kèm debug info
+tasks.withType<JavaCompile> {
+    if (!options.compilerArgs.contains("-parameters")) {
+        options.compilerArgs.add("-parameters")
+    }
+}

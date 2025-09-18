@@ -28,3 +28,7 @@ Thumbs.db
 
 # Others
 node_modules/
+
+# Local overrides and env files (do not commit secrets)
+application-local.properties
+.env

@@ -1,6 +1,8 @@
 package vn.duytan.c1se09.smartsurvey.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -17,6 +19,8 @@ import java.util.List;
 @Repository
 public interface SurveyRepository extends JpaRepository<Survey, Long> {
     List<Survey> findByUser(User user);
+
+    Page<Survey> findByUser(User user, Pageable pageable);
 
     List<Survey> findByStatus(SurveyStatusEnum status);
 

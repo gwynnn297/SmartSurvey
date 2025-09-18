@@ -5,9 +5,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
+import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
+import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyDeleteResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyPaginationDTO;
+import vn.duytan.c1se09.smartsurvey.domain.request.survey.SurveyCreateRequestDTO;
+import vn.duytan.c1se09.smartsurvey.domain.request.survey.SurveyUpdateRequestDTO;
+import vn.duytan.c1se09.smartsurvey.service.SurveyService;
 
-import java.util.HashMap;
-import java.util.Map;
+import jakarta.validation.Valid;
 
 /**
  * REST Controller cho Survey management
@@ -16,32 +22,15 @@ import java.util.Map;
 @RequestMapping("/surveys")
 @RequiredArgsConstructor
 public class SurveyController {
+    private final SurveyService surveyService;
 
-    /**
-     * Lấy danh sách khảo sát với phân trang
-     */
+    // Endpoint hợp nhất: luôn trả về danh sách phân trang
     @GetMapping
-    @ApiMessage("Get surveys list")
-    public ResponseEntity<?> getSurveys(
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int limit,
-            @RequestParam(required = false) String search) {
-        try {
-            // Mock data - sau này sẽ thay bằng service thực
-            Map<String, Object> response = new HashMap<>();
-            response.put("items", new Object[0]); // Empty array
-            response.put("page", page);
-            response.put("limit", limit);
-            response.put("total", 0);
-            response.put("totalPages", 0);
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("message", "Lỗi khi lấy danh sách khảo sát: " + e.getMessage());
-            errorResponse.put("status", "error");
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
+    @ApiMessage("Get surveys list (paginated)")
+    public ResponseEntity<SurveyPaginationDTO> getSurveys(
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size) throws IdInvalidException {
+        return ResponseEntity.ok(surveyService.getMySurveysPaginated(page, size));
     }
 
     /**
@@ -49,28 +38,45 @@ public class SurveyController {
      */
     @PostMapping
     @ApiMessage("Create new survey")
-    public ResponseEntity<?> createSurvey(@RequestBody Map<String, Object> surveyData) {
-        try {
-            // Mock response - sau này sẽ thay bằng service thực
-            Map<String, Object> response = new HashMap<>();
-            response.put("id", 1);
-            response.put("title", surveyData.get("title"));
-            response.put("status", "draft");
-            response.put("message", "Khảo sát đã được tạo thành công");
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("message", "Lỗi khi tạo khảo sát: " + e.getMessage());
-            errorResponse.put("status", "error");
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
+    public ResponseEntity<SurveyResponseDTO> createSurvey(@Valid @RequestBody SurveyCreateRequestDTO request)
+            throws IdInvalidException {
+        var surveyDTO = surveyService.createSurvey(request);
+        // TODO: Ghi activity_log tại đây
+        return ResponseEntity.ok(surveyDTO);
     }
+
+    /**
+     * Lấy chi tiết khảo sát theo id
+     */
+    @GetMapping("/{id}")
+    @ApiMessage("Get survey detail")
+    public ResponseEntity<SurveyResponseDTO> getSurveyDetail(@PathVariable("id") Long id) throws IdInvalidException {
+        var surveyDTO = surveyService.getSurveyById(id);
+        return ResponseEntity.ok(surveyDTO);
+    }
+
+    /**
+     * Cập nhật khảo sát
+     */
+    @PutMapping("/{id}")
+    @ApiMessage("Update survey")
+    public ResponseEntity<SurveyResponseDTO> updateSurvey(@PathVariable("id") Long id,
+            @RequestBody SurveyUpdateRequestDTO request) throws IdInvalidException {
+        var updatedDTO = surveyService.updateSurvey(id, request);
+        // TODO: Ghi activity_log tại đây
+        return ResponseEntity.ok(updatedDTO);
+    }
+
+    /**
+     * Xóa khảo sát
+     */
+    @DeleteMapping("/{id}")
+    @ApiMessage("Delete survey")
+    public ResponseEntity<SurveyDeleteResponseDTO> deleteSurvey(@PathVariable("id") Long id) throws IdInvalidException {
+        surveyService.deleteSurvey(id);
+        SurveyDeleteResponseDTO response = new SurveyDeleteResponseDTO(id, "Xóa khảo sát thành công");
+        // TODO: Ghi activity_log tại đây
+        return ResponseEntity.ok(response);
+    }
+
 }
-
-
-
-
-
-
-
