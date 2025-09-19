@@ -176,7 +176,7 @@ const CreateSurvey = () => {
     };
 
     return (
-        <div className="create-survey-wrapper">
+        <>
             <MainLayout>
                 <div className="survey-topbar">
                     <div className="survey-topbar-left">
@@ -326,6 +326,7 @@ const CreateSurvey = () => {
                                                                     newQ[idx].options[oIdx].option_text = e.target.value;
                                                                     setQuestions(newQ);
                                                                 }}
+                                                                placeholder="Nhập nội dung câu trả lời"
                                                             />
                                                             <button
                                                                 className="remove-option"
@@ -376,7 +377,7 @@ const CreateSurvey = () => {
                     </div>
                 </div>
             </MainLayout>
-        </div>
+        </>
     );
 };
 

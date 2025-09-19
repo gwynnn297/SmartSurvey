@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import HeaderComponent from "../../components/HeaderComponent";
 import { surveyService } from '../../services/surveyService';
 import { aiSurveyApi } from '../../api/aiSurveyApi';
+import MainLayout from '../../layouts/MainLayout';
 import './CreateAI.css';
 
 export default function CreateAI() {
@@ -71,8 +72,9 @@ export default function CreateAI() {
     };
 
     return (
-        <div className="create-ai-page">
-            <HeaderComponent showUserInfo={true} />
+        <>
+            <MainLayout>
+            
 
             <div className="ai-container">
                 <div className="ai-steps">
@@ -157,6 +159,7 @@ export default function CreateAI() {
                     </div>
                 )}
             </div>
-        </div>
+        </MainLayout>
+        </>
     );
 }

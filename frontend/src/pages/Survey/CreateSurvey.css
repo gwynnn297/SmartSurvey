@@ -264,51 +264,56 @@
   .btn-delete-question:hover { background:#fecaca; }
   
   /* Nội dung câu hỏi */
-  .question-input {
-    width: 100%;
-    padding: 0.75rem .85rem;
-    border-radius: 10px;
-    border: 1px solid #cbd5e1;
-    background: #fff;
-    margin-bottom: 1rem;
-    transition: all .2s ease;
-    font-size: 1.02rem;
-  }
-  .question-input:focus {
-    outline: none;
-    border-color: #93c5fd;
-    box-shadow: 0 0 0 3px rgba(59,130,246,.15);
-  }
-  
-  /* -----------------------------
-     Lựa chọn của câu trắc nghiệm
-  ------------------------------*/
-  .options-list {
-    display: flex;
-    flex-direction: column;
-    gap: .5rem;
-  }
-  
-  .option-item {
-    display: flex;
-    gap: .5rem;
-    align-items: center;
-  }
-  
-  .option-input {
-    flex: 1;
-    padding: 0.6rem .75rem;
-    border-radius: 8px;
-    border: 1px solid #cbd5e1;
-    background: #fff;
-    transition: all .2s ease;
-    font-size: .98rem;
-  }
-  .option-input:focus {
-    outline: none;
-    border-color: #93c5fd;
-    box-shadow: 0 0 0 3px rgba(59,130,246,.15);
-  }
+.question-input {
+  display: block;
+  width: 97%;
+  box-sizing: border-box;           /* ✅ để tính cả padding và border */
+  padding: 0.6rem .75rem;            /* 🔹 giống option-input */
+  border-radius: 8px;                /* 🔹 giống option-input */
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  margin-bottom: 1rem;
+  transition: all .2s ease;
+  font-size: .98rem;                 /* 🔹 giống option-input */
+}
+.question-input:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+}
+
+/* -----------------------------
+   Lựa chọn của câu trắc nghiệm
+------------------------------*/
+.options-list {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.option-item {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+}
+
+.option-input {
+  flex: 1;
+  width: 100%;
+  box-sizing: border-box;            /* ✅ giống question-input */
+  padding: 0.6rem .75rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  transition: all .2s ease;
+  font-size: .98rem;
+}
+.option-input:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.15);
+}
+
   
   /* Nút xóa option */
   .remove-option {
