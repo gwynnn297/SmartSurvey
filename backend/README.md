@@ -12,19 +12,26 @@
 
 
 
-### . Cấu hình Database MySQL
+### . Cấu hình Database MySQL (không hardcode)
 
 - Tạo database:
   ```sql
-  CREATE DATABASE smartservey CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  CREATE DATABASE smartsurvey CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
   ```
-- Đảm bảo user/password MySQL đúng như sau (hoặc sửa lại trong `src/main/resources/application.properties`):
-  ```
-  spring.datasource.username=root // sửa lại cho đúng với  username password trên mysql của mn
-  spring.datasource.password=phuc290703
-  ```
+- Không sửa file `src/main/resources/application.properties` để đổi password. Thay vào đó dùng 1 trong 2 cách:
+  1) Dùng biến môi trường (khuyên dùng):
+     ```zsh
+     # macOS zsh - đặt trong ~/.zshrc hoặc chạy trước khi start app
+     export DB_USERNAME="root"
+     export DB_PASSWORD="<your_mysql_password>"
+     export MYSQL_HOST="localhost"
+     export JWT_SECRET="<optional_custom_jwt_secret>"
+     ```
+  2) Dùng file local override (đã ignore):
+     - Copy file mẫu: `cp application-local.properties.example application-local.properties`
+     - Sửa giá trị trong `application-local.properties` cho máy của bạn.
 
-  ```
+Ứng dụng sẽ tự đọc biến môi trường hoặc file `application-local.properties` (nếu có). Không cần commit password lên repo.
 
 ### . Cài đặt thư viện phụ thuộc
 
@@ -36,11 +43,11 @@
 
 ### . Chạy ứng dụng
 
-- Dùng Maven:
+- Dùng Gradle:
   ```bash
-  mvn spring-boot:run
+  ./gradlew bootRun
   ```
-- Hoặc chạy file main: `/Users/tt/Documents/SmartServey/backend/src/main/resources/application.properties` (cài đặt Spring Boot Extension Pack) để có thể chạy được
+- Hoặc chạy bằng IDE (Spring Boot run configuration). Hãy đảm bảo đã set env vars hoặc có file `application-local.properties`.
 
 ### 6. Truy cập API
 

@@ -10,7 +10,6 @@ import vn.duytan.c1se09.smartsurvey.service.AuthService;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
 import vn.duytan.c1se09.smartsurvey.domain.request.auth.LoginRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.auth.RegisterRequestDTO;
-import vn.duytan.c1se09.smartsurvey.domain.request.auth.ChangePasswordRequestDTO;
 
 import jakarta.validation.Valid;
 import java.util.HashMap;
@@ -29,69 +28,38 @@ public class AuthController {
 
     @PostMapping("/register")
     @ApiMessage("Register a new user")
-    public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequestDTO registerRequest,
+    public ResponseEntity<AuthResponseDTO> registerUser(@Valid @RequestBody RegisterRequestDTO registerRequest,
             BindingResult bindingResult) {
-        // Bắt lỗi validation (ví dụ: mật khẩu < 6 ký tự)
         if (bindingResult.hasErrors()) {
-            String errorMessage = bindingResult.getAllErrors().get(0).getDefaultMessage();
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("message", errorMessage);
-            errorResponse.put("status", "error");
-            return ResponseEntity.badRequest().body(errorResponse);
+            // ném MethodArgumentNotValidException tự động -> GlobalException xử lý
+            throw new RuntimeException(bindingResult.getAllErrors().get(0).getDefaultMessage());
         }
-
-        try {
-            AuthResponseDTO authResponse = authService.registerUser(registerRequest);
-            return ResponseEntity.ok(authResponse);
-        } catch (RuntimeException e) {
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("message", e.getMessage());
-            errorResponse.put("status", "error");
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
+        AuthResponseDTO authResponse = authService.registerUser(registerRequest);
+        return ResponseEntity.ok(authResponse);
     }
 
     @PostMapping("/login")
     @ApiMessage("Login a user")
-    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequestDTO loginRequest) {
-        try {
-            AuthResponseDTO authResponse = authService.authenticateUser(loginRequest);
-            return ResponseEntity.ok(authResponse);
-        } catch (Exception e) {
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("message", "Email hoặc mật khẩu không đúng");
-            errorResponse.put("status", "error");
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
+    public ResponseEntity<AuthResponseDTO> authenticateUser(@Valid @RequestBody LoginRequestDTO loginRequest) {
+        AuthResponseDTO authResponse = authService.authenticateUser(loginRequest);
+        return ResponseEntity.ok(authResponse);
     }
 
     @GetMapping("/me")
     @ApiMessage("Get current user")
-    public ResponseEntity<?> getCurrentUser() {
-        try {
-            var currentUser = authService.getCurrentUser();
-            if (currentUser == null) {
-                Map<String, String> errorResponse = new HashMap<>();
-                errorResponse.put("message", "Không tìm thấy thông tin user");
-                errorResponse.put("status", "error");
-                return ResponseEntity.badRequest().body(errorResponse);
-            }
-
-            Map<String, Object> userInfo = new HashMap<>();
-            userInfo.put("id", currentUser.getUserId());
-            userInfo.put("email", currentUser.getEmail());
-            userInfo.put("fullName", currentUser.getFullName());
-            userInfo.put("role", currentUser.getRole().name());
-            userInfo.put("isActive", currentUser.getIsActive());
-            userInfo.put("createdAt", currentUser.getCreatedAt());
-
-            return ResponseEntity.ok(userInfo);
-        } catch (Exception e) {
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("message", "Lỗi khi lấy thông tin user");
-            errorResponse.put("status", "error");
-            return ResponseEntity.badRequest().body(errorResponse);
+    public ResponseEntity<Map<String, Object>> getCurrentUser() {
+        var currentUser = authService.getCurrentUser();
+        if (currentUser == null) {
+            throw new RuntimeException("Không tìm thấy thông tin user");
         }
+        Map<String, Object> userInfo = new HashMap<>();
+        userInfo.put("id", currentUser.getUserId());
+        userInfo.put("email", currentUser.getEmail());
+        userInfo.put("fullName", currentUser.getFullName());
+        userInfo.put("role", currentUser.getRole().name());
+        userInfo.put("isActive", currentUser.getIsActive());
+        userInfo.put("createdAt", currentUser.getCreatedAt());
+        return ResponseEntity.ok(userInfo);
     }
 
     @GetMapping("/health")
@@ -115,60 +83,6 @@ public class AuthController {
         return ResponseEntity.ok(Map.of(
                 "status", "success",
                 "message", "Đã gửi email khôi phục mật khẩu cho " + email));
-    }
-
-    @PostMapping("/test-token")
-    @ApiMessage("Test token validation")
-    public ResponseEntity<?> testToken() {
-        System.out.println("=== Test Token API Called ===");
-
-        // Test authentication
-        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        System.out.println("Security Context Authentication: " + (auth != null ? auth.getName() : "null"));
-        System.out.println("Is authenticated: " + (auth != null ? auth.isAuthenticated() : "false"));
-
-        if (auth != null) {
-            System.out.println("Authorities: " + auth.getAuthorities());
-        }
-
-        return ResponseEntity.ok(Map.of(
-                "message", "Token test successful",
-                "authenticated", auth != null && auth.isAuthenticated(),
-                "username", auth != null ? auth.getName() : "null"));
-    }
-
-    @PostMapping("/change-password")
-    @ApiMessage("Change password")
-    public ResponseEntity<?> changePassword(@Valid @RequestBody ChangePasswordRequestDTO changePasswordRequest,
-            BindingResult bindingResult) {
-        System.out.println("=== Change Password API Called ===");
-        System.out.println("Request data: " + changePasswordRequest);
-
-        // Test authentication
-        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        System.out.println("Security Context Authentication: " + (auth != null ? auth.getName() : "null"));
-        System.out.println("Is authenticated: " + (auth != null ? auth.isAuthenticated() : "false"));
-        // Bắt lỗi validation
-        if (bindingResult.hasErrors()) {
-            String errorMessage = bindingResult.getAllErrors().get(0).getDefaultMessage();
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("message", errorMessage);
-            errorResponse.put("status", "error");
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
-
-        try {
-            authService.changePassword(changePasswordRequest);
-            Map<String, String> successResponse = new HashMap<>();
-            successResponse.put("message", "Đổi mật khẩu thành công");
-            successResponse.put("status", "success");
-            return ResponseEntity.ok(successResponse);
-        } catch (Exception e) {
-            Map<String, String> errorResponse = new HashMap<>();
-            errorResponse.put("message", e.getMessage());
-            errorResponse.put("status", "error");
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
     }
 
 }
