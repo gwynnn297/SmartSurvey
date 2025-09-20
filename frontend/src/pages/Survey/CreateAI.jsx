@@ -95,7 +95,7 @@ export default function CreateAI() {
                         <input
                             value={form.title}
                             onChange={(e) => handleChange('title', e.target.value)}
-                            placeholder="Ví dụ: Khảo sát Hài lòng Khách hàng Q4 2024"
+                            placeholder="Nhập tiêu đề khảo sát"
                         />
                         {errors.title && <div className="ai-error">{errors.title}</div>}
                     </div>
@@ -123,7 +123,7 @@ export default function CreateAI() {
                         />
                     </div>
 
-                    <div className="ai-form-grid">
+                    {/* <div className="ai-form-grid">
                         <div className="ai-form-row">
                             <label>Hết hạn</label>
                             <input type="date" value={form.deadline_date} onChange={(e) => handleChange('deadline_date', e.target.value)} />
@@ -132,7 +132,7 @@ export default function CreateAI() {
                             <label>&nbsp;</label>
                             <input type="time" value={form.deadline_time} onChange={(e) => handleChange('deadline_time', e.target.value)} />
                         </div>
-                    </div>
+                    </div> */}
 
                     <div className="ai-form-row">
                         <label>Ngữ cảnh chi tiết cho AI <span className="req">*</span></label>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import { surveyService } from '../../services/surveyService';
+import { questionService, optionService } from '../../services/questionSurvey';
 import './CreateSurvey.css';
 
 // 🧩 DND Kit
@@ -53,6 +54,43 @@ const CreateSurvey = () => {
 
     const sensors = useSensors(useSensor(PointerSensor));
 
+    // Function để xóa question
+    const deleteQuestion = async (questionId, questionIndex) => {
+        try {
+            // Nếu question đã được lưu trên server (không phải temp), gọi API xóa
+            if (questionId && !questionId.toString().startsWith('temp_')) {
+                await questionService.deleteQuestion(questionId);
+                console.log('Question deleted from server:', questionId);
+            }
+
+            // Xóa khỏi state
+            const newQuestions = questions.filter((_, i) => i !== questionIndex);
+            setQuestions(newQuestions);
+        } catch (error) {
+            console.error('Error deleting question:', error);
+            alert('Có lỗi xảy ra khi xóa câu hỏi. Vui lòng thử lại.');
+        }
+    };
+
+    // Function để xóa option
+    const deleteOption = async (optionId, questionIndex, optionIndex) => {
+        try {
+            // Nếu option đã được lưu trên server (không phải temp), gọi API xóa
+            if (optionId && !optionId.toString().startsWith('temp_option_')) {
+                await optionService.deleteOption(optionId);
+                console.log('Option deleted from server:', optionId);
+            }
+
+            // Xóa khỏi state
+            const newQuestions = [...questions];
+            newQuestions[questionIndex].options.splice(optionIndex, 1);
+            setQuestions(newQuestions);
+        } catch (error) {
+            console.error('Error deleting option:', error);
+            alert('Có lỗi xảy ra khi xóa lựa chọn. Vui lòng thử lại.');
+        }
+    };
+
     useEffect(() => {
         loadCategories();
 
@@ -70,12 +108,58 @@ const CreateSurvey = () => {
                 status: editSurvey.status || 'draft'
             });
 
-            // Load questions nếu có
-            if (editSurvey.questions && editSurvey.questions.length > 0) {
+            // Load questions từ server nếu có surveyId
+            if (editSurvey.id && !editSurvey.id.toString().startsWith('temp_')) {
+                loadQuestionsFromServer(editSurvey.id);
+            } else if (editSurvey.questions && editSurvey.questions.length > 0) {
+                // Fallback: load từ localStorage
                 setQuestions(editSurvey.questions);
             }
         }
     }, [location.state]);
+
+    // Function để load questions từ server
+    const loadQuestionsFromServer = async (surveyId) => {
+        try {
+            console.log('Loading questions from server for survey:', surveyId);
+            const questionsFromServer = await questionService.getQuestionsBySurvey(surveyId);
+            console.log('Questions loaded from server:', questionsFromServer);
+
+            // Load options cho mỗi question
+            const questionsWithOptions = [];
+            for (const question of questionsFromServer) {
+                let options = [];
+                if (question.questionType === 'multiple_choice') {
+                    try {
+                        options = await optionService.getOptionsByQuestion(question.id);
+                        console.log(`Options loaded for question ${question.id}:`, options);
+                    } catch (error) {
+                        console.log(`No options found for question ${question.id}`);
+                    }
+                }
+
+                questionsWithOptions.push({
+                    id: question.id,
+                    question_text: question.questionText,
+                    question_type: question.questionType,
+                    is_required: question.isRequired,
+                    options: options.map(opt => ({
+                        id: opt.id,
+                        option_text: opt.optionText
+                    }))
+                });
+            }
+
+            setQuestions(questionsWithOptions);
+        } catch (error) {
+            console.error('Error loading questions from server:', error);
+            // Fallback: load từ localStorage nếu có
+            const editSurvey = location.state?.editSurvey;
+            if (editSurvey?.questions && editSurvey.questions.length > 0) {
+                setQuestions(editSurvey.questions);
+            }
+        }
+    };
 
     const loadCategories = async () => {
         try {
@@ -139,6 +223,94 @@ const CreateSurvey = () => {
                 console.log('✅ Survey created:', savedSurvey);
             }
 
+            const surveyId = savedSurvey.id;
+
+            // Tạo/cập nhật questions và options
+            const updatedQuestions = [];
+            if (questions.length > 0) {
+                for (const question of questions) {
+                    const questionPayload = {
+                        surveyId: surveyId,
+                        questionText: question.question_text,
+                        questionType: question.question_type,
+                        isRequired: question.is_required || false
+                    };
+
+                    let savedQuestion;
+                    if (question.id && question.id.toString().startsWith('temp_')) {
+                        // Tạo question mới
+                        savedQuestion = await questionService.createQuestion(questionPayload);
+                        console.log('✅ Question created:', savedQuestion);
+                    } else if (question.id && !question.id.toString().startsWith('temp_')) {
+                        // Cập nhật question hiện có
+                        savedQuestion = await questionService.updateQuestion(question.id, {
+                            questionText: question.question_text,
+                            questionType: question.question_type,
+                            isRequired: question.is_required || false
+                        });
+                        console.log('✅ Question updated:', savedQuestion);
+                    }
+
+                    // Tạo/cập nhật options cho multiple choice questions
+                    const updatedOptions = [];
+                    if (question.question_type === 'multiple_choice' && question.options?.length > 0) {
+                        for (const option of question.options) {
+                            if (option.option_text.trim()) {
+                                const optionPayload = {
+                                    questionId: savedQuestion.id,
+                                    optionText: option.option_text
+                                };
+
+                                let savedOption;
+                                if (option.id && option.id.toString().startsWith('temp_option_')) {
+                                    // Tạo option mới
+                                    savedOption = await optionService.createOption(optionPayload);
+                                    console.log('✅ Option created:', savedOption);
+                                } else if (option.id && !option.id.toString().startsWith('temp_option_')) {
+                                    // Cập nhật option hiện có
+                                    savedOption = await optionService.updateOption(option.id, {
+                                        optionText: option.option_text
+                                    });
+                                    console.log('✅ Option updated:', savedOption);
+                                }
+
+                                if (savedOption) {
+                                    updatedOptions.push({
+                                        id: savedOption.id,
+                                        option_text: savedOption.optionText
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    // Tạo question object với ID thực từ server
+                    const updatedQuestion = {
+                        id: savedQuestion.id,
+                        question_text: savedQuestion.questionText,
+                        question_type: savedQuestion.questionType,
+                        is_required: savedQuestion.isRequired,
+                        options: updatedOptions
+                    };
+
+                    updatedQuestions.push(updatedQuestion);
+                }
+            }
+
+            // Cập nhật state với questions có ID thực
+            setQuestions(updatedQuestions);
+
+            // Refresh questions từ server để đảm bảo đồng bộ
+            if (surveyId) {
+                setTimeout(async () => {
+                    try {
+                        await loadQuestionsFromServer(surveyId);
+                    } catch (error) {
+                        console.error('❌ Error refreshing questions:', error);
+                    }
+                }, 1000); // Delay 1 giây để server xử lý xong
+            }
+
             // Cập nhật localStorage
             const existingSurveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
 
@@ -151,8 +323,8 @@ const CreateSurvey = () => {
                             title: savedSurvey.title,
                             description: savedSurvey.description,
                             categoryName: savedSurvey.categoryName,
-                            questionsCount: questions.length,
-                            questions: questions,
+                            questionsCount: updatedQuestions.length,
+                            questions: updatedQuestions,
                             updatedAt: savedSurvey.updatedAt
                         }
                         : s
@@ -167,8 +339,8 @@ const CreateSurvey = () => {
                     status: 'draft',
                     categoryName: savedSurvey.categoryName,
                     createdAt: savedSurvey.createdAt,
-                    questionsCount: questions.length,
-                    questions: questions,
+                    questionsCount: updatedQuestions.length,
+                    questions: updatedQuestions,
                     responses: 0
                 };
                 existingSurveys.push(newSurvey);
@@ -180,7 +352,12 @@ const CreateSurvey = () => {
                 : (status === 'draft' ? 'Đã lưu bản nháp khảo sát!' : 'Đã tạo khảo sát thành công!');
 
             alert(message);
-            navigate('/dashboard');
+
+            // Nếu đang edit, ở lại trang để tiếp tục chỉnh sửa
+            // Nếu tạo mới, chuyển về dashboard
+            if (!isEditMode) {
+                navigate('/dashboard');
+            }
         } catch (err) {
             console.error('Lỗi khi lưu khảo sát:', err);
             alert('Có lỗi xảy ra khi lưu khảo sát. Vui lòng thử lại.');
@@ -199,10 +376,13 @@ const CreateSurvey = () => {
                             setQuestions(prev => [
                                 ...prev,
                                 {
-                                    id: Date.now(),
+                                    id: `temp_${Date.now()}`,
                                     question_text: '',
                                     question_type: 'multiple_choice',
-                                    options: [{ option_text: '' }, { option_text: '' }],
+                                    options: [
+                                        { id: `temp_option_${Date.now()}_1`, option_text: '' },
+                                        { id: `temp_option_${Date.now()}_2`, option_text: '' }
+                                    ],
                                     is_required: false
                                 }
                             ])
@@ -256,12 +436,14 @@ const CreateSurvey = () => {
                 {/* Main content */}
                 <div className="survey-main">
                     <div className="survey-info-card">
+                        <label className="field-label">Tiêu đề:</label>
                         <input
                             className="survey-title-input"
                             value={surveyData.title}
                             onChange={(e) => handleSurveyDataChange('title', e.target.value)}
                             placeholder="Tiêu đề khảo sát"
                         />
+                        <label className="field-label">Mô tả:</label>
                         <textarea
                             className="survey-desc-input"
                             value={surveyData.description}
@@ -278,10 +460,13 @@ const CreateSurvey = () => {
                                     className="btn-add-question"
                                     onClick={() =>
                                         setQuestions([{
-                                            id: Date.now(),
+                                            id: `temp_${Date.now()}`,
                                             question_text: '',
                                             question_type: 'multiple_choice',
-                                            options: [{ option_text: '' }, { option_text: '' }],
+                                            options: [
+                                                { id: `temp_option_${Date.now()}_1`, option_text: '' },
+                                                { id: `temp_option_${Date.now()}_2`, option_text: '' }
+                                            ],
                                             is_required: false
                                         }])
                                     }
@@ -311,8 +496,9 @@ const CreateSurvey = () => {
                                                 <button
                                                     className="btn-delete-question"
                                                     onClick={() => {
-                                                        const newQ = questions.filter((_, i) => i !== idx);
-                                                        setQuestions(newQ);
+                                                        if (window.confirm('Bạn có chắc muốn xóa câu hỏi này không?')) {
+                                                            deleteQuestion(q.id, idx);
+                                                        }
                                                     }}
                                                 >
                                                     🗑
@@ -348,9 +534,9 @@ const CreateSurvey = () => {
                                                         <button
                                                             className="remove-option"
                                                             onClick={() => {
-                                                                const newQ = [...questions];
-                                                                newQ[idx].options.splice(oIdx, 1);
-                                                                setQuestions(newQ);
+                                                                if (window.confirm('Bạn có chắc muốn xóa lựa chọn này không?')) {
+                                                                    deleteOption(opt.id, idx, oIdx);
+                                                                }
                                                             }}
                                                         >x</button>
                                                     </div>
@@ -359,7 +545,10 @@ const CreateSurvey = () => {
                                                     className="add-option"
                                                     onClick={() => {
                                                         const newQ = [...questions];
-                                                        newQ[idx].options.push({ option_text: '' });
+                                                        newQ[idx].options.push({
+                                                            id: `temp_option_${Date.now()}_${newQ[idx].options.length + 1}`,
+                                                            option_text: ''
+                                                        });
                                                         setQuestions(newQ);
                                                     }}
                                                 >
@@ -376,10 +565,13 @@ const CreateSurvey = () => {
                                             setQuestions(prev => [
                                                 ...prev,
                                                 {
-                                                    id: Date.now(),
+                                                    id: `temp_${Date.now()}`,
                                                     question_text: '',
                                                     question_type: 'multiple_choice',
-                                                    options: [{ option_text: '' }, { option_text: '' }],
+                                                    options: [
+                                                        { id: `temp_option_${Date.now()}_1`, option_text: '' },
+                                                        { id: `temp_option_${Date.now()}_2`, option_text: '' }
+                                                    ],
                                                     is_required: false
                                                 }
                                             ])

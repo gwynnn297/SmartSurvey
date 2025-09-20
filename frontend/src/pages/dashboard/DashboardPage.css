@@ -1,12 +1,13 @@
 .dashboard-container {
     min-height: 100vh;
-    background: #f8f9fa;
+    background: #f4f5f9;
 }
 
 .dashboard-content {
     padding: 24px;
     max-width: 1200px;
     margin: 0 auto;
+    background-color: #f4f5f9;
 }
 
 .dashboard-header {
@@ -133,20 +134,21 @@
     
 } */
 
-.dashboard-actions .btn-secondary {
+.dashboard-actions .btn-createsurvey {
     width: 180px;
     height: 50px;
     background: #3063ca;
     color: #cbced1;
     font-size: 16px;
     border: 2px solid #e5e7eb;
-    boder-radius: 10px;   
-
+    border-radius: 10px;   
+    cursor: pointer;
+    transition: all 0.3s ease;
 }
 
-.dashboard-actions .btn-secondary:hover {
-    background: #e5e7eb;
-    border-color: #d1d5db;
+.dashboard-actions .btn-createsurvey:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
 .survey-list {
@@ -165,7 +167,7 @@
 }
 
 .survey-item:hover {
-    background: #e0e0e2;
+    background: #f4f5f9;
 }
 
 .survey-left {
@@ -281,7 +283,35 @@
     border-radius: 16px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
     overflow: hidden;
+    position: relative;
 }
+
+/* === KHỐI CSS MỚI CHO NÚT ĐÓNG === */
+.modal-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    background: transparent;
+    border: none;
+    font-size: 28px;
+    line-height: 1;
+    color: #6b7280;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.modal-close-btn:hover {
+    background-color: #f3f4f6;
+    color: #111827;
+}
+
 
 .modal-header {
     padding: 20px 24px;

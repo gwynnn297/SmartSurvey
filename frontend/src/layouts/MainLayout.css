@@ -1,0 +1,13 @@
+/* MainLayout.css */
+.content {
+    max-width: 90%;
+    /* Giới hạn chiều rộng tối đa */
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    /* px-4 trong Tailwind tương đương */
+    padding-right: 1rem;
+    /* padding-top: 2rem;    */
+    padding-bottom: 2rem;
+    background-color: #f4f5f9;
+}

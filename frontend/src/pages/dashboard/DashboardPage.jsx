@@ -166,7 +166,7 @@ export default function DashboardPage() {
             <h2>Danh sách khảo sát:</h2>
             <div className="dashboard-actions">
               {/* <button className="btn-primary" onClick={() => setShowCreateModal(true)}>+ Tạo khảo sát mới</button> */}
-              <button className="btn-secondary" onClick={() => setShowCreateModal(true)}>+ Tạo khảo sát mới</button>
+              <button className="btn-createsurvey" onClick={() => setShowCreateModal(true)}>+ Tạo khảo sát mới</button>
             </div>
           </div>
           <div className="survey-list">
@@ -244,6 +244,8 @@ export default function DashboardPage() {
         {showCreateModal && (
           <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
+              {/* === NÚT X ĐÃ ĐƯỢC THÊM VÀO ĐÂY === */}
+              <button className="modal-close-btn" onClick={() => setShowCreateModal(false)}>&times;</button>
               <div className="modal-header">
                 <h3>Bạn muốn bắt đầu như thế nào?</h3>
                 <p>Chọn phương thức tạo khảo sát phù hợp với nhu cầu của bạn</p>

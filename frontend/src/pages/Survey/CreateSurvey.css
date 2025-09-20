@@ -82,6 +82,7 @@
     grid-template-columns: 260px 1fr;
     gap: 1.25rem;
     align-items: start;
+    /* background-color: #f4f5f9; */
   }
   
   /* -----------------------------
@@ -147,13 +148,15 @@
   }
   
   .survey-title-input {
-    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
     font-weight: 800;
     width: 100%;
     border: none;
     outline: none;
     background: transparent;
-    color: #111827;
+    color:#060606;
+    margin-top: 6px;
   }
   
   .survey-desc-input {
@@ -167,6 +170,21 @@
     background: transparent;
   }
   
+  /* -----------------------------
+     Css của field label
+  ------------------------------*/
+  .field {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .field-label {
+    font-weight: 600;
+    font-size: 25px; 
+    color: #060606; /* màu chữ đậm */
+  }
+
+
   /* -----------------------------
      Khung danh sách câu hỏi (luôn hiện)
   ------------------------------*/
@@ -392,6 +410,3 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  
-
-  

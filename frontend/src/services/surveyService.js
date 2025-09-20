@@ -17,10 +17,10 @@ export const surveyService = {
         try {
             console.log('Creating survey:', data);
             const response = await apiClient.post('/surveys', data);
-            console.log('✅ Survey created:', response.data);
+            console.log('Survey created:', response.data);
             return response.data;
         } catch (error) {
-            console.error('❌ Create survey error:', error);
+            console.error('Create survey error:', error);
             throw error;
         }
     },
@@ -33,7 +33,7 @@ export const surveyService = {
             });
             return response.data;
         } catch (error) {
-            console.error('❌ Get surveys error:', error);
+            console.error('Get surveys error:', error);
             throw error;
         }
     },
@@ -44,7 +44,7 @@ export const surveyService = {
             const response = await apiClient.get(`/surveys/${surveyId}`);
             return response.data;
         } catch (error) {
-            console.error('❌ Get survey by id error:', error);
+            console.error('Get survey by id error:', error);
             throw error;
         }
     },
@@ -52,12 +52,12 @@ export const surveyService = {
     // Cập nhật khảo sát
     updateSurvey: async (surveyId, data) => {
         try {
-            console.log(`📝 Updating survey ${surveyId}:`, data);
+            console.log(`Updating survey ${surveyId}:`, data);
             const response = await apiClient.put(`/surveys/${surveyId}`, data);
-            console.log('✅ Survey updated:', response.data);
+            console.log('Survey updated:', response.data);
             return response.data;
         } catch (error) {
-            console.error('❌ Update survey error:', error);
+            console.error('Update survey error:', error);
             throw error;
         }
     },
@@ -68,7 +68,7 @@ export const surveyService = {
             const response = await apiClient.delete(`/surveys/${surveyId}`);
             return response.data;
         } catch (error) {
-            console.error('❌ Delete survey error:', error);
+            console.error('Delete survey error:', error);
             throw error;
         }
     },
@@ -79,7 +79,7 @@ export const surveyService = {
             const response = await apiClient.get('/categories');
             return response.data;
         } catch (error) {
-            console.error('❌ Get categories error:', error);
+            console.error('Get categories error:', error);
             throw error;
         }
     }
