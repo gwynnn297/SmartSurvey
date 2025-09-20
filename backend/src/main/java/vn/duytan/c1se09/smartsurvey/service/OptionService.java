@@ -7,6 +7,8 @@ import vn.duytan.c1se09.smartsurvey.domain.*;
 import vn.duytan.c1se09.smartsurvey.domain.request.option.OptionCreateRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.option.OptionUpdateRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.option.OptionResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.option.OptionCreateResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.option.OptionUpdateResponseDTO;
 import vn.duytan.c1se09.smartsurvey.repository.*;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 
@@ -99,6 +101,9 @@ public class OptionService {
         return toOptionResponseDTO(option);
     }
 
+    /**
+     * Cập nhật tùy chọn (method gốc)
+     */
     @Transactional
     public OptionResponseDTO updateOption(Long optionId, OptionUpdateRequestDTO request) throws IdInvalidException {
         Option option = getOptionEntityById(optionId);
@@ -151,5 +156,80 @@ public class OptionService {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
         return optionRepository.countByQuestion(question);
+    }
+
+    /**
+     * SPRINT 2: Tạo tùy chọn cho câu hỏi cụ thể và trả về response DTO
+     */
+    @Transactional
+    public OptionCreateResponseDTO createOptionForQuestionWithResponse(Long questionId, OptionCreateRequestDTO request) throws IdInvalidException {
+        
+        // Tái sử dụng logic hiện tại
+        OptionResponseDTO optionDTO = createOption(request);
+        
+        // Tạo response DTO
+        OptionCreateResponseDTO response = new OptionCreateResponseDTO();
+        response.setId(optionDTO.getId());
+        response.setQuestionId(optionDTO.getQuestionId());
+        response.setQuestionText(optionDTO.getQuestionText());
+        response.setOptionText(optionDTO.getOptionText());
+        response.setMessage("Tạo tùy chọn thành công!");
+        response.setCreatedAt(optionDTO.getCreatedAt());
+        response.setUpdatedAt(optionDTO.getUpdatedAt());
+        
+        return response;
+    }
+
+    /**
+     * Tạo tùy chọn cho câu hỏi cụ thể (method mới)
+     */
+    @Transactional
+    public OptionResponseDTO createOptionForQuestion(Long questionId, OptionCreateRequestDTO request) throws IdInvalidException {
+        User currentUser = authService.getCurrentUser();
+        if (currentUser == null) {
+            throw new IdInvalidException("Người dùng chưa xác thực");
+        }
+
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
+        
+        if (!question.getSurvey().getUser().getUserId().equals(currentUser.getUserId())) {
+            throw new IdInvalidException("Bạn không có quyền tạo tùy chọn cho câu hỏi này");
+        }
+
+        Option option = new Option();
+        option.setQuestion(question);
+        option.setOptionText(request.getOptionText());
+
+        Option savedOption = optionRepository.save(option);
+        
+        // Log activity
+        activityLogService.log(
+                ActivityLog.ActionType.add_question,
+                savedOption.getOptionId(),
+                "options",
+                "Tạo tùy chọn: " + request.getOptionText());
+        
+        return toOptionResponseDTO(savedOption);
+    }
+
+    /**
+     * Cập nhật tùy chọn và trả về response DTO
+     */
+    @Transactional
+    public OptionUpdateResponseDTO updateOptionWithResponse(Long optionId, OptionUpdateRequestDTO request) throws IdInvalidException {
+        OptionResponseDTO updatedDTO = updateOption(optionId, request);
+        
+        // Tạo response DTO
+        OptionUpdateResponseDTO response = new OptionUpdateResponseDTO();
+        response.setId(updatedDTO.getId());
+        response.setQuestionId(updatedDTO.getQuestionId());
+        response.setQuestionText(updatedDTO.getQuestionText());
+        response.setOptionText(updatedDTO.getOptionText());
+        response.setMessage("Cập nhật tùy chọn thành công!");
+        response.setCreatedAt(updatedDTO.getCreatedAt());
+        response.setUpdatedAt(updatedDTO.getUpdatedAt());
+        
+        return response;
     }
 }

@@ -7,6 +7,8 @@ import vn.duytan.c1se09.smartsurvey.domain.*;
 import vn.duytan.c1se09.smartsurvey.domain.request.question.QuestionCreateRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.question.QuestionUpdateRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.question.QuestionResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.question.QuestionCreateResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.question.QuestionUpdateResponseDTO;
 import vn.duytan.c1se09.smartsurvey.repository.*;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 
@@ -75,6 +77,31 @@ public class QuestionService {
         return toQuestionResponseDTO(saved);
     }
 
+    /**
+     * SPRINT 2: Tạo câu hỏi cho survey cụ thể và trả về response DTO
+     */
+    @Transactional
+    public QuestionCreateResponseDTO createQuestionForSurveyWithResponse(Long surveyId, QuestionCreateRequestDTO request) throws IdInvalidException {
+        
+        // Tái sử dụng logic hiện tại
+        QuestionResponseDTO questionDTO = createQuestion(request);
+        
+        // Tạo response DTO
+        QuestionCreateResponseDTO response = new QuestionCreateResponseDTO();
+        response.setId(questionDTO.getId());
+        response.setSurveyId(questionDTO.getSurveyId());
+        response.setSurveyTitle(questionDTO.getSurveyTitle());
+        response.setQuestionText(questionDTO.getQuestionText());
+        response.setQuestionType(questionDTO.getQuestionType());
+        response.setQuestionTypeDescription(questionDTO.getQuestionTypeDescription());
+        response.setIsRequired(questionDTO.getIsRequired());
+        response.setMessage("Tạo câu hỏi thành công!");
+        response.setCreatedAt(questionDTO.getCreatedAt());
+        response.setUpdatedAt(questionDTO.getUpdatedAt());
+        
+        return response;
+    }
+
     public List<QuestionResponseDTO> getQuestionsBySurvey(Long surveyId) throws IdInvalidException {
         User currentUser = authService.getCurrentUser();
         if (currentUser == null) {
@@ -104,6 +131,9 @@ public class QuestionService {
         return toQuestionResponseDTO(question);
     }
 
+    /**
+     * Cập nhật câu hỏi (method gốc)
+     */
     @Transactional
     public QuestionResponseDTO updateQuestion(Long questionId, QuestionUpdateRequestDTO request) throws IdInvalidException {
         Question question = getQuestionEntityById(questionId);
@@ -133,6 +163,29 @@ public class QuestionService {
                 "Cập nhật câu hỏi: " + saved.getQuestionText());
 
         return toQuestionResponseDTO(saved);
+    }
+
+    /**
+     * Cập nhật câu hỏi và trả về response DTO
+     */
+    @Transactional
+    public QuestionUpdateResponseDTO updateQuestionWithResponse(Long questionId, QuestionUpdateRequestDTO request) throws IdInvalidException {
+        QuestionResponseDTO updatedDTO = updateQuestion(questionId, request);
+        
+        // Tạo response DTO
+        QuestionUpdateResponseDTO response = new QuestionUpdateResponseDTO();
+        response.setId(updatedDTO.getId());
+        response.setSurveyId(updatedDTO.getSurveyId());
+        response.setSurveyTitle(updatedDTO.getSurveyTitle());
+        response.setQuestionText(updatedDTO.getQuestionText());
+        response.setQuestionType(updatedDTO.getQuestionType());
+        response.setQuestionTypeDescription(updatedDTO.getQuestionTypeDescription());
+        response.setIsRequired(updatedDTO.getIsRequired());
+        response.setMessage("Cập nhật câu hỏi thành công!");
+        response.setCreatedAt(updatedDTO.getCreatedAt());
+        response.setUpdatedAt(updatedDTO.getUpdatedAt());
+        
+        return response;
     }
 
     @Transactional

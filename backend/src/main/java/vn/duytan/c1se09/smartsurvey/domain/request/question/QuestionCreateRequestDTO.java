@@ -7,7 +7,7 @@ import vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum;
 
 @Data
 public class QuestionCreateRequestDTO {
-    @NotNull(message = "Survey ID không được để trống")
+    // Không bắt buộc vì có thể lấy từ URL
     private Long surveyId;
     
     @NotBlank(message = "Nội dung câu hỏi không được để trống")

@@ -20,81 +20,67 @@ import java.util.List;
  * REST Controller cho Option management
  */
 @RestController
-@RequestMapping("/options")
 @RequiredArgsConstructor
 public class OptionController {
     private final OptionService optionService;
 
     /**
-     * Tạo tùy chọn mới
+     * SPRINT 2: Tạo tùy chọn cho câu hỏi cụ thể
+     * POST /questions/{id}/options
      */
-    @PostMapping
-    @ApiMessage("Create new option")
-    public ResponseEntity<OptionCreateResponseDTO> createOption(@Valid @RequestBody OptionCreateRequestDTO request)
-            throws IdInvalidException {
-        var optionDTO = optionService.createOption(request);
+    @PostMapping("/questions/{questionId}/options")
+    @ApiMessage("Create new option for question")
+    public ResponseEntity<OptionCreateResponseDTO> createOptionForQuestion(
+            @PathVariable("questionId") Long questionId,
+            @Valid @RequestBody OptionCreateRequestDTO request) throws IdInvalidException {
         
-        // Tạo response DTO riêng cho create
-        OptionCreateResponseDTO response = new OptionCreateResponseDTO();
-        response.setId(optionDTO.getId());
-        response.setQuestionId(optionDTO.getQuestionId());
-        response.setQuestionText(optionDTO.getQuestionText());
-        response.setOptionText(optionDTO.getOptionText());
-        response.setMessage("Tạo tùy chọn thành công!");
-        response.setCreatedAt(optionDTO.getCreatedAt());
-        response.setUpdatedAt(optionDTO.getUpdatedAt());
+        // Override questionId từ path parameter nếu chưa có
+        if (request.getQuestionId() == null) {
+            request.setQuestionId(questionId);
+        }
         
+        // Gọi service method trực tiếp
+        OptionCreateResponseDTO response = optionService.createOptionForQuestionWithResponse(questionId, request);
         return ResponseEntity.ok(response);
     }
 
     /**
      * Lấy danh sách tùy chọn theo question
      */
-    @GetMapping("/question/{questionId}")
+    @GetMapping("/options/question/{questionId}")
     @ApiMessage("Get options by question")
     public ResponseEntity<List<OptionResponseDTO>> getOptionsByQuestion(@PathVariable("questionId") Long questionId) 
             throws IdInvalidException {
-        var options = optionService.getOptionsByQuestion(questionId);
+        List<OptionResponseDTO> options = optionService.getOptionsByQuestion(questionId);
         return ResponseEntity.ok(options);
     }
 
     /**
      * Lấy chi tiết tùy chọn theo id
      */
-    @GetMapping("/{id}")
+    @GetMapping("/options/{id}")
     @ApiMessage("Get option detail")
     public ResponseEntity<OptionResponseDTO> getOptionDetail(@PathVariable("id") Long id) 
             throws IdInvalidException {
-        var optionDTO = optionService.getOptionById(id);
+        OptionResponseDTO optionDTO = optionService.getOptionById(id);
         return ResponseEntity.ok(optionDTO);
     }
 
     /**
      * Cập nhật tùy chọn
      */
-    @PutMapping("/{id}")
+    @PutMapping("/options/{id}")
     @ApiMessage("Update option")
     public ResponseEntity<OptionUpdateResponseDTO> updateOption(@PathVariable("id") Long id,
             @Valid @RequestBody OptionUpdateRequestDTO request) throws IdInvalidException {
-        var updatedDTO = optionService.updateOption(id, request);
-        
-        // Tạo response DTO riêng cho update
-        OptionUpdateResponseDTO response = new OptionUpdateResponseDTO();
-        response.setId(updatedDTO.getId());
-        response.setQuestionId(updatedDTO.getQuestionId());
-        response.setQuestionText(updatedDTO.getQuestionText());
-        response.setOptionText(updatedDTO.getOptionText());
-        response.setMessage("Cập nhật tùy chọn thành công!");
-        response.setCreatedAt(updatedDTO.getCreatedAt());
-        response.setUpdatedAt(updatedDTO.getUpdatedAt());
-        
+        OptionUpdateResponseDTO response = optionService.updateOptionWithResponse(id, request);
         return ResponseEntity.ok(response);
     }
 
     /**
      * Xóa tùy chọn
      */
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/options/{id}")
     @ApiMessage("Delete option")
     public ResponseEntity<OptionDeleteResponseDTO> deleteOption(@PathVariable("id") Long id) 
             throws IdInvalidException {
