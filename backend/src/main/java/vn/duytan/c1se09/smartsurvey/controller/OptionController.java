@@ -25,8 +25,7 @@ public class OptionController {
     private final OptionService optionService;
 
     /**
-     * SPRINT 2: Tạo tùy chọn cho câu hỏi cụ thể
-     * POST /questions/{id}/options
+     *  Tạo tùy chọn cho câu hỏi cụ thể
      */
     @PostMapping("/questions/{questionId}/options")
     @ApiMessage("Create new option for question")
@@ -40,7 +39,7 @@ public class OptionController {
         }
         
         // Gọi service method trực tiếp
-        OptionCreateResponseDTO response = optionService.createOptionForQuestionWithResponse(questionId, request);
+        OptionCreateResponseDTO response = optionService.createOptionWithResponse(questionId, request);
         return ResponseEntity.ok(response);
     }
 

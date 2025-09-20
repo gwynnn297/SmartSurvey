@@ -25,8 +25,7 @@ public class QuestionController {
     private final QuestionService questionService;
 
     /**
-     * SPRINT 2: Tạo câu hỏi cho survey cụ thể
-     * POST /surveys/{id}/questions
+     *  Tạo câu hỏi cho survey cụ thể
      */
     @PostMapping("/surveys/{surveyId}/questions")
     @ApiMessage("Create new question for survey")
@@ -40,7 +39,7 @@ public class QuestionController {
         }
         
         // Gọi service method trực tiếp
-        QuestionCreateResponseDTO response = questionService.createQuestionForSurveyWithResponse(surveyId, request);
+        QuestionCreateResponseDTO response = questionService.createQuestionWithResponse(surveyId, request);
         return ResponseEntity.ok(response);
     }
 

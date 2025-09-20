@@ -25,6 +25,8 @@ public class OptionService {
     private final AuthService authService;
     private final ActivityLogService activityLogService;
 
+ 
+    
     public Option getOptionEntityById(Long optionId) throws IdInvalidException {
         return optionRepository.findById(optionId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy tùy chọn"));
@@ -41,49 +43,82 @@ public class OptionService {
         return dto;
     }
 
-    @Transactional
-    public OptionResponseDTO createOption(OptionCreateRequestDTO request) throws IdInvalidException {
+
+
+    private void validateUserPermission(Question question) throws IdInvalidException {
         User currentUser = authService.getCurrentUser();
         if (currentUser == null) {
             throw new IdInvalidException("Người dùng chưa xác thực");
         }
-
-        // Kiểm tra question tồn tại và thuộc về user hiện tại
-        Question question = questionRepository.findById(request.getQuestionId())
-                .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
         
         if (!question.getSurvey().getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền thêm tùy chọn vào câu hỏi này");
+            throw new IdInvalidException("Bạn không có quyền thực hiện thao tác này");
         }
+    }
 
+    
+    /**
+     * Tạo tùy chọn mới (phương thức chính)
+     * @param questionId 
+     * @param request 
+     * @return 
+     */
+    @Transactional
+    public OptionResponseDTO createOption(Long questionId, OptionCreateRequestDTO request) throws IdInvalidException {
+       
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
+        
+   
+        validateUserPermission(question);
+
+        
         Option option = new Option();
         option.setQuestion(question);
         option.setOptionText(request.getOptionText());
 
         Option saved = optionRepository.save(option);
         
-        // Log activity
+        
         activityLogService.log(
                 ActivityLog.ActionType.add_question,
                 saved.getOptionId(),
                 "options",
-                "Tạo tùy chọn mới: " + saved.getOptionText());
+                "Tạo tùy chọn: " + saved.getOptionText());
 
         return toOptionResponseDTO(saved);
     }
 
-    public List<OptionResponseDTO> getOptionsByQuestion(Long questionId) throws IdInvalidException {
-        User currentUser = authService.getCurrentUser();
-        if (currentUser == null) {
-            throw new IdInvalidException("Người dùng chưa xác thực");
-        }
+    /**
+     * Tạo tùy chọn mới với response message
+     * @param questionId 
+     * @param request 
+     * @return 
+     */
+    @Transactional
+    public OptionCreateResponseDTO createOptionWithResponse(Long questionId, OptionCreateRequestDTO request) throws IdInvalidException {
+        OptionResponseDTO optionDTO = createOption(questionId, request);
+        
+        // Convert to create response DTO
+        OptionCreateResponseDTO response = new OptionCreateResponseDTO();
+        response.setId(optionDTO.getId());
+        response.setQuestionId(optionDTO.getQuestionId());
+        response.setQuestionText(optionDTO.getQuestionText());
+        response.setOptionText(optionDTO.getOptionText());
+        response.setMessage("Tạo tùy chọn thành công!");
+        response.setCreatedAt(optionDTO.getCreatedAt());
+        response.setUpdatedAt(optionDTO.getUpdatedAt());
+        
+        return response;
+    }
 
+    //  Đọc danh sách câu trả lời của câu hỏi
+    
+    public List<OptionResponseDTO> getOptionsByQuestion(Long questionId) throws IdInvalidException {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
         
-        if (!question.getSurvey().getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền xem tùy chọn của câu hỏi này");
-        }
+        validateUserPermission(question);
 
         List<Option> options = optionRepository.findByQuestion(question);
         return options.stream().map(this::toOptionResponseDTO).toList();
@@ -91,28 +126,22 @@ public class OptionService {
 
     public OptionResponseDTO getOptionById(Long optionId) throws IdInvalidException {
         Option option = getOptionEntityById(optionId);
-        
-        // Kiểm tra quyền
-        User currentUser = authService.getCurrentUser();
-        if (!option.getQuestion().getSurvey().getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền xem tùy chọn này");
-        }
-        
+        validateUserPermission(option.getQuestion());
         return toOptionResponseDTO(option);
     }
 
+
+    
     /**
-     * Cập nhật tùy chọn (method gốc)
+     * Cập nhật tùy chọn
+     * @param optionId 
+     * @param request 
+     * @return 
      */
     @Transactional
     public OptionResponseDTO updateOption(Long optionId, OptionUpdateRequestDTO request) throws IdInvalidException {
         Option option = getOptionEntityById(optionId);
-        
-        // Kiểm tra quyền
-        User currentUser = authService.getCurrentUser();
-        if (!option.getQuestion().getSurvey().getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền cập nhật tùy chọn này");
-        }
+        validateUserPermission(option.getQuestion());
 
         if (request.getOptionText() != null && !request.getOptionText().isEmpty()) {
             option.setOptionText(request.getOptionText());
@@ -129,98 +158,16 @@ public class OptionService {
         return toOptionResponseDTO(saved);
     }
 
-    @Transactional
-    public void deleteOption(Long optionId) throws IdInvalidException {
-        Option option = getOptionEntityById(optionId);
-        
-        // Kiểm tra quyền
-        User currentUser = authService.getCurrentUser();
-        if (!option.getQuestion().getSurvey().getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền xóa tùy chọn này");
-        }
-
-        optionRepository.delete(option);
-        
-        activityLogService.log(
-                ActivityLog.ActionType.delete_question,
-                optionId,
-                "options",
-                "Xóa tùy chọn: " + option.getOptionText());
-    }
-
-    public long getTotalOptions() {
-        return optionRepository.count();
-    }
-
-    public long getOptionsCountByQuestion(Long questionId) throws IdInvalidException {
-        Question question = questionRepository.findById(questionId)
-                .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
-        return optionRepository.countByQuestion(question);
-    }
-
     /**
-     * SPRINT 2: Tạo tùy chọn cho câu hỏi cụ thể và trả về response DTO
-     */
-    @Transactional
-    public OptionCreateResponseDTO createOptionForQuestionWithResponse(Long questionId, OptionCreateRequestDTO request) throws IdInvalidException {
-        
-        // Tái sử dụng logic hiện tại
-        OptionResponseDTO optionDTO = createOption(request);
-        
-        // Tạo response DTO
-        OptionCreateResponseDTO response = new OptionCreateResponseDTO();
-        response.setId(optionDTO.getId());
-        response.setQuestionId(optionDTO.getQuestionId());
-        response.setQuestionText(optionDTO.getQuestionText());
-        response.setOptionText(optionDTO.getOptionText());
-        response.setMessage("Tạo tùy chọn thành công!");
-        response.setCreatedAt(optionDTO.getCreatedAt());
-        response.setUpdatedAt(optionDTO.getUpdatedAt());
-        
-        return response;
-    }
-
-    /**
-     * Tạo tùy chọn cho câu hỏi cụ thể (method mới)
-     */
-    @Transactional
-    public OptionResponseDTO createOptionForQuestion(Long questionId, OptionCreateRequestDTO request) throws IdInvalidException {
-        User currentUser = authService.getCurrentUser();
-        if (currentUser == null) {
-            throw new IdInvalidException("Người dùng chưa xác thực");
-        }
-
-        Question question = questionRepository.findById(questionId)
-                .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
-        
-        if (!question.getSurvey().getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền tạo tùy chọn cho câu hỏi này");
-        }
-
-        Option option = new Option();
-        option.setQuestion(question);
-        option.setOptionText(request.getOptionText());
-
-        Option savedOption = optionRepository.save(option);
-        
-        // Log activity
-        activityLogService.log(
-                ActivityLog.ActionType.add_question,
-                savedOption.getOptionId(),
-                "options",
-                "Tạo tùy chọn: " + request.getOptionText());
-        
-        return toOptionResponseDTO(savedOption);
-    }
-
-    /**
-     * Cập nhật tùy chọn và trả về response DTO
+     * Cập nhật tùy chọn với response message
+     * @param optionId 
+     * @param request 
+     * @return 
      */
     @Transactional
     public OptionUpdateResponseDTO updateOptionWithResponse(Long optionId, OptionUpdateRequestDTO request) throws IdInvalidException {
         OptionResponseDTO updatedDTO = updateOption(optionId, request);
         
-        // Tạo response DTO
         OptionUpdateResponseDTO response = new OptionUpdateResponseDTO();
         response.setId(updatedDTO.getId());
         response.setQuestionId(updatedDTO.getQuestionId());
@@ -231,5 +178,33 @@ public class OptionService {
         response.setUpdatedAt(updatedDTO.getUpdatedAt());
         
         return response;
+    }
+
+    // xóa câu trả lời
+    
+    @Transactional
+    public void deleteOption(Long optionId) throws IdInvalidException {
+        Option option = getOptionEntityById(optionId);
+        validateUserPermission(option.getQuestion());
+
+        optionRepository.delete(option);
+        
+        activityLogService.log(
+                ActivityLog.ActionType.delete_question,
+                optionId,
+                "options",
+                "Xóa tùy chọn: " + option.getOptionText());
+    }
+
+    // Tổng số tùy chọn trong hệ thống
+    
+    public long getTotalOptions() {
+        return optionRepository.count();
+    }
+ // Số tùy chọn của một câu hỏi cụ thể
+    public long getOptionsCountByQuestion(Long questionId) throws IdInvalidException {
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
+        return optionRepository.countByQuestion(question);
     }
 }

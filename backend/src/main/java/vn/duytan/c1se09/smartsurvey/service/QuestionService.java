@@ -12,6 +12,7 @@ import vn.duytan.c1se09.smartsurvey.domain.response.question.QuestionUpdateRespo
 import vn.duytan.c1se09.smartsurvey.repository.*;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 
+
 import java.util.List;
 
 /**
@@ -25,6 +26,8 @@ public class QuestionService {
     private final AuthService authService;
     private final ActivityLogService activityLogService;
 
+
+    // lấy thông tin câu hỏi
     public Question getQuestionEntityById(Long questionId) throws IdInvalidException {
         return questionRepository.findById(questionId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
@@ -44,21 +47,40 @@ public class QuestionService {
         return dto;
     }
 
-    @Transactional
-    public QuestionResponseDTO createQuestion(QuestionCreateRequestDTO request) throws IdInvalidException {
+
+    private void validateUserPermission(Survey survey) throws IdInvalidException {
         User currentUser = authService.getCurrentUser();
         if (currentUser == null) {
             throw new IdInvalidException("Người dùng chưa xác thực");
         }
-
-        // Kiểm tra survey tồn tại và thuộc về user hiện tại
-        Survey survey = surveyRepository.findById(request.getSurveyId())
-                .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
         
         if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền thêm câu hỏi vào khảo sát này");
+            throw new IdInvalidException("Bạn không có quyền thực hiện thao tác này");
         }
+    }
 
+    private void validateUserPermission(Question question) throws IdInvalidException {
+        validateUserPermission(question.getSurvey());
+    }
+
+    // tạo câu hỏi 
+
+    /**
+     * Tạo câu hỏi mới (phương thức chính)
+     * @param surveyId 
+     * @param request 
+     * @return 
+     */
+    @Transactional
+    public QuestionResponseDTO createQuestion(Long surveyId, QuestionCreateRequestDTO request) throws IdInvalidException {
+        
+        Survey survey = surveyRepository.findById(surveyId)
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
+        
+       
+        validateUserPermission(survey);
+
+        
         Question question = new Question();
         question.setSurvey(survey);
         question.setQuestionText(request.getQuestionText());
@@ -72,21 +94,21 @@ public class QuestionService {
                 ActivityLog.ActionType.add_question,
                 saved.getQuestionId(),
                 "questions",
-                "Tạo câu hỏi mới: " + saved.getQuestionText());
+                "Tạo câu hỏi: " + saved.getQuestionText());
 
         return toQuestionResponseDTO(saved);
     }
 
     /**
-     * SPRINT 2: Tạo câu hỏi cho survey cụ thể và trả về response DTO
+     * Tạo câu hỏi mới với response message
+     * @param surveyId 
+     * @param request 
+     * @return 
      */
     @Transactional
-    public QuestionCreateResponseDTO createQuestionForSurveyWithResponse(Long surveyId, QuestionCreateRequestDTO request) throws IdInvalidException {
-        
-        // Tái sử dụng logic hiện tại
-        QuestionResponseDTO questionDTO = createQuestion(request);
-        
-        // Tạo response DTO
+    public QuestionCreateResponseDTO createQuestionWithResponse(Long surveyId, QuestionCreateRequestDTO request) throws IdInvalidException {
+        QuestionResponseDTO questionDTO = createQuestion(surveyId, request);
+       
         QuestionCreateResponseDTO response = new QuestionCreateResponseDTO();
         response.setId(questionDTO.getId());
         response.setSurveyId(questionDTO.getSurveyId());
@@ -102,18 +124,13 @@ public class QuestionService {
         return response;
     }
 
+    // đọc danh sách câu hỏi trong survey
+    
     public List<QuestionResponseDTO> getQuestionsBySurvey(Long surveyId) throws IdInvalidException {
-        User currentUser = authService.getCurrentUser();
-        if (currentUser == null) {
-            throw new IdInvalidException("Người dùng chưa xác thực");
-        }
-
         Survey survey = surveyRepository.findById(surveyId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
         
-        if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền xem câu hỏi của khảo sát này");
-        }
+        validateUserPermission(survey);
 
         List<Question> questions = questionRepository.findBySurveyOrderByCreatedAt(survey);
         return questions.stream().map(this::toQuestionResponseDTO).toList();
@@ -121,28 +138,22 @@ public class QuestionService {
 
     public QuestionResponseDTO getQuestionById(Long questionId) throws IdInvalidException {
         Question question = getQuestionEntityById(questionId);
-        
-        // Kiểm tra quyền
-        User currentUser = authService.getCurrentUser();
-        if (!question.getSurvey().getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền xem câu hỏi này");
-        }
-        
+        validateUserPermission(question);
         return toQuestionResponseDTO(question);
     }
 
+    // cập nhập câu hỏi
+    
     /**
-     * Cập nhật câu hỏi (method gốc)
+     * Cập nhật câu hỏi
+     * @param questionId 
+     * @param request 
+     * @return
      */
     @Transactional
     public QuestionResponseDTO updateQuestion(Long questionId, QuestionUpdateRequestDTO request) throws IdInvalidException {
         Question question = getQuestionEntityById(questionId);
-        
-        // Kiểm tra quyền
-        User currentUser = authService.getCurrentUser();
-        if (!question.getSurvey().getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền cập nhật câu hỏi này");
-        }
+        validateUserPermission(question);
 
         if (request.getQuestionText() != null && !request.getQuestionText().isEmpty()) {
             question.setQuestionText(request.getQuestionText());
@@ -166,13 +177,15 @@ public class QuestionService {
     }
 
     /**
-     * Cập nhật câu hỏi và trả về response DTO
+     * Cập nhật câu hỏi với response message
+     * @param questionId 
+     * @param request 
+     * @return 
      */
     @Transactional
     public QuestionUpdateResponseDTO updateQuestionWithResponse(Long questionId, QuestionUpdateRequestDTO request) throws IdInvalidException {
         QuestionResponseDTO updatedDTO = updateQuestion(questionId, request);
         
-        // Tạo response DTO
         QuestionUpdateResponseDTO response = new QuestionUpdateResponseDTO();
         response.setId(updatedDTO.getId());
         response.setSurveyId(updatedDTO.getSurveyId());
@@ -188,15 +201,12 @@ public class QuestionService {
         return response;
     }
 
+    // xóa câu hỏi
+    
     @Transactional
     public void deleteQuestion(Long questionId) throws IdInvalidException {
         Question question = getQuestionEntityById(questionId);
-        
-        // Kiểm tra quyền
-        User currentUser = authService.getCurrentUser();
-        if (!question.getSurvey().getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền xóa câu hỏi này");
-        }
+        validateUserPermission(question);
 
         questionRepository.delete(question);
         
@@ -207,10 +217,11 @@ public class QuestionService {
                 "Xóa câu hỏi: " + question.getQuestionText());
     }
 
+  // Tổng số câu hỏi trong hệ thống
     public long getTotalQuestions() {
         return questionRepository.count();
     }
-
+ // Số câu hỏi của một khảo sát cụ thể
     public long getQuestionsCountBySurvey(Long surveyId) throws IdInvalidException {
         Survey survey = surveyRepository.findById(surveyId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
