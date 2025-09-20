@@ -41,7 +41,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // ...existing code...
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
         return authConfig.getAuthenticationManager();
@@ -87,6 +86,9 @@ public class SecurityConfig {
                         .requestMatchers("/users/profile").authenticated()
                         .requestMatchers("/dashboard/**").authenticated()
                         .requestMatchers("/surveys/**").authenticated()
+                        .requestMatchers("/questions/**").authenticated()
+                        .requestMatchers("/options/**").authenticated()
+                        .requestMatchers("/categories/**").authenticated()
                         .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .anyRequest().authenticated());
