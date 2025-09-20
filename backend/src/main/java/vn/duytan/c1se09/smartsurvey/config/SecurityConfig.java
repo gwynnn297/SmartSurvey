@@ -41,7 +41,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // ...existing code...
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
         return authConfig.getAuthenticationManager();
@@ -81,14 +80,34 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
+                        // Public endpoints - không cần authentication
                         .requestMatchers("/auth/login", "/auth/register", "/auth/forgot-password").permitAll()
-                        .requestMatchers("/auth/change-password", "/auth/me", "/auth/test-token").authenticated()
-                        .requestMatchers("/api/users").authenticated()
-                        .requestMatchers("/users/profile").authenticated()
-                        .requestMatchers("/dashboard/**").authenticated()
-                        .requestMatchers("/surveys/**").authenticated()
                         .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
+                        
+                        // Auth endpoints - cần authentication
+                        .requestMatchers("/auth/change-password", "/auth/me", "/auth/test-token").authenticated()
+                        
+                        // User endpoints - cần authentication
+                        .requestMatchers("/api/users").authenticated()
+                        .requestMatchers("/users/profile").authenticated()
+                        
+                        // Dashboard endpoints - cần authentication
+                        .requestMatchers("/dashboard/**").authenticated()
+                        
+                        // Survey endpoints - cần authentication (bao gồm cả /surveys/{id}/questions)
+                        .requestMatchers("/surveys/**").authenticated()
+                        
+                        // Question endpoints - cần authentication (bao gồm cả /questions/{id}/options)
+                        .requestMatchers("/questions/**").authenticated()
+                        
+                        // Option endpoints - cần authentication
+                        .requestMatchers("/options/**").authenticated()
+                        
+                        // Category endpoints - cần authentication
+                        .requestMatchers("/categories/**").authenticated()
+                        
+                        // Tất cả các request khác - cần authentication
                         .anyRequest().authenticated());
 
         http.authenticationProvider(authenticationProvider());
