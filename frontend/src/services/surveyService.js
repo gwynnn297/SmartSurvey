@@ -1,10 +1,21 @@
 import { apiClient } from './authService';
 
 export const surveyService = {
-    // Tạo khảo sát mới
+    // Lấy tổng quan dashboard
+    getDashboardOverview: async () => {
+        try {
+            const response = await apiClient.get('/dashboard/overview');
+            return response.data;
+        } catch (error) {
+            console.error('Get dashboard overview error:', error);
+            throw error;
+        }
+    },
+
+    // Tạo khảo sát mới - chỉ tạo survey, không tạo questions
     createSurvey: async (data) => {
         try {
-            console.log('📝 Creating survey:', data);
+            console.log('Creating survey:', data);
             const response = await apiClient.post('/surveys', data);
             console.log('✅ Survey created:', response.data);
             return response.data;
@@ -14,36 +25,12 @@ export const surveyService = {
         }
     },
 
-    // Thêm câu hỏi vào khảo sát
-    addQuestion: async (surveyId, data) => {
+    // Lấy danh sách khảo sát với phân trang
+    getSurveys: async (page = 0, size = 10) => {
         try {
-            console.log(`📝 Adding question to survey ${surveyId}:`, data);
-            const response = await apiClient.post(`/surveys/${surveyId}/questions`, data);
-            console.log('✅ Question added:', response.data);
-            return response.data;
-        } catch (error) {
-            console.error('❌ Add question error:', error);
-            throw error;
-        }
-    },
-
-    // Thêm option cho câu hỏi
-    addOption: async (questionId, data) => {
-        try {
-            console.log(`📝 Adding option to question ${questionId}:`, data);
-            const response = await apiClient.post(`/questions/${questionId}/options`, data);
-            console.log('✅ Option added:', response.data);
-            return response.data;
-        } catch (error) {
-            console.error('❌ Add option error:', error);
-            throw error;
-        }
-    },
-
-    // Lấy danh sách khảo sát
-    getSurveys: async (params = {}) => {
-        try {
-            const response = await apiClient.get('/surveys', { params });
+            const response = await apiClient.get('/surveys', {
+                params: { page, size }
+            });
             return response.data;
         } catch (error) {
             console.error('❌ Get surveys error:', error);

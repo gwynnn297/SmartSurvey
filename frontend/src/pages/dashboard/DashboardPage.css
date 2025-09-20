@@ -94,9 +94,10 @@
 }
 
 .section {
-    background: white;
+    background: #ffffff; 
     border-radius: 12px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.1);
+    border: 3px solid #f7f7f8;
 }
 
 .section-header {
@@ -119,21 +120,28 @@
     display: flex;
     gap: 1rem; 
     align-items: center;
+
     /* margin-left: auto; */
 }
 
-.dashboard-actions .btn-primary {
-    width: 180px;
-    height: 50px;
-    
-}
-
-.dashboard-actions .btn-secondary {
+/* .dashboard-actions .btn-primary {
     width: 180px;
     height: 50px;
     background: #f3f4f6;
     color: #374151;
     border: 2px solid #e5e7eb;
+    
+} */
+
+.dashboard-actions .btn-secondary {
+    width: 180px;
+    height: 50px;
+    background: #3063ca;
+    color: #cbced1;
+    font-size: 16px;
+    border: 2px solid #e5e7eb;
+    boder-radius: 10px;   
+
 }
 
 .dashboard-actions .btn-secondary:hover {
@@ -143,6 +151,7 @@
 
 .survey-list {
     padding: 8px 8px 8px 8px;
+
 }
 
 .survey-item {
@@ -151,11 +160,12 @@
     justify-content: space-between;
     padding: 12px;
     border-radius: 10px;
-    transition: background 0.15s ease;
+    transition: background 0.15s ease;   
+    cursor: pointer;
 }
 
 .survey-item:hover {
-    background: #f9fafb;
+    background: #e0e0e2;
 }
 
 .survey-left {
