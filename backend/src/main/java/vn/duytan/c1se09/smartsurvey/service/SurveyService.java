@@ -28,8 +28,8 @@ import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyPaginationDTO;
 public class SurveyService {
     private final SurveyRepository surveyRepository;
     private final CategoryRepository categoryRepository;
-    // Các repository khác có thể được dùng trong tương lai
-    // (question/options/answers)
+    private final QuestionRepository questionRepository;
+    private final OptionRepository optionRepository;
     private final AuthService authService;
     private final ActivityLogService activityLogService;
 
@@ -210,6 +210,34 @@ public class SurveyService {
             throw new IdInvalidException("Bạn không có quyền xóa khảo sát này");
         }
 
+        // Cascade delete: Xóa tất cả questions và options thuộc survey này
+        List<Question> questions = questionRepository.findBySurvey(survey);
+        for (Question question : questions) {
+            // Xóa tất cả options của question này
+            List<Option> options = optionRepository.findByQuestion(question);
+            if (!options.isEmpty()) {
+                optionRepository.deleteAll(options);
+                activityLogService.log(
+                        ActivityLog.ActionType.delete_option,
+                        question.getQuestionId(),
+                        "options",
+                        "Xóa " + options.size() + " tùy chọn khi xóa câu hỏi: " + question.getQuestionText());
+            }
+            
+            // Log xóa question
+            activityLogService.log(
+                    ActivityLog.ActionType.delete_question,
+                    question.getQuestionId(),
+                    "questions",
+                    "Xóa câu hỏi khi xóa khảo sát: " + question.getQuestionText());
+        }
+        
+        // Xóa tất cả questions
+        if (!questions.isEmpty()) {
+            questionRepository.deleteAll(questions);
+        }
+
+        // Cuối cùng xóa survey
         surveyRepository.delete(survey);
         activityLogService.log(
                 ActivityLog.ActionType.delete_survey,

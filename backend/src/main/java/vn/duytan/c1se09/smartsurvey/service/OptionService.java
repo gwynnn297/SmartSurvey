@@ -81,7 +81,7 @@ public class OptionService {
         
         
         activityLogService.log(
-                ActivityLog.ActionType.add_question,
+                ActivityLog.ActionType.add_option,
                 saved.getOptionId(),
                 "options",
                 "Tạo tùy chọn: " + saved.getOptionText());
@@ -150,7 +150,7 @@ public class OptionService {
         Option saved = optionRepository.save(option);
         
         activityLogService.log(
-                ActivityLog.ActionType.edit_question,
+                ActivityLog.ActionType.edit_option,
                 saved.getOptionId(),
                 "options",
                 "Cập nhật tùy chọn: " + saved.getOptionText());
@@ -190,7 +190,7 @@ public class OptionService {
         optionRepository.delete(option);
         
         activityLogService.log(
-                ActivityLog.ActionType.delete_question,
+                ActivityLog.ActionType.delete_option,
                 optionId,
                 "options",
                 "Xóa tùy chọn: " + option.getOptionText());
