@@ -57,15 +57,12 @@ const CreateSurvey = () => {
     // Function để xóa question
     const deleteQuestion = async (questionId, questionIndex) => {
         try {
-            // Nếu question đã được lưu trên server (không phải temp), gọi API xóa
-            if (questionId && !questionId.toString().startsWith('temp_')) {
-                await questionService.deleteQuestion(questionId);
-                console.log('Question deleted from server:', questionId);
-            }
-
-            // Xóa khỏi state
+            // Chỉ xóa khỏi giao diện, không xóa khỏi database ngay lập tức
+            // Sẽ xóa khỏi database khi ấn "Cập nhật"
             const newQuestions = questions.filter((_, i) => i !== questionIndex);
             setQuestions(newQuestions);
+
+            console.log('✅ Đã xóa câu hỏi khỏi giao diện. Sẽ xóa khỏi database khi ấn "Cập nhật"');
         } catch (error) {
             console.error('Error deleting question:', error);
             alert('Có lỗi xảy ra khi xóa câu hỏi. Vui lòng thử lại.');
@@ -75,16 +72,13 @@ const CreateSurvey = () => {
     // Function để xóa option
     const deleteOption = async (optionId, questionIndex, optionIndex) => {
         try {
-            // Nếu option đã được lưu trên server (không phải temp), gọi API xóa
-            if (optionId && !optionId.toString().startsWith('temp_option_')) {
-                await optionService.deleteOption(optionId);
-                console.log('Option deleted from server:', optionId);
-            }
-
-            // Xóa khỏi state
+            // Chỉ xóa khỏi giao diện, không xóa khỏi database ngay lập tức
+            // Sẽ xóa khỏi database khi ấn "Cập nhật"
             const newQuestions = [...questions];
             newQuestions[questionIndex].options.splice(optionIndex, 1);
             setQuestions(newQuestions);
+
+            console.log('✅ Đã xóa tùy chọn khỏi giao diện. Sẽ xóa khỏi database khi ấn "Cập nhật"');
         } catch (error) {
             console.error('Error deleting option:', error);
             alert('Có lỗi xảy ra khi xóa lựa chọn. Vui lòng thử lại.');
@@ -236,6 +230,65 @@ const CreateSurvey = () => {
             }
 
             const surveyId = savedSurvey.id;
+
+            // Xử lý xóa các câu hỏi và options đã bị xóa khỏi giao diện
+            if (isEditMode && editSurveyId) {
+                try {
+                    // Lấy danh sách câu hỏi hiện tại từ server
+                    const serverQuestions = await questionService.getQuestionsBySurvey(surveyId);
+                    console.log('📋 Server questions:', serverQuestions);
+
+                    // Tìm các câu hỏi đã bị xóa khỏi giao diện
+                    const currentQuestionIds = questions.map(q => q.id).filter(id => id && !id.toString().startsWith('temp_'));
+                    const deletedQuestions = serverQuestions.filter(sq => !currentQuestionIds.includes(sq.id));
+
+                    console.log('🗑️ Questions to delete from server:', deletedQuestions);
+
+                    // Xóa các câu hỏi đã bị xóa
+                    for (const deletedQuestion of deletedQuestions) {
+                        try {
+                            // Xóa tất cả options của câu hỏi trước
+                            const options = await optionService.getOptionsByQuestion(deletedQuestion.id);
+                            for (const option of options) {
+                                await optionService.deleteOption(option.id);
+                                console.log(`✅ Deleted option ${option.id}`);
+                            }
+
+                            // Xóa câu hỏi
+                            await questionService.deleteQuestion(deletedQuestion.id);
+                            console.log(`✅ Deleted question ${deletedQuestion.id}`);
+                        } catch (error) {
+                            console.error(`❌ Error deleting question ${deletedQuestion.id}:`, error);
+                        }
+                    }
+
+                    // Xử lý xóa options trong các câu hỏi còn lại
+                    for (const question of questions) {
+                        if (question.id && !question.id.toString().startsWith('temp_') && question.question_type === 'multiple_choice') {
+                            try {
+                                // Lấy options hiện tại từ server
+                                const serverOptions = await optionService.getOptionsByQuestion(question.id);
+
+                                // Tìm các options đã bị xóa khỏi giao diện
+                                const currentOptionIds = question.options?.map(o => o.id).filter(id => id && !id.toString().startsWith('temp_option_')) || [];
+                                const deletedOptions = serverOptions.filter(so => !currentOptionIds.includes(so.id));
+
+                                console.log(`🗑️ Options to delete for question ${question.id}:`, deletedOptions);
+
+                                // Xóa các options đã bị xóa
+                                for (const deletedOption of deletedOptions) {
+                                    await optionService.deleteOption(deletedOption.id);
+                                    console.log(`✅ Deleted option ${deletedOption.id}`);
+                                }
+                            } catch (error) {
+                                console.error(`❌ Error processing options for question ${question.id}:`, error);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('❌ Error processing deletions:', error);
+                }
+            }
 
             // Tạo/cập nhật questions và options
             const updatedQuestions = [];
