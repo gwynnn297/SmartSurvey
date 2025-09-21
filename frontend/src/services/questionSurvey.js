@@ -1,11 +1,12 @@
 import { apiClient } from './authService';
 
 export const questionService = {
-    // Tạo câu hỏi mới
+    // Tạo câu hỏi mới cho survey
     createQuestion: async (data) => {
         try {
             console.log('Creating question:', data);
-            const response = await apiClient.post('/questions', data);
+            const { surveyId, ...questionData } = data;
+            const response = await apiClient.post(`/surveys/${surveyId}/questions`, questionData);
             console.log('Question created:', response.data);
             return response.data;
         } catch (error) {
@@ -62,11 +63,12 @@ export const questionService = {
 };
 
 export const optionService = {
-    // Tạo tùy chọn mới
+    // Tạo tùy chọn mới cho question
     createOption: async (data) => {
         try {
             console.log('Creating option:', data);
-            const response = await apiClient.post('/options', data);
+            const { questionId, ...optionData } = data;
+            const response = await apiClient.post(`/questions/${questionId}/options`, optionData);
             console.log('Option created:', response.data);
             return response.data;
         } catch (error) {

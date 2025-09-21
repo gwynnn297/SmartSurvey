@@ -50,7 +50,7 @@ apiClient.interceptors.response.use(
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         // Redirect to login
-        window.location.href = '/login';
+        // window.location.href = '/login';
       } else {
         console.log('⚠️ 401 Unauthorized on non-auth endpoint - Keeping token, might be endpoint not implemented yet');
         // Không xóa token cho các endpoint khác (có thể chưa implement)

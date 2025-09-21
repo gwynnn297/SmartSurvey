@@ -118,9 +118,9 @@ const Login = () => {
                             <label>
                                 <input type="checkbox" /> Ghi nhớ đăng nhập
                             </label>
-                            <button 
-                                type="button" 
-                                className="link-button" 
+                            <button
+                                type="button"
+                                className="link-button"
                                 onClick={handleForgotPassword}
                             >
                                 Quên mật khẩu?

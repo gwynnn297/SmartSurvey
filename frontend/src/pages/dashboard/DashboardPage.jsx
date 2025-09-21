@@ -17,6 +17,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [pageSize] = useState(10);
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -57,37 +63,90 @@ export default function DashboardPage() {
 
         try {
           console.log('📋 Dashboard: Calling getSurveys...');
-          apiSurveys = await surveyService.getSurveys(0, 10);
+          apiSurveys = await surveyService.getSurveys(currentPage, pageSize);
           console.log('✅ Dashboard: Surveys response:', apiSurveys);
         } catch (error) {
           console.log('⚠️ Dashboard: API surveys failed, using local data');
         }
 
-        // Set overview data (prefer API, fallback to local)
-        if (apiOverview) {
-          setOverview({
-            totalSurveys: apiOverview.totalSurveys || localSurveys.length,
-            totalResponses: apiOverview.totalResponses || localSurveys.reduce((sum, s) => sum + (s.responses || 0), 0),
-            activeSurveys: apiOverview.activeSurveys || localSurveys.filter(s => s.status === 'active').length,
-            completionRate: apiOverview.completionRate || (localSurveys.length > 0 ? 75 : 0)
-          });
+        // Calculate real statistics from actual data
+        const calculateRealStats = (surveysData, metaData = null) => {
+          let totalSurveys, totalResponses, activeSurveys, completionRate;
+
+          if (metaData) {
+            // Use meta data for accurate total count
+            totalSurveys = metaData.total || 0;
+            console.log('📊 Dashboard: Using meta data for total surveys:', totalSurveys);
+          } else {
+            totalSurveys = surveysData.length;
+          }
+
+          totalResponses = surveysData.reduce((sum, s) => sum + (s.responses || s.responseCount || 0), 0);
+          activeSurveys = surveysData.filter(s => s.status === 'published').length;
+
+          // Calculate completion rate based on surveys with responses
+          const surveysWithResponses = surveysData.filter(s => (s.responses || s.responseCount || 0) > 0);
+          completionRate = totalSurveys > 0 ? Math.round((surveysWithResponses.length / totalSurveys) * 100) : 0;
+
+          return {
+            totalSurveys,
+            totalResponses,
+            activeSurveys,
+            completionRate
+          };
+        };
+
+        // Use real data from API or local storage
+        let finalSurveysData = [];
+        let metaData = null;
+
+        if (apiSurveys) {
+          if (apiSurveys.meta) {
+            metaData = apiSurveys.meta;
+            // Try to get all surveys from API for detailed stats
+            try {
+              const allSurveysResponse = await surveyService.getSurveys(0, 1000);
+              finalSurveysData = Array.isArray(allSurveysResponse?.result) ? allSurveysResponse.result : [];
+              console.log('📊 Dashboard: Fetched all surveys for detailed stats:', finalSurveysData.length);
+            } catch (error) {
+              console.log('Could not fetch all surveys, using current page data');
+              finalSurveysData = surveysList;
+            }
+          } else {
+            finalSurveysData = surveysList;
+          }
         } else {
-          setOverview({
-            totalSurveys: localSurveys.length,
-            totalResponses: localSurveys.reduce((sum, s) => sum + (s.responses || 0), 0),
-            activeSurveys: localSurveys.filter(s => s.status === 'active').length,
-            completionRate: localSurveys.length > 0 ? 75 : 0
-          });
+          finalSurveysData = localSurveys;
         }
+
+        const realStats = calculateRealStats(finalSurveysData, metaData);
+        setOverview(realStats);
+
+        console.log('📊 Dashboard: Real statistics calculated:', realStats);
 
         // Set surveys data (prefer API, fallback to local)
         let surveysList = [];
         if (apiSurveys) {
           // Backend trả về { meta: {...}, result: [...] }
-          surveysList = Array.isArray(apiSurveys?.result) ? apiSurveys.result :
-            Array.isArray(apiSurveys) ? apiSurveys : localSurveys;
+          if (apiSurveys.meta) {
+            // Có thông tin phân trang từ API
+            surveysList = Array.isArray(apiSurveys.result) ? apiSurveys.result : [];
+            setTotalPages(apiSurveys.meta.pages || 0);
+            setTotalElements(apiSurveys.meta.total || 0);
+          } else {
+            // Không có thông tin phân trang, xử lý như cũ
+            surveysList = Array.isArray(apiSurveys?.result) ? apiSurveys.result :
+              Array.isArray(apiSurveys) ? apiSurveys : localSurveys;
+            setTotalPages(1);
+            setTotalElements(surveysList.length);
+          }
         } else {
-          surveysList = localSurveys;
+          // Fallback to local data with pagination
+          const startIndex = currentPage * pageSize;
+          const endIndex = startIndex + pageSize;
+          surveysList = localSurveys.slice(startIndex, endIndex);
+          setTotalPages(Math.ceil(localSurveys.length / pageSize));
+          setTotalElements(localSurveys.length);
         }
 
         setSurveys(surveysList);
@@ -101,13 +160,51 @@ export default function DashboardPage() {
     };
 
     loadData();
-  }, []);
+  }, [currentPage, pageSize]);
+
 
   const displayName = user?.name || user?.username || user?.fullName || "User";
 
   const handleViewSurvey = (survey) => {
     alert('Chức năng xem khảo sát sẽ được phát triển');
   };
+
+  // Pagination handlers
+  const handlePageChange = (newPage) => {
+    if (newPage >= 0 && newPage < totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 0) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages - 1) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(0, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage < maxVisiblePages - 1) {
+      startPage = Math.max(0, endPage - maxVisiblePages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
 
   if (loading) {
     return (
@@ -182,7 +279,7 @@ export default function DashboardPage() {
               >
                 <div className="survey-left">
                   <div className={`status-badge ${s.status || 'draft'}`}>
-                    {s.status === 'active' ? '🟢 Đang hoạt động' : s.status === 'closed' ? '🔴 Đã đóng' : '📝 Nháp'}
+                    {s.status === 'published' ? 'Đã xuất bản' : s.status === 'archived' ? 'Đã lưu trữ' : 'Bản nháp'}
                   </div>
                   <div className="survey-title">{s.title || 'Không tiêu đề'}</div>
                   {s.description && (
@@ -215,9 +312,9 @@ export default function DashboardPage() {
                     className="btn-text"
                     onClick={async (e) => {
                       e.stopPropagation();
-                      if (window.confirm('Bạn có chắc muốn xóa khảo sát này không?')) {
+                      if (window.confirm('Bạn có chắc muốn xóa khảo sát này không? Tất cả câu hỏi và tùy chọn trong khảo sát cũng sẽ bị xóa.')) {
                         try {
-                          // Gọi API xóa trên backend
+                          // Gọi API xóa trên backend (backend sẽ tự động xóa cascade)
                           await surveyService.deleteSurvey(s.id);
 
                           // Xóa trong localStorage và state để cập nhật UI
@@ -225,7 +322,54 @@ export default function DashboardPage() {
                           localStorage.setItem('userSurveys', JSON.stringify(updatedSurveys));
                           setSurveys(updatedSurveys);
 
-                          alert('Đã xóa khảo sát thành công!');
+                          // Xóa tất cả câu hỏi và tùy chọn liên quan trong localStorage
+                          const surveyId = s.id;
+
+                          // Lấy danh sách câu hỏi từ localStorage
+                          const allQuestions = JSON.parse(localStorage.getItem('surveyQuestions') || '[]');
+                          const questionsToDelete = allQuestions.filter(q => q.surveyId === surveyId);
+
+                          // Lấy danh sách tùy chọn từ localStorage
+                          const allOptions = JSON.parse(localStorage.getItem('questionOptions') || '[]');
+                          const questionIdsToDelete = questionsToDelete.map(q => q.id);
+                          const optionsToDelete = allOptions.filter(opt => questionIdsToDelete.includes(opt.questionId));
+
+                          // Xóa câu hỏi và tùy chọn khỏi localStorage
+                          const updatedQuestions = allQuestions.filter(q => q.surveyId !== surveyId);
+                          const updatedOptions = allOptions.filter(opt => !questionIdsToDelete.includes(opt.questionId));
+
+                          localStorage.setItem('surveyQuestions', JSON.stringify(updatedQuestions));
+                          localStorage.setItem('questionOptions', JSON.stringify(updatedOptions));
+
+                          console.log(`🗑️ Đã xóa ${questionsToDelete.length} câu hỏi và ${optionsToDelete.length} tùy chọn liên quan đến khảo sát ${surveyId}`);
+
+                          // Cập nhật KPI real-time
+                          const calculateRealStats = (surveysData, metaData = null) => {
+                            let totalSurveys, totalResponses, activeSurveys, completionRate;
+
+                            if (metaData) {
+                              totalSurveys = metaData.total || 0;
+                            } else {
+                              totalSurveys = surveysData.length;
+                            }
+
+                            totalResponses = surveysData.reduce((sum, s) => sum + (s.responses || s.responseCount || 0), 0);
+                            activeSurveys = surveysData.filter(s => s.status === 'published').length;
+                            const surveysWithResponses = surveysData.filter(s => (s.responses || s.responseCount || 0) > 0);
+                            completionRate = totalSurveys > 0 ? Math.round((surveysWithResponses.length / totalSurveys) * 100) : 0;
+
+                            return { totalSurveys, totalResponses, activeSurveys, completionRate };
+                          };
+
+                          const newStats = calculateRealStats(updatedSurveys);
+                          setOverview(newStats);
+
+                          // Reset về trang đầu nếu trang hiện tại trống
+                          if (updatedSurveys.length === 0 && currentPage > 0) {
+                            setCurrentPage(0);
+                          }
+
+                          alert(`Đã xóa khảo sát thành công!\nĐã xóa ${questionsToDelete.length} câu hỏi và ${optionsToDelete.length} tùy chọn liên quan.`);
                         } catch (error) {
                           console.error('Lỗi khi xóa khảo sát:', error);
                           alert('Xóa khảo sát thất bại. Vui lòng thử lại.');
@@ -240,6 +384,39 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
+
+          {/* Pagination */}
+          {totalPages > 0 && (
+            <div className="pagination-container">
+              <div className="pagination">
+                <button
+                  className="pagination-btn"
+                  onClick={handlePreviousPage}
+                  disabled={currentPage === 0}
+                >
+                  ← Trước
+                </button>
+
+                {getPageNumbers().map((pageNum) => (
+                  <button
+                    key={pageNum}
+                    className={`pagination-btn ${currentPage === pageNum ? 'active' : ''}`}
+                    onClick={() => handlePageChange(pageNum)}
+                  >
+                    {pageNum + 1}
+                  </button>
+                ))}
+
+                <button
+                  className="pagination-btn"
+                  onClick={handleNextPage}
+                  disabled={currentPage === totalPages - 1}
+                >
+                  Sau →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         {showCreateModal && (
           <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>

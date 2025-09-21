@@ -214,13 +214,25 @@ const CreateSurvey = () => {
 
             let savedSurvey;
             if (isEditMode && editSurveyId) {
-                // Update existing survey
+                // Update existing survey - giữ nguyên status hiện tại
                 savedSurvey = await surveyService.updateSurvey(editSurveyId, payload);
                 console.log('✅ Survey updated:', savedSurvey);
             } else {
-                // Create new survey
+                // Create new survey - backend luôn tạo với status 'draft'
                 savedSurvey = await surveyService.createSurvey(payload);
                 console.log('✅ Survey created:', savedSurvey);
+
+                // Nếu muốn status 'published', cần cập nhật status sau khi tạo
+                if (status === 'published') {
+                    savedSurvey = await surveyService.updateSurvey(savedSurvey.id, { status: 'published' });
+                    console.log('✅ Survey status updated to published:', savedSurvey);
+                }
+            }
+
+            // Kiểm tra nếu savedSurvey tồn tại và có ID
+            if (!savedSurvey || !savedSurvey.id) {
+                console.error('❌ Failed to save survey:', savedSurvey);
+                throw new Error('Không thể lưu khảo sát. Vui lòng thử lại.');
             }
 
             const surveyId = savedSurvey.id;
@@ -249,6 +261,16 @@ const CreateSurvey = () => {
                             isRequired: question.is_required || false
                         });
                         console.log('✅ Question updated:', savedQuestion);
+                    } else {
+                        // Nếu không có ID, tạo question mới
+                        savedQuestion = await questionService.createQuestion(questionPayload);
+                        console.log('✅ Question created (no ID):', savedQuestion);
+                    }
+
+                    // Kiểm tra nếu savedQuestion tồn tại
+                    if (!savedQuestion || !savedQuestion.id) {
+                        console.error('❌ Failed to save question:', question);
+                        throw new Error(`Không thể lưu câu hỏi: ${question.question_text}`);
                     }
 
                     // Tạo/cập nhật options cho multiple choice questions
@@ -272,13 +294,20 @@ const CreateSurvey = () => {
                                         optionText: option.option_text
                                     });
                                     console.log('✅ Option updated:', savedOption);
+                                } else {
+                                    // Nếu không có ID, tạo option mới
+                                    savedOption = await optionService.createOption(optionPayload);
+                                    console.log('✅ Option created (no ID):', savedOption);
                                 }
 
-                                if (savedOption) {
+                                if (savedOption && savedOption.id) {
                                     updatedOptions.push({
                                         id: savedOption.id,
                                         option_text: savedOption.optionText
                                     });
+                                } else {
+                                    console.error('❌ Failed to save option:', option);
+                                    throw new Error(`Không thể lưu lựa chọn: ${option.option_text}`);
                                 }
                             }
                         }
@@ -308,7 +337,7 @@ const CreateSurvey = () => {
                     } catch (error) {
                         console.error('❌ Error refreshing questions:', error);
                     }
-                }, 1000); // Delay 1 giây để server xử lý xong
+                }, 200); // Delay 1 giây để server xử lý xong
             }
 
             // Cập nhật localStorage
@@ -336,7 +365,7 @@ const CreateSurvey = () => {
                     id: savedSurvey.id,
                     title: savedSurvey.title,
                     description: savedSurvey.description,
-                    status: 'draft',
+                    status: status,
                     categoryName: savedSurvey.categoryName,
                     createdAt: savedSurvey.createdAt,
                     questionsCount: updatedQuestions.length,
@@ -348,19 +377,43 @@ const CreateSurvey = () => {
             }
 
             const message = isEditMode
-                ? (status === 'draft' ? 'Đã cập nhật bản nháp khảo sát!' : 'Đã cập nhật khảo sát thành công!')
-                : (status === 'draft' ? 'Đã lưu bản nháp khảo sát!' : 'Đã tạo khảo sát thành công!');
+                ? 'Đã cập nhật khảo sát thành công!'
+                : (status === 'draft' ? 'Đã lưu bản nháp khảo sát!' : 'Đã xuất bản khảo sát thành công!');
 
             alert(message);
 
-            // Nếu đang edit, ở lại trang để tiếp tục chỉnh sửa
-            // Nếu tạo mới, chuyển về dashboard
-            if (!isEditMode) {
-                navigate('/dashboard');
-            }
+            // Chuyển về dashboard sau khi lưu/cập nhật thành công
+            navigate('/dashboard');
         } catch (err) {
             console.error('Lỗi khi lưu khảo sát:', err);
-            alert('Có lỗi xảy ra khi lưu khảo sát. Vui lòng thử lại.');
+
+            // Hiển thị thông báo lỗi chi tiết hơn
+            let errorMessage = 'Có lỗi xảy ra khi lưu khảo sát. Vui lòng thử lại.';
+
+            if (err.response?.data?.message) {
+                errorMessage = err.response.data.message;
+            } else if (err.message) {
+                errorMessage = err.message;
+            } else if (err.response?.status) {
+                switch (err.response.status) {
+                    case 400:
+                        errorMessage = 'Dữ liệu không hợp lệ. Vui lòng kiểm tra lại thông tin.';
+                        break;
+                    case 401:
+                        errorMessage = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+                        break;
+                    case 403:
+                        errorMessage = 'Bạn không có quyền thực hiện thao tác này.';
+                        break;
+                    case 500:
+                        errorMessage = 'Lỗi máy chủ. Vui lòng thử lại sau.';
+                        break;
+                    default:
+                        errorMessage = `Lỗi ${err.response.status}: ${err.response.statusText || 'Không xác định'}`;
+                }
+            }
+
+            alert(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -398,10 +451,12 @@ const CreateSurvey = () => {
                     </button>
                 </div>
                 <div className="survey-topbar-right">
-                    <button className="btn-save" onClick={() => saveSurvey('draft')} disabled={loading}>
-                        {isEditMode ? 'Cập nhật bản nháp' : 'Lưu bản nháp'}
-                    </button>
-                    <button className="btn-publish" onClick={() => saveSurvey('active')} disabled={loading}>
+                    {!isEditMode && (
+                        <button className="btn-save" onClick={() => saveSurvey('draft')} disabled={loading}>
+                            Lưu bản nháp
+                        </button>
+                    )}
+                    <button className="btn-publish" onClick={() => saveSurvey('published')} disabled={loading}>
                         {isEditMode ? 'Cập nhật' : 'Lưu'}
                     </button>
                 </div>
