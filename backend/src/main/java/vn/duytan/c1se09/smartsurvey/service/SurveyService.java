@@ -223,7 +223,7 @@ public class SurveyService {
                         "options",
                         "Xóa " + options.size() + " tùy chọn khi xóa câu hỏi: " + question.getQuestionText());
             }
-            
+
             // Log xóa question
             activityLogService.log(
                     ActivityLog.ActionType.delete_question,
@@ -231,7 +231,7 @@ public class SurveyService {
                     "questions",
                     "Xóa câu hỏi khi xóa khảo sát: " + question.getQuestionText());
         }
-        
+
         // Xóa tất cả questions
         if (!questions.isEmpty()) {
             questionRepository.deleteAll(questions);

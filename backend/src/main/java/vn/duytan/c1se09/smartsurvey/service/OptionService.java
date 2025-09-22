@@ -25,8 +25,6 @@ public class OptionService {
     private final AuthService authService;
     private final ActivityLogService activityLogService;
 
- 
-    
     public Option getOptionEntityById(Long optionId) throws IdInvalidException {
         return optionRepository.findById(optionId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy tùy chọn"));
@@ -43,43 +41,38 @@ public class OptionService {
         return dto;
     }
 
-
-
     private void validateUserPermission(Question question) throws IdInvalidException {
         User currentUser = authService.getCurrentUser();
         if (currentUser == null) {
             throw new IdInvalidException("Người dùng chưa xác thực");
         }
-        
+
         if (!question.getSurvey().getUser().getUserId().equals(currentUser.getUserId())) {
             throw new IdInvalidException("Bạn không có quyền thực hiện thao tác này");
         }
     }
 
-    
     /**
      * Tạo tùy chọn mới (phương thức chính)
-     * @param questionId 
-     * @param request 
-     * @return 
+     * 
+     * @param questionId
+     * @param request
+     * @return
      */
     @Transactional
     public OptionResponseDTO createOption(Long questionId, OptionCreateRequestDTO request) throws IdInvalidException {
-       
+
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
-        
-   
+
         validateUserPermission(question);
 
-        
         Option option = new Option();
         option.setQuestion(question);
         option.setOptionText(request.getOptionText());
 
         Option saved = optionRepository.save(option);
-        
-        
+
         activityLogService.log(
                 ActivityLog.ActionType.add_option,
                 saved.getOptionId(),
@@ -91,14 +84,16 @@ public class OptionService {
 
     /**
      * Tạo tùy chọn mới với response message
-     * @param questionId 
-     * @param request 
-     * @return 
+     * 
+     * @param questionId
+     * @param request
+     * @return
      */
     @Transactional
-    public OptionCreateResponseDTO createOptionWithResponse(Long questionId, OptionCreateRequestDTO request) throws IdInvalidException {
+    public OptionCreateResponseDTO createOptionWithResponse(Long questionId, OptionCreateRequestDTO request)
+            throws IdInvalidException {
         OptionResponseDTO optionDTO = createOption(questionId, request);
-        
+
         // Convert to create response DTO
         OptionCreateResponseDTO response = new OptionCreateResponseDTO();
         response.setId(optionDTO.getId());
@@ -108,16 +103,16 @@ public class OptionService {
         response.setMessage("Tạo tùy chọn thành công!");
         response.setCreatedAt(optionDTO.getCreatedAt());
         response.setUpdatedAt(optionDTO.getUpdatedAt());
-        
+
         return response;
     }
 
-    //  Đọc danh sách câu trả lời của câu hỏi
-    
+    // Đọc danh sách câu trả lời của câu hỏi
+
     public List<OptionResponseDTO> getOptionsByQuestion(Long questionId) throws IdInvalidException {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
-        
+
         validateUserPermission(question);
 
         List<Option> options = optionRepository.findByQuestion(question);
@@ -130,13 +125,12 @@ public class OptionService {
         return toOptionResponseDTO(option);
     }
 
-
-    
     /**
      * Cập nhật tùy chọn
-     * @param optionId 
-     * @param request 
-     * @return 
+     * 
+     * @param optionId
+     * @param request
+     * @return
      */
     @Transactional
     public OptionResponseDTO updateOption(Long optionId, OptionUpdateRequestDTO request) throws IdInvalidException {
@@ -148,7 +142,7 @@ public class OptionService {
         }
 
         Option saved = optionRepository.save(option);
-        
+
         activityLogService.log(
                 ActivityLog.ActionType.edit_option,
                 saved.getOptionId(),
@@ -160,14 +154,16 @@ public class OptionService {
 
     /**
      * Cập nhật tùy chọn với response message
-     * @param optionId 
-     * @param request 
-     * @return 
+     * 
+     * @param optionId
+     * @param request
+     * @return
      */
     @Transactional
-    public OptionUpdateResponseDTO updateOptionWithResponse(Long optionId, OptionUpdateRequestDTO request) throws IdInvalidException {
+    public OptionUpdateResponseDTO updateOptionWithResponse(Long optionId, OptionUpdateRequestDTO request)
+            throws IdInvalidException {
         OptionResponseDTO updatedDTO = updateOption(optionId, request);
-        
+
         OptionUpdateResponseDTO response = new OptionUpdateResponseDTO();
         response.setId(updatedDTO.getId());
         response.setQuestionId(updatedDTO.getQuestionId());
@@ -176,19 +172,19 @@ public class OptionService {
         response.setMessage("Cập nhật tùy chọn thành công!");
         response.setCreatedAt(updatedDTO.getCreatedAt());
         response.setUpdatedAt(updatedDTO.getUpdatedAt());
-        
+
         return response;
     }
 
     // xóa câu trả lời
-    
+
     @Transactional
     public void deleteOption(Long optionId) throws IdInvalidException {
         Option option = getOptionEntityById(optionId);
         validateUserPermission(option.getQuestion());
 
         optionRepository.delete(option);
-        
+
         activityLogService.log(
                 ActivityLog.ActionType.delete_option,
                 optionId,
@@ -197,11 +193,12 @@ public class OptionService {
     }
 
     // Tổng số tùy chọn trong hệ thống
-    
+
     public long getTotalOptions() {
         return optionRepository.count();
     }
- // Số tùy chọn của một câu hỏi cụ thể
+
+    // Số tùy chọn của một câu hỏi cụ thể
     public long getOptionsCountByQuestion(Long questionId) throws IdInvalidException {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
