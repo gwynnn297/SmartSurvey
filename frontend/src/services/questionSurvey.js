@@ -1,6 +1,19 @@
 import { apiClient } from './authService';
 
 export const questionService = {
+    // Reorder câu hỏi trong survey
+    reorderQuestions: async (surveyId, orderedQuestionIds) => {
+        try {
+            const response = await apiClient.put(`/surveys/${surveyId}/questions/reorder`, {
+                orderedQuestionIds
+            });
+            return response.data;
+        } catch (error) {
+            console.error('Reorder questions error:', error);
+            throw error;
+        }
+    },
+
     // Tạo câu hỏi mới cho survey
     createQuestion: async (data) => {
         try {

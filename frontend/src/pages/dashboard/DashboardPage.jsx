@@ -317,97 +317,29 @@ export default function DashboardPage() {
                           const surveyId = s.id;
                           console.log(`🗑️ Bắt đầu xóa khảo sát ${surveyId}...`);
 
-                          // Bước 1: Lấy danh sách câu hỏi của khảo sát từ server
-                          let questionsToDelete = [];
-                          try {
-                            const { questionService, optionService } = await import('../../services/questionSurvey');
-                            questionsToDelete = await questionService.getQuestionsBySurvey(surveyId);
-                            console.log(`📋 Tìm thấy ${questionsToDelete.length} câu hỏi cần xóa`);
-                          } catch (error) {
-                            console.log('⚠️ Không thể lấy câu hỏi từ server, sử dụng localStorage');
-                            // Fallback: lấy từ localStorage
-                            const allQuestions = JSON.parse(localStorage.getItem('surveyQuestions') || '[]');
-                            questionsToDelete = allQuestions.filter(q => q.surveyId === surveyId);
-                          }
-
-                          // Bước 2: Xóa tất cả options của các câu hỏi trước
-                          let totalOptionsDeleted = 0;
-                          for (const question of questionsToDelete) {
-                            try {
-                              const { optionService } = await import('../../services/questionSurvey');
-                              const options = await optionService.getOptionsByQuestion(question.id);
-                              console.log(`🗑️ Xóa ${options.length} tùy chọn của câu hỏi ${question.id}`);
-
-                              // Xóa từng option
-                              for (const option of options) {
-                                await optionService.deleteOption(option.id);
-                                totalOptionsDeleted++;
-                              }
-                            } catch (error) {
-                              console.log(`⚠️ Không thể xóa options của câu hỏi ${question.id}:`, error.message);
-                            }
-                          }
-
-                          // Bước 3: Xóa tất cả câu hỏi
-                          let totalQuestionsDeleted = 0;
-                          for (const question of questionsToDelete) {
-                            try {
-                              const { questionService } = await import('../../services/questionSurvey');
-                              await questionService.deleteQuestion(question.id);
-                              totalQuestionsDeleted++;
-                              console.log(`✅ Đã xóa câu hỏi ${question.id}`);
-                            } catch (error) {
-                              console.log(`⚠️ Không thể xóa câu hỏi ${question.id}:`, error.message);
-                            }
-                          }
-
-                          // Bước 4: Xóa khảo sát
+                          // Backend đã xử lý cascade delete (questions, options)
                           await surveyService.deleteSurvey(surveyId);
-                          console.log(`✅ Đã xóa khảo sát ${surveyId}`);
+                          console.log(`✅ Đã xóa khảo sát ${surveyId} (cascade trên backend)`);
 
-                          // Bước 5: Cập nhật UI và localStorage
+                          // Cập nhật UI và localStorage
                           const updatedSurveys = surveys.filter(survey => survey.id !== s.id);
                           localStorage.setItem('userSurveys', JSON.stringify(updatedSurveys));
                           setSurveys(updatedSurveys);
 
-                          // Xóa dữ liệu liên quan khỏi localStorage
-                          const allQuestions = JSON.parse(localStorage.getItem('surveyQuestions') || '[]');
-                          const allOptions = JSON.parse(localStorage.getItem('questionOptions') || '[]');
-                          const questionIdsToDelete = questionsToDelete.map(q => q.id);
-
-                          const updatedQuestions = allQuestions.filter(q => q.surveyId !== surveyId);
-                          const updatedOptions = allOptions.filter(opt => !questionIdsToDelete.includes(opt.questionId));
-
-                          localStorage.setItem('surveyQuestions', JSON.stringify(updatedQuestions));
-                          localStorage.setItem('questionOptions', JSON.stringify(updatedOptions));
-
                           // Cập nhật KPI real-time
-                          const calculateRealStats = (surveysData, metaData = null) => {
-                            let totalSurveys, totalResponses, activeSurveys, completionRate;
-
-                            if (metaData) {
-                              totalSurveys = metaData.total || 0;
-                            } else {
-                              totalSurveys = surveysData.length;
-                            }
-
-                            totalResponses = surveysData.reduce((sum, s) => sum + (s.responses || s.responseCount || 0), 0);
-                            activeSurveys = surveysData.filter(s => s.status === 'published').length;
-                            const surveysWithResponses = surveysData.filter(s => (s.responses || s.responseCount || 0) > 0);
-                            completionRate = totalSurveys > 0 ? Math.round((surveysWithResponses.length / totalSurveys) * 100) : 0;
-
-                            return { totalSurveys, totalResponses, activeSurveys, completionRate };
-                          };
-
-                          const newStats = calculateRealStats(updatedSurveys);
-                          setOverview(newStats);
+                          const totalSurveys = updatedSurveys.length;
+                          const totalResponses = updatedSurveys.reduce((sum, s) => sum + (s.responses || s.responseCount || 0), 0);
+                          const activeSurveys = updatedSurveys.filter(s => s.status === 'published').length;
+                          const surveysWithResponses = updatedSurveys.filter(s => (s.responses || s.responseCount || 0) > 0);
+                          const completionRate = totalSurveys > 0 ? Math.round((surveysWithResponses.length / totalSurveys) * 100) : 0;
+                          setOverview({ totalSurveys, totalResponses, activeSurveys, completionRate });
 
                           // Reset về trang đầu nếu trang hiện tại trống
                           if (updatedSurveys.length === 0 && currentPage > 0) {
                             setCurrentPage(0);
                           }
 
-                          alert(`Đã xóa khảo sát thành công!\n Đã xóa ${totalQuestionsDeleted} câu hỏi\n Đã xóa ${totalOptionsDeleted} tùy chọn`);
+                          alert('Đã xóa khảo sát thành công!');
                         } catch (error) {
                           console.error('Lỗi khi xóa khảo sát:', error);
                           alert('Xóa khảo sát thất bại. Vui lòng thử lại.');

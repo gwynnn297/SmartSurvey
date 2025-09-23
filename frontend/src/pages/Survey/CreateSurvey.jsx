@@ -379,6 +379,17 @@ const CreateSurvey = () => {
                 }
             }
 
+            // Đồng bộ thứ tự câu hỏi lên backend theo thứ tự hiện tại trên giao diện
+            try {
+                if (updatedQuestions.length > 0) {
+                    const orderedQuestionIds = updatedQuestions.map(q => q.id);
+                    await questionService.reorderQuestions(surveyId, orderedQuestionIds);
+                    console.log('✅ Đã lưu thứ tự câu hỏi mới lên server');
+                }
+            } catch (error) {
+                console.error('❌ Lỗi khi lưu thứ tự câu hỏi:', error);
+            }
+
             // Cập nhật state với questions có ID thực
             setQuestions(updatedQuestions);
 
@@ -525,11 +536,15 @@ const CreateSurvey = () => {
                             sensors={sensors}
                             collisionDetection={closestCenter}
                             onDragEnd={({ active, over }) => {
-                                if (active.id !== over.id) {
-                                    const oldIndex = questions.findIndex(q => q.id === active.id);
-                                    const newIndex = questions.findIndex(q => q.id === over.id);
-                                    setQuestions(arrayMove(questions, oldIndex, newIndex));
-                                }
+                                if (!over || active.id === over.id) return;
+
+                                const oldIndex = questions.findIndex(q => q.id === active.id);
+                                const newIndex = questions.findIndex(q => q.id === over.id);
+                                const newOrder = arrayMove(questions, oldIndex, newIndex);
+                                setQuestions(newOrder);
+
+                                // Chỉ đổi thứ tự trên giao diện. Gọi API khi ấn Lưu/Cập nhật
+                                console.log('↔️ Đã thay đổi thứ tự câu hỏi trên giao diện');
                             }}
                         >
                             <SortableContext items={questions.map(q => q.id)} strategy={verticalListSortingStrategy}>

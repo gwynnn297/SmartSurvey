@@ -73,7 +73,11 @@ npm run preview
 
 # Lint code
 npm run lint
-```
+$env:DB_USERNAME = "root"
+$env:DB_PASSWORD = 2402
+$env:MYSQL_HOST  = "localhost"```
+Trước khi chạy backend
+
 
 ## 🏗️ Cấu trúc dự án
 
