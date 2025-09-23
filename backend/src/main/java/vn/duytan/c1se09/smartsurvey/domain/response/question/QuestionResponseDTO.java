@@ -12,7 +12,9 @@ public class QuestionResponseDTO {
     private String questionType;
     private String questionTypeDescription;
     private Boolean isRequired;
-   
+    
+    private Integer displayOrder;
+    
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 } 

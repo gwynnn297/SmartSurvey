@@ -5,10 +5,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import vn.duytan.c1se09.smartsurvey.domain.request.question.QuestionCreateRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.question.QuestionUpdateRequestDTO;
+import vn.duytan.c1se09.smartsurvey.domain.request.question.QuestionReorderRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.question.QuestionResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.question.QuestionCreateResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.question.QuestionUpdateResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.question.QuestionDeleteResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.question.QuestionReorderResponseDTO;
 import vn.duytan.c1se09.smartsurvey.service.QuestionService;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
@@ -55,6 +57,18 @@ public class QuestionController {
     }
 
     /**
+     * Reorder câu hỏi theo danh sách id 1..N
+     */
+    @PutMapping("/surveys/{surveyId}/questions/reorder")
+    @ApiMessage("Reorder questions in survey")
+    public ResponseEntity<QuestionReorderResponseDTO> reorderQuestions(
+            @PathVariable("surveyId") Long surveyId,
+            @Valid @RequestBody QuestionReorderRequestDTO request) throws IdInvalidException {
+        questionService.reorderQuestions(surveyId, request.getOrderedQuestionIds());
+        return ResponseEntity.ok(new QuestionReorderResponseDTO(surveyId, "Sắp xếp câu hỏi thành công"));
+    }
+
+    /**
      * Lấy chi tiết câu hỏi theo id
      */
     @GetMapping("/questions/{id}")
@@ -87,4 +101,4 @@ public class QuestionController {
         QuestionDeleteResponseDTO response = new QuestionDeleteResponseDTO(id, "Xóa câu hỏi thành công");
         return ResponseEntity.ok(response);
     }
-} 
+}

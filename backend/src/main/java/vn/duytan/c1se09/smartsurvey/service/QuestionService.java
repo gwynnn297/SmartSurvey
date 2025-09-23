@@ -14,6 +14,8 @@ import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Service xử lý logic business cho Question
@@ -42,6 +44,7 @@ public class QuestionService {
         dto.setQuestionType(question.getQuestionType().name());
         dto.setQuestionTypeDescription(question.getQuestionType().getDescription());
         dto.setIsRequired(question.getIsRequired());
+        dto.setDisplayOrder(question.getDisplayOrder());
         dto.setCreatedAt(question.getCreatedAt());
         dto.setUpdatedAt(question.getUpdatedAt());
         return dto;
@@ -86,6 +89,10 @@ public class QuestionService {
         question.setQuestionText(request.getQuestionText());
         question.setQuestionType(request.getQuestionType());
         question.setIsRequired(request.getIsRequired() != null ? request.getIsRequired() : true);
+
+        // set display order to max + 1 within survey
+        int maxOrder = questionRepository.findMaxDisplayOrderBySurvey(survey);
+        question.setDisplayOrder(maxOrder + 1);
 
         Question saved = questionRepository.save(question);
         
@@ -132,7 +139,7 @@ public class QuestionService {
         
         validateUserPermission(survey);
 
-        List<Question> questions = questionRepository.findBySurveyOrderByCreatedAt(survey);
+        List<Question> questions = questionRepository.findBySurveyOrderByDisplayOrderAsc(survey);
         return questions.stream().map(this::toQuestionResponseDTO).toList();
     }
 
@@ -140,6 +147,43 @@ public class QuestionService {
         Question question = getQuestionEntityById(questionId);
         validateUserPermission(question);
         return toQuestionResponseDTO(question);
+    }
+
+    /**
+     * Reorder theo danh sách id (1..N) cho một survey
+     */
+    @Transactional
+    public void reorderQuestions(Long surveyId, List<Long> orderedQuestionIds) throws IdInvalidException {
+        Survey survey = surveyRepository.findById(surveyId)
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
+        validateUserPermission(survey);
+
+        List<Question> questions = questionRepository.findBySurvey(survey);
+        if (orderedQuestionIds.size() != questions.size()) {
+            throw new IdInvalidException("Danh sách id không khớp số lượng câu hỏi trong khảo sát");
+        }
+        Set<Long> validIds = questions.stream().map(Question::getQuestionId).collect(Collectors.toSet());
+        for (Long id : orderedQuestionIds) {
+            if (!validIds.contains(id)) {
+                throw new IdInvalidException("Câu hỏi không thuộc khảo sát");
+            }
+        }
+        for (int i = 0; i < orderedQuestionIds.size(); i++) {
+            Long qid = orderedQuestionIds.get(i);
+            for (Question q : questions) {
+                if (q.getQuestionId().equals(qid)) {
+                    q.setDisplayOrder(i + 1);
+                    questionRepository.save(q);
+                    break;
+                }
+            }
+        }
+
+        activityLogService.log(
+                ActivityLog.ActionType.edit_question,
+                surveyId,
+                "questions",
+                "Sắp xếp lại thứ tự câu hỏi cho khảo sát: " + survey.getTitle());
     }
 
     // cập nhập câu hỏi

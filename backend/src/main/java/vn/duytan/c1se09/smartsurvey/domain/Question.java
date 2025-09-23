@@ -36,6 +36,9 @@ public class Question {
     @Column(name = "is_required", nullable = false)
     private Boolean isRequired = true;
 
+    @Column(name = "display_order", nullable = false)
+    private Integer displayOrder = 0;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
