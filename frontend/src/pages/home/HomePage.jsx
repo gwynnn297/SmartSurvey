@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import "./HomePage.css";
-
+import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
 const HomePage = () => {
     const navigate = useNavigate();
 
@@ -18,8 +18,7 @@ const HomePage = () => {
             {/* Header */}
             <header className="header">
                 <div className="logo">
-                    <div className="logo-icon">S</div>
-                    <span>SmartSurvey</span>
+                <img className="logo-smart-survey" src={logoSmartSurvey} alt="logoSmartSurvey" />
                 </div>
                 <nav className="nav">
                     <a href="#features">Tính năng</a>
@@ -222,7 +221,7 @@ const HomePage = () => {
                             <a href="#contact">Liên hệ</a>
                             <a href="#support">Hỗ trợ</a>
                         </div>
-                    </div>  
+                    </div>
                 </div>
                 <div className="footer-bottom">
                     <p>© 2025 SmartSurvey. Tất cả quyền được bảo lưu.</p>

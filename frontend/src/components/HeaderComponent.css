@@ -17,16 +17,46 @@
 }
 
 .logo {
-    display: flex;
+    /* display: flex;
     align-items: center;
     gap: 12px;
     cursor: pointer;
+    transition: opacity 0.2s; */
+    display: flex;
+    align-items: center;
+    /* căn giữa theo chiều dọc */
+    justify-content: center;
+    /* nếu muốn căn giữa ngang trong khung logo */
+    cursor: pointer;
     transition: opacity 0.2s;
+    height: 40px;
+    /* đồng bộ chiều cao với avatar để canh giữa */
 }
 
 .logo:hover {
     opacity: 0.8;
 }
+
+.logo-smart-survey {
+    height: 40px;
+    /* desktop */
+    width: auto;
+    object-fit: contain;
+    display: block;
+    /* loại bỏ khoảng trắng baseline của img */
+    align-self: center;
+    /* canh giữa dọc trong flex container .logo */
+    margin: 0;
+    /* cách đều theo padding của .header-component */
+}
+
+@media (max-width: 480px) {
+    .logo-smart-survey {
+        height: 40px;
+        /* mobile nhỏ hơn */
+    }
+}
+
 
 .logo-icon {
     width: 40px;

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from "../../services/authService";
 import './LoginPage.css';
-
+import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
 const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -72,8 +72,7 @@ const Login = () => {
             {/* Header */}
             <header className="header">
                 <div className="logo">
-                    <div className="logo-icon">S</div>
-                    <span onClick={handleHome}>SmartSurvey</span>
+                    <img onClick={handleHome} className="logo-smart-survey" src={logoSmartSurvey} alt="logoSmartSurvey" />
                 </div>
                 <div className="header-buttons">
                     <button className="btn-login" onClick={handleLogin}>
@@ -88,7 +87,7 @@ const Login = () => {
             <div className="login-content">
                 <div className="login-card">
                     <div className="login-header">
-                        <div className="avatar">👤</div>
+                        <img className="logo-smart-survey" src={logoSmartSurvey} alt="logoSmartSurvey" />
                         <h2>Đăng Nhập</h2>
                         <p>Chào mừng bạn quay trở lại SmartSurvey</p>
                     </div>

@@ -521,7 +521,7 @@ const CreateSurvey = () => {
                         </button>
                     )}
                     <button className="btn-publish" onClick={() => saveSurvey('published')} disabled={loading}>
-                        {isEditMode ? 'Cập nhật' : 'Lưu'}
+                        {isEditMode ? 'Cập nhật' : 'Xuất bản'}
                     </button>
                 </div>
             </div>

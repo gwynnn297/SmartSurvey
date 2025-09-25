@@ -8,6 +8,8 @@ import CreateAI from "./pages/Survey/CreateAI";
 import CreateSurvey from "./pages/Survey/CreateSurvey";
 import Profile from "./pages/Profile/Profile";
 import ChangePassword from "./pages/ChangePassword/ChangePassword";
+// import './lib/fontawesome';
+import '@fortawesome/fontawesome-free/css/all.min.css';
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");

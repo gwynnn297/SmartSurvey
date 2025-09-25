@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './HeaderComponent.css';
-
+import logoSmartSurvey from '../assets/logoSmartSurvey.png';
 const HeaderComponent = ({ showUserInfo = false, username }) => {
     const navigate = useNavigate();
     const [showDropdown, setShowDropdown] = useState(false);
@@ -21,7 +21,7 @@ const HeaderComponent = ({ showUserInfo = false, username }) => {
     const handleLogout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        navigate('/login');
+        navigate('/home');
     };
 
     const toggleDropdown = () => {
@@ -44,10 +44,7 @@ const HeaderComponent = ({ showUserInfo = false, username }) => {
         <header className="header-component">
             <div className="header-left">
                 <div className="logo" onClick={handleLogoClick}>
-                    <div className="logo">
-                        <div className="logo-icon">S</div>
-                        <span>SmartSurvey</span>
-                    </div>
+                    <img className="logo-smart-survey" src={logoSmartSurvey} alt="logoSmartSurvey" />
                 </div>
             </div>
 

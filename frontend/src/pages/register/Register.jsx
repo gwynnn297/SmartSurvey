@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { register } from '../../services/authService';
 import './Register.css';
-
+import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
 const Register = () => {
     const [formData, setFormData] = useState({
         fullName: '',
@@ -22,47 +22,47 @@ const Register = () => {
         });
     };
 
-const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
 
-    if (formData.password !== formData.confirmPassword) {
-        setError('Mật khẩu xác nhận không khớp!');
-        return;
-    }
-
-    setIsLoading(true);
-    try {
-        const response = await register(
-            formData.fullName,
-            formData.email,
-            formData.password
-        );
-
-        if (response?.token) {
-            setSuccess('🎉 Đăng ký thành công! Đang chuyển đến trang đăng nhập...');
-            setTimeout(() => {
-                navigate('/login');
-            }, 2000);
-        } else {
-            setError('Đăng ký thất bại: API không trả dữ liệu hợp lệ!');
+        if (formData.password !== formData.confirmPassword) {
+            setError('Mật khẩu xác nhận không khớp!');
+            return;
         }
-    } catch (err) {
-        console.error("Register page error:", err);
 
-        setError(err.message || "Đăng ký thất bại! Vui lòng kiểm tra lại thông tin.");
+        setIsLoading(true);
+        try {
+            const response = await register(
+                formData.fullName,
+                formData.email,
+                formData.password
+            );
 
-        // Reset password để nhập lại
-        setFormData((prev) => ({
-            ...prev,
-            password: '',
-            confirmPassword: ''
-        }));
+            if (response?.token) {
+                setSuccess('🎉 Đăng ký thành công! Đang chuyển đến trang đăng nhập...');
+                setTimeout(() => {
+                    navigate('/login');
+                }, 2000);
+            } else {
+                setError('Đăng ký thất bại: API không trả dữ liệu hợp lệ!');
+            }
+        } catch (err) {
+            console.error("Register page error:", err);
 
-        setIsLoading(false); // mở lại input để nhập tiếp
-    }
-};
+            setError(err.message || "Đăng ký thất bại! Vui lòng kiểm tra lại thông tin.");
+
+            // Reset password để nhập lại
+            setFormData((prev) => ({
+                ...prev,
+                password: '',
+                confirmPassword: ''
+            }));
+
+            setIsLoading(false); // mở lại input để nhập tiếp
+        }
+    };
 
 
 
@@ -80,9 +80,8 @@ const handleSubmit = async (e) => {
         <div className="register-container">
             {/* Header */}
             <header className="header">
-                <div className="logo">
-                    <div className="logo-icon">S</div>
-                    <span onClick={handleHome}>SmartSurvey</span>
+                <div className="logo" >
+                    <img onClick={handleHome} className="logo-smart-survey" src={logoSmartSurvey} alt="logoSmartSurvey" />
                 </div>
                 <div className="header-buttons">
                     <button className="btn-login" onClick={handleLogin}>
@@ -97,7 +96,7 @@ const handleSubmit = async (e) => {
             <div className="register-content">
                 <div className="register-card">
                     <div className="register-header">
-                        <div className="avatar">👤</div>
+                        <img className="logo-smart-survey" src={logoSmartSurvey} alt="logoSmartSurvey" />
                         <h2>Đăng Ký</h2>
                         <p>Tạo tài khoản mới để bắt đầu sử dụng SmartSurvey</p>
                     </div>

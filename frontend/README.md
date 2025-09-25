@@ -58,7 +58,9 @@ npm install
 # Cài đặt @dnd-kit/core (nếu chưa có)
 npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities @dnd-kit/modifiers
 ```
-
+# Cài đặt thư viện icon
+npm install @fortawesome/fontawesome-svg-core @fortawesome/react-fontawesome @fortawesome/free-solid-svg-icons @fortawesome/free-regular-svg-icons @fortawesome/free-brands-svg-icons
+npm i @fortawesome/fontawesome-free
 ### Chạy ứng dụng
 
 ```bash

@@ -19,9 +19,12 @@
 .logo {
     display: flex;
     align-items: center;
+    justify-content: center;
+    /* căn giữa logo trong header */
     gap: 12px;
 }
 
+/* Xóa override kích cỡ toàn cục để tránh ảnh hưởng header */
 .logo-icon {
     width: 40px;
     height: 40px;
@@ -96,6 +99,17 @@
 
 .register-header {
     margin-bottom: 30px;
+}
+
+.register-header .logo-smart-survey {
+    width: 300px;
+    height: 150px;
+    display: block;
+    /* loại bỏ baseline */
+    margin: 0 auto;
+    /* căn giữa theo chiều ngang */
+    margin-bottom: -20px;
+    /* khớp với LoginPage */
 }
 
 .avatar {
