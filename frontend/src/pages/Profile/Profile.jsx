@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import HeaderComponent from '../../components/HeaderComponent';
 import profileService from '../../services/profileService';
 import './Profile.css';
-import './ProfileForm.css';
 
-// Inline ProfileForm component (moved from components/ProfileForm)
+// Modern ProfileForm component with improved UI
 const ProfileForm = ({ profile, onUpdate }) => {
     const [formData, setFormData] = useState({
         fullName: '',
@@ -15,7 +14,13 @@ const ProfileForm = ({ profile, onUpdate }) => {
         updatedAt: ''
     });
 
-    const [originalData, setOriginalData] = useState({});
+    const [originalData, setOriginalData] = useState({
+        fullName: '',
+        email: '',
+        role: '',
+        createdAt: '',
+        updatedAt: ''
+    });
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
     const [errors, setErrors] = useState({});
@@ -118,118 +123,171 @@ const ProfileForm = ({ profile, onUpdate }) => {
         return roleMap[role] || role;
     };
 
+    // Extract initials from full name for avatar
+    const getInitials = (name) => {
+        if (!name) return "U";
+        return name
+            .split(" ")
+            .map(word => word.charAt(0))
+            .join("")
+            .toUpperCase()
+            .slice(0, 2);
+    };
+
     const hasChanges = formData.fullName !== originalData.fullName;
     const isFormValid = formData.fullName.trim() !== '';
 
     return (
-        <div className="profile-form-container">
-            <form onSubmit={handleSubmit} className="profile-form">
-                {message.text && (
-                    <div className={`message ${message.type}`}>
-                        {message.text}
+        <div className="modern-profile-container">
+            {/* Profile Card with Avatar Section */}
+            <div className="profile-card">
+                {/* Avatar Section */}
+                <div className="profile-avatar-section">
+                    <div className="avatar-container">
+                        <div className="avatar-circle">
+                            {getInitials(formData.fullName)}
+                        </div>
+                        <button className="avatar-upload-btn" onClick={() => console.log('Avatar upload')}>
+                            <i className="fas fa-camera"></i>
+                        </button>
                     </div>
-                )}
-
-                <div className="form-group">
-                    <label htmlFor="fullName" className="form-label">
-                        Họ và tên <span className="required">*</span>
-                    </label>
-                    <input
-                        type="text"
-                        id="fullName"
-                        name="fullName"
-                        value={formData.fullName}
-                        onChange={handleInputChange}
-                        className={`form-input ${errors.fullName ? 'error' : ''}`}
-                        placeholder="Nhập họ và tên"
-                        disabled={loading}
-                    />
-                    {errors.fullName && (
-                        <span className="error-message">{errors.fullName}</span>
-                    )}
+                    <div className="profile-info">
+                        <h2 className="profile-name">{formData.fullName || "Tên người dùng"}</h2>
+                        <p className="profile-email">{formData.email || "email@example.com"}</p>
+                    </div>
                 </div>
 
-                <div className="form-group">
-                    <label htmlFor="email" className="form-label">
-                        Email
-                    </label>
-                    <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        value={formData.email}
-                        className="form-input readonly"
-                        disabled
-                    />
-                </div>
-
-                <div className="form-group">
-                    <label htmlFor="role" className="form-label">
-                        Vai trò
-                    </label>
-                    <input
-                        type="text"
-                        id="role"
-                        name="role"
-                        value={getRoleDisplayName(formData.role)}
-                        className="form-input readonly"
-                        disabled
-                    />
-                </div>
-
-                <div className="form-group">
-                    <label htmlFor="createdAt" className="form-label">
-                        Ngày tạo tài khoản
-                    </label>
-                    <input
-                        type="text"
-                        id="createdAt"
-                        name="createdAt"
-                        value={formatDate(formData.createdAt)}
-                        className="form-input readonly"
-                        disabled
-                    />
-                </div>
-
-                <div className="form-group">
-                    <label htmlFor="updatedAt" className="form-label">
-                        Cập nhật gần nhất
-                    </label>
-                    <input
-                        type="text"
-                        id="updatedAt"
-                        name="updatedAt"
-                        value={formatDate(formData.updatedAt)}
-                        className="form-input readonly"
-                        disabled
-                    />
-                </div>
-
-                <div className="form-actions">
-                    <button
-                        type="button"
-                        onClick={handleCancel}
-                        className="btn btn-secondary"
-                        disabled={loading || !hasChanges}
-                    >
-                        Hủy
-                    </button>
-                    <button
-                        type="submit"
-                        className="btn btn-primary"
-                        disabled={loading || !hasChanges || !isFormValid}
-                    >
-                        {loading ? (
-                            <>
-                                <span className="loading-spinner-small"></span>
-                                Đang lưu...
-                            </>
-                        ) : (
-                            'Lưu'
+                {/* Form Section */}
+                <div className="profile-form-section">
+                    <form onSubmit={handleSubmit} className="modern-profile-form">
+                        {message.text && (
+                            <div className={`modern-alert ${message.type}`}>
+                                <i className={`fas ${message.type === 'success' ? 'fa-check-circle' :
+                                    message.type === 'error' ? 'fa-exclamation-circle' :
+                                        'fa-info-circle'}`}></i>
+                                <span>{message.text}</span>
+                            </div>
                         )}
-                    </button>
+
+                        <div className="form-grid">
+                            {/* Editable field */}
+                            <div className="form-field">
+                                <label htmlFor="fullName" className="modern-label">
+                                    Họ và tên <span className="required">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    id="fullName"
+                                    name="fullName"
+                                    value={formData.fullName}
+                                    onChange={handleInputChange}
+                                    className={`modern-input ${errors.fullName ? 'error' : ''}`}
+                                    placeholder="Nhập họ và tên"
+                                    disabled={loading}
+                                />
+                                {errors.fullName && (
+                                    <span className="error-text">{errors.fullName}</span>
+                                )}
+                            </div>
+
+                            {/* Read-only fields */}
+                            <div className="form-field">
+                                <label htmlFor="email" className="modern-label">Email</label>
+                                <input
+                                    type="email"
+                                    id="email"
+                                    name="email"
+                                    value={formData.email}
+                                    className="modern-input readonly"
+                                    disabled
+                                />
+                            </div>
+
+                            <div className="form-field">
+                                <label htmlFor="role" className="modern-label">Vai trò</label>
+                                <input
+                                    type="text"
+                                    id="role"
+                                    name="role"
+                                    value={getRoleDisplayName(formData.role)}
+                                    className="modern-input readonly"
+                                    disabled
+                                />
+                            </div>
+
+                            <div className="form-field-group">
+                                <div className="form-field">
+                                    <label htmlFor="createdAt" className="modern-label">
+                                        Ngày tạo tài khoản
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="createdAt"
+                                        name="createdAt"
+                                        value={formatDate(formData.createdAt)}
+                                        className="modern-input readonly"
+                                        disabled
+                                    />
+                                </div>
+
+                                <div className="form-field">
+                                    <label htmlFor="updatedAt" className="modern-label">
+                                        Cập nhật gần nhất
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="updatedAt"
+                                        name="updatedAt"
+                                        value={formatDate(formData.updatedAt)}
+                                        className="modern-input readonly"
+                                        disabled
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Form Actions */}
+                        <div className="modern-form-actions">
+                            <button
+                                type="button"
+                                onClick={handleCancel}
+                                className="modern-btn secondary"
+                                disabled={loading || !hasChanges}
+                            >
+                                <i className="fas fa-times"></i>
+                                <span>Hủy</span>
+                            </button>
+
+                            <button
+                                type="submit"
+                                className="modern-btn primary"
+                                disabled={loading || !hasChanges || !isFormValid}
+                            >
+                                {loading ? (
+                                    <>
+                                        <div className="spinner"></div>
+                                        <span>Đang lưu...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="fas fa-save"></i>
+                                        <span>Lưu thay đổi</span>
+                                    </>
+                                )}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => window.location.href = '/change-password'}
+                                className="modern-btn accent"
+                            >
+                                <i className="fas fa-lock"></i>
+                                <span>Đổi mật khẩu</span>
+                            </button>
+                        </div>
+                    </form>
                 </div>
-            </form>
+            </div>
         </div>
     );
 };
@@ -276,11 +334,11 @@ const Profile = () => {
             const updatedProfile = await profileService.updateProfile(updatedData);
             setProfile(updatedProfile);
             const stored = JSON.parse(localStorage.getItem('user') || '{}');
-localStorage.setItem('user', JSON.stringify({
-  ...stored,
-  name: updatedProfile.fullName,
-  fullName: updatedProfile.fullName
-}));
+            localStorage.setItem('user', JSON.stringify({
+                ...stored,
+                name: updatedProfile.fullName,
+                fullName: updatedProfile.fullName
+            }));
             return { success: true, message: 'Cập nhật profile thành công!' };
         } catch (err) {
             console.error('Error updating profile:', err);
@@ -291,10 +349,13 @@ localStorage.setItem('user', JSON.stringify({
 
     if (loading) {
         return (
-            <div className="profile-container">
-                <div className="profile-loading">
-                    <div className="loading-spinner"></div>
-                    <p>Đang tải thông tin profile...</p>
+            <div className="modern-profile-page">
+                <HeaderComponent showUserInfo={true} username={profile?.fullName} />
+                <div className="modern-container">
+                    <div className="loading-container">
+                        <div className="loading-spinner-large"></div>
+                        <p className="loading-text">Đang tải thông tin profile...</p>
+                    </div>
                 </div>
             </div>
         );
@@ -302,56 +363,41 @@ localStorage.setItem('user', JSON.stringify({
 
     if (error) {
         return (
-            <div className="profile-container">
-                <div className="profile-error">
-                    <h2>Lỗi</h2>
-                    <p>{error}</p>
-                    <button onClick={loadProfile} className="retry-button">
-                        Thử lại
-                    </button>
+            <div className="modern-profile-page">
+                <HeaderComponent showUserInfo={true} username={profile?.fullName} />
+                <div className="modern-container">
+                    <div className="error-container">
+                        <div className="error-icon">
+                            <i className="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <h2 className="error-title">Có lỗi xảy ra</h2>
+                        <p className="error-message">{error}</p>
+                        <button onClick={loadProfile} className="modern-btn primary">
+                            <i className="fas fa-redo"></i>
+                            <span>Thử lại</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="profile-page">
+        <div className="modern-profile-page">
             <HeaderComponent showUserInfo={true} username={profile?.fullName} />
 
-            <div className="profile-container">
-                <div className="profile-header">
-                    <div className="profile-title">
-                        <h1>Thông tin cá nhân</h1>
-                        <p>Xem và chỉnh sửa thông tin cá nhân của bạn</p>
-                    </div>
-
-                    <div className="profile-actions">
-                        <button
-                            onClick={() => navigate('/dashboard')}
-                            className="btn btn-secondary"
-                        >
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M8 0L0 4L8 8L16 4L8 0Z" fill="currentColor" />
-                                <path d="M0 6L8 10L16 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                <path d="M0 8L8 12L16 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            Quay lại trang chủ
-                        </button>
-
-                        <button
-                            onClick={() => navigate('/change-password')}
-                            className="btn btn-primary"
-                        >
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12 6V4C12 1.79 10.21 0 8 0C5.79 0 4 1.79 4 4V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                <path d="M14 6H2C1.45 6 1 6.45 1 7V14C1 14.55 1.45 15 2 15H14C14.55 15 15 14.55 15 14V7C15 6.45 14.55 6 14 6Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                <path d="M8 10C8.55 10 9 9.55 9 9C9 8.45 8.55 8 8 8C7.45 8 7 8.45 7 9C7 9.55 7.45 10 8 10Z" fill="currentColor" />
-                            </svg>
-                            Đổi mật khẩu
-                        </button>
+            <div className="modern-container">
+                {/* Modern Header with centered title */}
+                <div className="modern-header">
+                    <div className="header-content">
+                        <div className="header-center">
+                            <h1 className="page-title">Thông tin cá nhân</h1>
+                            <p className="page-description">Xem và chỉnh sửa thông tin cá nhân của bạn</p>
+                        </div>
                     </div>
                 </div>
 
+                {/* Profile Content */}
                 <div className="profile-content">
                     <ProfileForm
                         profile={profile}

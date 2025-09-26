@@ -210,7 +210,10 @@ export default function DashboardPage() {
     return (
       <div className="dashboard-container">
         <div className="dashboard-content">
-          <div className="loading">Đang tải...</div>
+          <div className="loading">
+            <div className="loading-spinner"></div>
+            <span>Đang tải...</span>
+          </div>
         </div>
       </div>
     );
@@ -227,52 +230,100 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="kpi-grid">
-          <div className="kpi-card">
-            <div className="kpi-icon kpi-blue">📋</div>
-            <div className="kpi-info">
-              <h3>Tổng Khảo sát</h3>
-              <span className="kpi-number">{overview.totalSurveys}</span>
-            </div>
-          </div>
-          <div className="kpi-card">
-            <div className="kpi-icon kpi-green">🗳️</div>
-            <div className="kpi-info">
-              <h3>Tổng Phản hồi</h3>
-              <span className="kpi-number">{overview.totalResponses}</span>
-            </div>
-          </div>
-          <div className="kpi-card">
-            <div className="kpi-icon kpi-orange">✅</div>
-            <div className="kpi-info">
-              <h3>Đang hoạt động</h3>
-              <span className="kpi-number">{overview.activeSurveys}</span>
-            </div>
-          </div>
-          <div className="kpi-card">
-            <div className="kpi-icon kpi-purple">📈</div>
-            <div className="kpi-info">
-              <h3>Tỉ lệ hoàn thành</h3>
-              <span className="kpi-number">{overview.completionRate}%</span>
-            </div>
-          </div>
-        </div>
+       <div className="stats-sections">
+  <section className="stats-block">
+    <div className="kpi-card">
+      <div className="kpi-icon kpi-blue" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" 
+             viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9" />
+          <path d="M9 3v4a2 2 0 0 0 2 2h4" />
+        </svg>
+      </div>
+      <div className="kpi-info">
+        <h3>Tổng Khảo sát</h3>
+        <span className="kpi-number">{overview.totalSurveys}</span>
+      </div>
+    </div>
+  </section>
+
+  <section className="stats-block">
+    <div className="kpi-card">
+      <div className="kpi-icon kpi-green" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" 
+             viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 6h13M8 12h13M8 18h13" />
+          <rect x="3" y="5" width="3" height="3" rx="1" />
+          <rect x="3" y="11" width="3" height="3" rx="1" />
+          <rect x="3" y="17" width="3" height="3" rx="1" />
+        </svg>
+      </div>
+      <div className="kpi-info">
+        <h3>Tổng Phản hồi</h3>
+        <span className="kpi-number">{overview.totalResponses}</span>
+      </div>
+    </div>
+  </section>
+
+  <section className="stats-block">
+    <div className="kpi-card">
+      <div className="kpi-icon kpi-orange" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" 
+             viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      </div>
+      <div className="kpi-info">
+        <h3>Đang hoạt động</h3>
+        <span className="kpi-number">{overview.activeSurveys}</span>
+      </div>
+    </div>
+  </section>
+
+  <section className="stats-block">
+    <div className="kpi-card">
+      <div className="kpi-icon kpi-purple" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" 
+             viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 3v18h18" />
+          <path d="M19 17V9l-5 5-3-3-4 4" />
+        </svg>
+      </div>
+      <div className="kpi-info">
+        <h3>Tỉ lệ hoàn thành</h3>
+        <span className="kpi-number">{overview.completionRate}%</span>
+      </div>
+    </div>
+  </section>
+</div>
+
 
         <div className="section">
           <div className="section-header">
             <h2>Danh sách khảo sát:</h2>
             <div className="dashboard-actions">
-              {/* <button className="btn-primary" onClick={() => setShowCreateModal(true)}>+ Tạo khảo sát mới</button> */}
               <button className="btn-createsurvey" onClick={() => setShowCreateModal(true)}>+ Tạo khảo sát mới</button>
             </div>
           </div>
-          <div className="survey-list">
+          <div className="survey-list grid-3">
             {surveys.length === 0 && (
-              <div className="empty">Chưa có khảo sát nào.</div>
+              <div className="empty">
+                <div className="empty-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9" />
+                    <path d="M9 3v4a2 2 0 0 0 2 2h4" />
+                  </svg>
+                </div>
+                <span>Chưa có khảo sát nào.</span>
+              </div>
             )}
             {surveys.map((s) => (
               <div
-                className="survey-item"
+                className={`survey-item ${s.status || 'draft'}`}
                 key={s.id || s._id}
                 onClick={() => navigate('/create-survey', { state: { editSurvey: s } })}
                 style={{ cursor: 'pointer' }}
@@ -286,13 +337,22 @@ export default function DashboardPage() {
                     <div className="survey-description">{s.description}</div>
                   )}
                   <div className="survey-meta">
-                    <span>📅 {new Date(s.createdAt || s.created_at || Date.now()).toLocaleDateString('vi-VN')}</span>
+                    <span className="meta-item">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon-inline"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                      {new Date(s.createdAt || s.created_at || Date.now()).toLocaleDateString('vi-VN')}
+                    </span>
                     <span>•</span>
-                    <span>💬 {s.responses ?? s.responseCount ?? 0} phản hồi</span>
+                    <span className="meta-item">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon-inline"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" /></svg>
+                      {s.responses ?? s.responseCount ?? 0} phản hồi
+                    </span>
                     {s.questionsCount && (
                       <>
                         <span>•</span>
-                        <span>❓ {s.questionsCount} câu hỏi</span>
+                        <span className="meta-item">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon-inline"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 2-3 4" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                          {s.questionsCount} câu hỏi
+                        </span>
                       </>
                     )}
                   </div>
@@ -306,10 +366,13 @@ export default function DashboardPage() {
                       alert('Chức năng báo cáo sẽ được phát triển');
                     }}
                   >
-                    📊 Báo cáo
+                    <span className="btn-icon-left" aria-hidden="true">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><rect x="7" y="12" width="3" height="6" /><rect x="12" y="9" width="3" height="9" /><rect x="17" y="5" width="3" height="13" /></svg>
+                    </span>
+                    Báo cáo
                   </button>
                   <button
-                    className="btn-text"
+                    className="btn-text btn-danger"
                     onClick={async (e) => {
                       e.stopPropagation();
                       if (window.confirm('Bạn có chắc muốn xóa khảo sát này không? Tất cả câu hỏi và tùy chọn trong khảo sát cũng sẽ bị xóa.')) {
@@ -347,7 +410,10 @@ export default function DashboardPage() {
                       }
                     }}
                   >
-                    🗑️ Xóa
+                    <span className="btn-icon-left" aria-hidden="true">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" /></svg>
+                    </span>
+                    Xóa
                   </button>
 
                 </div>
@@ -364,7 +430,10 @@ export default function DashboardPage() {
                   onClick={handlePreviousPage}
                   disabled={currentPage === 0}
                 >
-                  ← Trước
+                  <span className="icon-inline" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                  </span>
+                  Trước
                 </button>
 
                 {getPageNumbers().map((pageNum) => (
@@ -382,7 +451,10 @@ export default function DashboardPage() {
                   onClick={handleNextPage}
                   disabled={currentPage === totalPages - 1}
                 >
-                  Sau →
+                  Sau
+                  <span className="icon-inline" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                  </span>
                 </button>
               </div>
             </div>
@@ -391,7 +463,6 @@ export default function DashboardPage() {
         {showCreateModal && (
           <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
-              {/* === NÚT X ĐÃ ĐƯỢC THÊM VÀO ĐÂY === */}
               <button className="modal-close-btn" onClick={() => setShowCreateModal(false)}>&times;</button>
               <div className="modal-header">
                 <h3>Bạn muốn bắt đầu như thế nào?</h3>
@@ -399,8 +470,11 @@ export default function DashboardPage() {
               </div>
               <div className="modal-body">
                 <div className="create-option" onClick={() => { setShowCreateModal(false); navigate('/create-ai'); }}>
-                  <div className="option-icon ai">⚡</div>
+                  <div className="option-icon ai" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                  </div>
                   <div className="option-title">Tạo bằng AI</div>
+                  <p className="option-desc">Mô tả ý tưởng của bạn, AI sẽ tự động tạo một bản nháp khảo sát để bạn bắt đầu.</p>
                   <ul>
                     <li>Tiết kiệm thời gian</li>
                     <li>Gợi ý câu hỏi thông minh</li>
@@ -409,14 +483,17 @@ export default function DashboardPage() {
                   <button className="btn-primary small">Bắt đầu ngay</button>
                 </div>
                 <div className="create-option" onClick={() => { setShowCreateModal(false); navigate('/create-survey'); }}>
-                  <div className="option-icon manual">✍️</div>
+                  <div className="option-icon manual" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>
+                  </div>
                   <div className="option-title">Tạo thủ công</div>
+                  <p className="option-desc">Tự tay xây dựng khảo sát từ đầu để toàn quyền kiểm soát mọi câu hỏi và chi tiết.</p>
                   <ul>
                     <li>Kiểm soát hoàn toàn</li>
                     <li>Tùy chỉnh chi tiết</li>
                     <li>Thiết kế theo ý muốn</li>
                   </ul>
-                  <button className="btn-primary outlined small">Bắt đầu ngay</button>
+                  <button className="btn-primary small">Bắt đầu ngay</button>
                 </div>
               </div>
               <div className="modal-footer">

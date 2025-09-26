@@ -14,6 +14,11 @@ const ChangePassword = () => {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
     const [errors, setErrors] = useState({});
+    const [showPasswords, setShowPasswords] = useState({
+        current: false,
+        new: false,
+        confirm: false
+    });
     const navigate = useNavigate();
 
     const handleInputChange = (e) => {
@@ -30,6 +35,18 @@ const ChangePassword = () => {
                 [name]: ''
             }));
         }
+
+        // Clear message when user starts typing
+        if (message.text) {
+            setMessage({ type: '', text: '' });
+        }
+    };
+
+    const togglePasswordVisibility = (field) => {
+        setShowPasswords(prev => ({
+            ...prev,
+            [field]: !prev[field]
+        }));
     };
 
     const validateForm = () => {
@@ -43,6 +60,8 @@ const ChangePassword = () => {
             newErrors.newPassword = 'Mật khẩu mới không được để trống';
         } else if (formData.newPassword.length < 6) {
             newErrors.newPassword = 'Mật khẩu mới phải có ít nhất 6 ký tự';
+        } else if (formData.newPassword === formData.currentPassword) {
+            newErrors.newPassword = 'Mật khẩu mới phải khác mật khẩu hiện tại';
         }
 
         if (!formData.confirmPassword.trim()) {
@@ -53,6 +72,28 @@ const ChangePassword = () => {
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
+    };
+
+    const getPasswordStrength = (password) => {
+        if (!password) return { strength: 0, label: '', color: '' };
+
+        let strength = 0;
+        if (password.length >= 6) strength += 1;
+        if (password.length >= 8) strength += 1;
+        if (/[A-Z]/.test(password)) strength += 1;
+        if (/[0-9]/.test(password)) strength += 1;
+        if (/[^A-Za-z0-9]/.test(password)) strength += 1;
+
+        const levels = [
+            { strength: 0, label: '', color: '' },
+            { strength: 1, label: 'Rất yếu', color: '#dc2626' },
+            { strength: 2, label: 'Yếu', color: '#ea580c' },
+            { strength: 3, label: 'Trung bình', color: '#ca8a04' },
+            { strength: 4, label: 'Mạnh', color: '#16a34a' },
+            { strength: 5, label: 'Rất mạnh', color: '#059669' }
+        ];
+
+        return levels[strength] || levels[0];
     };
 
     const handleSubmit = async (e) => {
@@ -130,127 +171,219 @@ const ChangePassword = () => {
         navigate('/profile');
     };
 
+    const passwordStrength = getPasswordStrength(formData.newPassword);
+    const isFormValid = formData.currentPassword && formData.newPassword && formData.confirmPassword &&
+        formData.newPassword === formData.confirmPassword && formData.newPassword.length >= 6;
+
     return (
         <div className="change-password-page">
             <HeaderComponent showUserInfo={true} />
 
             <div className="change-password-container">
+                {/* Modern Header with centered title */}
                 <div className="change-password-header">
-                    <div className="change-password-title">
-                        <h1>Đổi mật khẩu</h1>
-                        <p>Thay đổi mật khẩu để bảo mật tài khoản của bạn</p>
-                    </div>
-
-                    <div className="change-password-actions">
-                        <button
-                            onClick={handleCancel}
-                            className="btn btn-secondary"
-                        >
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M8 0L0 4L8 8L16 4L8 0Z" fill="currentColor" />
-                                <path d="M0 6L8 10L16 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                <path d="M0 8L8 12L16 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            Quay lại
-                        </button>
+                    <div className="header-content">
+                        <div className="header-center">
+                            <h1 className="page-title">Đổi mật khẩu</h1>
+                            <p className="page-description">Thay đổi mật khẩu để bảo mật tài khoản của bạn</p>
+                        </div>
                     </div>
                 </div>
 
-                <div className="change-password-content">
-                    <form onSubmit={handleSubmit} className="change-password-form">
-                        {/* Message Display */}
-                        {message.text && (
-                            <div className={`message ${message.type}`}>
-                                {message.text}
-                            </div>
-                        )}
-
-                        {/* Current Password Field */}
-                        <div className="form-group">
-                            <label htmlFor="currentPassword" className="form-label">
-                                Mật khẩu hiện tại <span className="required">*</span>
-                            </label>
-                            <input
-                                type="password"
-                                id="currentPassword"
-                                name="currentPassword"
-                                value={formData.currentPassword}
-                                onChange={handleInputChange}
-                                className={`form-input ${errors.currentPassword ? 'error' : ''}`}
-                                placeholder="Nhập mật khẩu hiện tại"
-                                disabled={loading}
-                            />
-                            {errors.currentPassword && (
-                                <span className="error-message">{errors.currentPassword}</span>
-                            )}
+                {/* Content Grid */}
+                <div className="content-grid">
+                    {/* Security Tips Sidebar */}
+                    <div className="security-tips">
+                        <div className="tips-header">
+                            <i className="fas fa-lightbulb"></i>
+                            <h3>Mẹo bảo mật</h3>
                         </div>
+                        <ul className="tips-list">
+                            <li>
+                                <i className="fas fa-check-circle"></i>
+                                <span>Sử dụng ít nhất 8 ký tự</span>
+                            </li>
+                            <li>
+                                <i className="fas fa-check-circle"></i>
+                                <span>Kết hợp chữ hoa, chữ thường và số</span>
+                            </li>
+                            <li>
+                                <i className="fas fa-check-circle"></i>
+                                <span>Bao gồm ký tự đặc biệt (!@#$%^&*)</span>
+                            </li>
+                            <li>
+                                <i className="fas fa-check-circle"></i>
+                                <span>Không sử dụng thông tin cá nhân</span>
+                            </li>
+                        </ul>
+                    </div>
 
-                        {/* New Password Field */}
-                        <div className="form-group">
-                            <label htmlFor="newPassword" className="form-label">
-                                Mật khẩu mới <span className="required">*</span>
-                            </label>
-                            <input
-                                type="password"
-                                id="newPassword"
-                                name="newPassword"
-                                value={formData.newPassword}
-                                onChange={handleInputChange}
-                                className={`form-input ${errors.newPassword ? 'error' : ''}`}
-                                placeholder="Nhập mật khẩu mới (ít nhất 6 ký tự)"
-                                disabled={loading}
-                            />
-                            {errors.newPassword && (
-                                <span className="error-message">{errors.newPassword}</span>
+                    {/* Form Content */}
+                    <div className="change-password-content">
+                        <form onSubmit={handleSubmit} className="change-password-form">
+                            {/* Message Display */}
+                            {message.text && (
+                                <div className={`message modern-alert ${message.type}`}>
+                                    <i className={`fas ${message.type === 'success' ? 'fa-check-circle' :
+                                        message.type === 'error' ? 'fa-exclamation-circle' :
+                                            'fa-info-circle'}`}></i>
+                                    <span>{message.text}</span>
+                                </div>
                             )}
-                        </div>
 
-                        {/* Confirm Password Field */}
-                        <div className="form-group">
-                            <label htmlFor="confirmPassword" className="form-label">
-                                Xác nhận mật khẩu mới <span className="required">*</span>
-                            </label>
-                            <input
-                                type="password"
-                                id="confirmPassword"
-                                name="confirmPassword"
-                                value={formData.confirmPassword}
-                                onChange={handleInputChange}
-                                className={`form-input ${errors.confirmPassword ? 'error' : ''}`}
-                                placeholder="Nhập lại mật khẩu mới"
-                                disabled={loading}
-                            />
-                            {errors.confirmPassword && (
-                                <span className="error-message">{errors.confirmPassword}</span>
-                            )}
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="form-actions">
-                            <button
-                                type="button"
-                                onClick={handleCancel}
-                                className="btn btn-secondary"
-                                disabled={loading}
-                            >
-                                Hủy
-                            </button>
-                            <button
-                                type="submit"
-                                className="btn btn-primary"
-                                disabled={loading}
-                            >
-                                {loading ? (
-                                    <>
-                                        <span className="loading-spinner-small"></span>
-                                        Đang xử lý...
-                                    </>
-                                ) : (
-                                    'Đổi mật khẩu'
+                            {/* Current Password Field */}
+                            <div className="form-group">
+                                <label htmlFor="currentPassword" className="form-label modern-label">
+                                    <i className="fas fa-key field-icon"></i>
+                                    Mật khẩu hiện tại <span className="required">*</span>
+                                </label>
+                                <div className="password-input-wrapper">
+                                    <input
+                                        type={showPasswords.current ? "text" : "password"}
+                                        id="currentPassword"
+                                        name="currentPassword"
+                                        value={formData.currentPassword}
+                                        onChange={handleInputChange}
+                                        className={`form-input modern-input ${errors.currentPassword ? 'error' : ''}`}
+                                        placeholder="Nhập mật khẩu hiện tại"
+                                        disabled={loading}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="password-toggle"
+                                        onClick={() => togglePasswordVisibility('current')}
+                                        disabled={loading}
+                                    >
+                                        <i className={`fas ${showPasswords.current ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                                    </button>
+                                </div>
+                                {errors.currentPassword && (
+                                    <span className="error-message">{errors.currentPassword}</span>
                                 )}
-                            </button>
-                        </div>
-                    </form>
+                            </div>
+
+                            {/* New Password Field */}
+                            <div className="form-group">
+                                <label htmlFor="newPassword" className="form-label modern-label">
+                                    <i className="fas fa-lock field-icon"></i>
+                                    Mật khẩu mới <span className="required">*</span>
+                                </label>
+                                <div className="password-input-wrapper">
+                                    <input
+                                        type={showPasswords.new ? "text" : "password"}
+                                        id="newPassword"
+                                        name="newPassword"
+                                        value={formData.newPassword}
+                                        onChange={handleInputChange}
+                                        className={`form-input modern-input ${errors.newPassword ? 'error' : ''}`}
+                                        placeholder="Nhập mật khẩu mới (ít nhất 6 ký tự)"
+                                        disabled={loading}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="password-toggle"
+                                        onClick={() => togglePasswordVisibility('new')}
+                                        disabled={loading}
+                                    >
+                                        <i className={`fas ${showPasswords.new ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                                    </button>
+                                </div>
+
+                                {/* Password Strength Indicator */}
+                                {formData.newPassword && (
+                                    <div className="password-strength">
+                                        <div className="strength-meter">
+                                            <div
+                                                className="strength-fill"
+                                                style={{
+                                                    width: `${(passwordStrength.strength / 5) * 100}%`,
+                                                    backgroundColor: passwordStrength.color
+                                                }}
+                                            ></div>
+                                        </div>
+                                        <span
+                                            className="strength-label"
+                                            style={{ color: passwordStrength.color }}
+                                        >
+                                            {passwordStrength.label}
+                                        </span>
+                                    </div>
+                                )}
+
+                                {errors.newPassword && (
+                                    <span className="error-message">{errors.newPassword}</span>
+                                )}
+                            </div>
+
+                            {/* Confirm Password Field */}
+                            <div className="form-group">
+                                <label htmlFor="confirmPassword" className="form-label modern-label">
+                                    <i className="fas fa-check-circle field-icon"></i>
+                                    Xác nhận mật khẩu mới <span className="required">*</span>
+                                </label>
+                                <div className="password-input-wrapper">
+                                    <input
+                                        type={showPasswords.confirm ? "text" : "password"}
+                                        id="confirmPassword"
+                                        name="confirmPassword"
+                                        value={formData.confirmPassword}
+                                        onChange={handleInputChange}
+                                        className={`form-input modern-input ${errors.confirmPassword ? 'error' :
+                                            formData.confirmPassword && formData.newPassword === formData.confirmPassword ? 'success' : ''}`}
+                                        placeholder="Nhập lại mật khẩu mới"
+                                        disabled={loading}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="password-toggle"
+                                        onClick={() => togglePasswordVisibility('confirm')}
+                                        disabled={loading}
+                                    >
+                                        <i className={`fas ${showPasswords.confirm ? 'fa-eye-slash' : 'fa-eye'}`}></i>
+                                    </button>
+                                    {formData.confirmPassword && formData.newPassword === formData.confirmPassword && (
+                                        <div className="password-match-indicator">
+                                            <i className="fas fa-check"></i>
+                                        </div>
+                                    )}
+                                </div>
+                                {errors.confirmPassword && (
+                                    <span className="error-message">{errors.confirmPassword}</span>
+                                )}
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="form-actions">
+                                <button
+                                    type="button"
+                                    onClick={handleCancel}
+                                    className="btn btn-secondary modern-btn"
+                                    disabled={loading}
+                                >
+                                    <i className="fas fa-times"></i>
+                                    <span>Hủy</span>
+                                </button>
+
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary modern-btn"
+                                    disabled={loading || !isFormValid}
+                                >
+                                    {loading ? (
+                                        <>
+                                            <span className="loading-spinner-small"></span>
+                                            <span>Đang xử lý...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fas fa-shield-alt"></i>
+                                            <span>Đổi mật khẩu</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
