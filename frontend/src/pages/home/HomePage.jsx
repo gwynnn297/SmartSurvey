@@ -96,8 +96,8 @@ const HomePage = () => {
                 <h2>Tại sao chọn SmartSurvey?</h2>
                 <div className="feature-cards">
                     <div className="feature-card">
-                        <div className="feature-icon">⚡</div>
-                        <h3>Tiết kiệm thời gian với AI</h3>
+                        <div className="feature-icon"><i class="fa-solid fa-bolt"></i></div>
+                        <h3>Tiết kiệm thời gian tạo khảo sát với AI</h3>
                         <ul>
                             <li>Tạo câu hỏi tự động với AI</li>
                             <li>Phân tích dữ liệu thông minh</li>
@@ -106,7 +106,7 @@ const HomePage = () => {
                         </ul>
                     </div>
                     <div className="feature-card">
-                        <div className="feature-icon">📊</div>
+                        <div className="feature-icon"><i class="fa-regular fa-chart-bar"></i></div>
                         <h3>Phân tích sâu, không cần chuyên gia</h3>
                         <ul>
                             <li>Phân tích tự động các loại dữ liệu</li>
@@ -116,7 +116,7 @@ const HomePage = () => {
                         </ul>
                     </div>
                     <div className="feature-card">
-                        <div className="feature-icon">💬</div>
+                        <div className="feature-icon"><i class="fa-regular fa-lightbulb"></i></div>
                         <h3>Tìm kiếm insight bằng cách trò chuyện</h3>
                         <ul>
                             <li>AI trò chuyện tự nhiên</li>
@@ -146,11 +146,11 @@ const HomePage = () => {
                         <p>Thu thập phản hồi qua email, mạng xã hội hoặc nhúng vào website</p>
                         <div className="step-mockup">
                             <div className="channels">
-                                <span>📧 Email</span>
-                                <span>💬 SMS</span>
-                                <span>📱 Zalo</span>
-                                <span>📘 Facebook</span>
-                                <span>🔲 QR code</span>
+                                <span><i class="fa-brands fa-google"></i> Email</span>
+                                <span><i class="fa-solid fa-comment"></i> SMS</span>
+                                <span><i class="fa-solid fa-square-phone-flip"></i> Zalo</span>
+                                <span><i class="fa-brands fa-facebook"></i> Facebook</span>
+                                <span><i class="fa-solid fa-qrcode"></i> QR code</span>
                             </div>
                         </div>
                     </div>
@@ -176,7 +176,7 @@ const HomePage = () => {
                     <p>Tham gia cùng hàng nghìn người đã tin tưởng SmartSurvey để thu thập và phân tích dữ liệu thông minh.</p>
                     <div className="cta-buttons">
                         <button className="btn-trial" onClick={handleRegister}>
-                            <span className="btn-icon">🚀</span>
+                            <span className="btn-icon"><i class="fa-solid fa-bolt"></i></span>
                             Đăng ký trải nghiệm miễn phí ngay
                         </button>
                         <button className="btn-consult">
