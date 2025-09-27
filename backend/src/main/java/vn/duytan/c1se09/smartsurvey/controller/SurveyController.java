@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyDetailResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyDeleteResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyPaginationDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.survey.SurveyCreateRequestDTO;
@@ -41,18 +42,19 @@ public class SurveyController {
     public ResponseEntity<SurveyResponseDTO> createSurvey(@Valid @RequestBody SurveyCreateRequestDTO request)
             throws IdInvalidException {
         var surveyDTO = surveyService.createSurvey(request);
-        // TODO: Ghi activity_log tại đây
+        // Activity log đã được ghi trong SurveyService.createSurvey()
         return ResponseEntity.ok(surveyDTO);
     }
 
     /**
-     * Lấy chi tiết khảo sát theo id
+     * Lấy chi tiết khảo sát theo id (kèm questions và options)
      */
     @GetMapping("/{id}")
-    @ApiMessage("Get survey detail")
-    public ResponseEntity<SurveyResponseDTO> getSurveyDetail(@PathVariable("id") Long id) throws IdInvalidException {
-        var surveyDTO = surveyService.getSurveyById(id);
-        return ResponseEntity.ok(surveyDTO);
+    @ApiMessage("Get survey detail with questions and options")
+    public ResponseEntity<SurveyDetailResponseDTO> getSurveyDetail(@PathVariable("id") Long id)
+            throws IdInvalidException {
+        var surveyDetailDTO = surveyService.getSurveyByIdWithDetails(id);
+        return ResponseEntity.ok(surveyDetailDTO);
     }
 
     /**
@@ -63,7 +65,7 @@ public class SurveyController {
     public ResponseEntity<SurveyResponseDTO> updateSurvey(@PathVariable("id") Long id,
             @RequestBody SurveyUpdateRequestDTO request) throws IdInvalidException {
         var updatedDTO = surveyService.updateSurvey(id, request);
-        // TODO: Ghi activity_log tại đây
+        // Activity log đã được ghi trong SurveyService.updateSurvey()
         return ResponseEntity.ok(updatedDTO);
     }
 
@@ -75,7 +77,7 @@ public class SurveyController {
     public ResponseEntity<SurveyDeleteResponseDTO> deleteSurvey(@PathVariable("id") Long id) throws IdInvalidException {
         surveyService.deleteSurvey(id);
         SurveyDeleteResponseDTO response = new SurveyDeleteResponseDTO(id, "Xóa khảo sát thành công");
-        // TODO: Ghi activity_log tại đây
+        // Activity log đã được ghi trong SurveyService.deleteSurvey()
         return ResponseEntity.ok(response);
     }
 

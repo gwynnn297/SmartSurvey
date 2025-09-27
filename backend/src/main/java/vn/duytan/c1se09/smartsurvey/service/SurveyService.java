@@ -1,6 +1,7 @@
 package vn.duytan.c1se09.smartsurvey.service;
 
 import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyDetailResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.survey.SurveyCreateRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.survey.SurveyUpdateRequestDTO;
 
@@ -151,6 +152,65 @@ public class SurveyService {
     public SurveyResponseDTO getSurveyById(Long surveyId) throws IdInvalidException {
         Survey survey = getSurveyEntityById(surveyId);
         return toSurveyResponseDTO(survey);
+    }
+
+    /**
+     * Lấy chi tiết survey với questions và options đầy đủ
+     */
+    public SurveyDetailResponseDTO getSurveyByIdWithDetails(Long surveyId) throws IdInvalidException {
+        Survey survey = getSurveyEntityById(surveyId);
+
+        // Kiểm tra quyền truy cập
+        User currentUser = authService.getCurrentUser();
+        if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
+            throw new IdInvalidException("Bạn không có quyền xem chi tiết khảo sát này");
+        }
+
+        SurveyDetailResponseDTO dto = new SurveyDetailResponseDTO();
+        dto.setId(survey.getSurveyId());
+        dto.setTitle(survey.getTitle());
+        dto.setDescription(survey.getDescription());
+        dto.setStatus(survey.getStatus() != null ? survey.getStatus().name() : null);
+        dto.setAiPrompt(survey.getAiPrompt());
+
+        if (survey.getCategory() != null) {
+            dto.setCategoryId(survey.getCategory().getCategoryId());
+            dto.setCategoryName(survey.getCategory().getCategoryName());
+        }
+
+        if (survey.getUser() != null) {
+            dto.setUserId(survey.getUser().getUserId());
+            dto.setUserName(survey.getUser().getFullName());
+        }
+
+        dto.setCreatedAt(survey.getCreatedAt());
+        dto.setUpdatedAt(survey.getUpdatedAt());
+
+        // Lấy danh sách questions với options
+        List<Question> questions = questionRepository.findBySurveyOrderByDisplayOrderAsc(survey);
+        List<SurveyDetailResponseDTO.QuestionCompactDTO> questionDTOs = questions.stream().map(question -> {
+            SurveyDetailResponseDTO.QuestionCompactDTO qDto = new SurveyDetailResponseDTO.QuestionCompactDTO();
+            qDto.setId(question.getQuestionId());
+            qDto.setText(question.getQuestionText());
+            qDto.setType(question.getQuestionType().name().toLowerCase());
+            qDto.setRequired(question.getIsRequired());
+            qDto.setOrder(question.getDisplayOrder());
+
+            // Lấy options cho question này (compact)
+            List<Option> options = optionRepository.findByQuestion(question);
+            List<SurveyDetailResponseDTO.OptionCompactDTO> optionDTOs = options.stream().map(option -> {
+                SurveyDetailResponseDTO.OptionCompactDTO oDto = new SurveyDetailResponseDTO.OptionCompactDTO();
+                oDto.setId(option.getOptionId());
+                oDto.setText(option.getOptionText());
+                return oDto;
+            }).toList();
+
+            qDto.setOptions(optionDTOs);
+            return qDto;
+        }).toList();
+
+        dto.setQuestions(questionDTOs);
+        return dto;
     }
 
     @Transactional

@@ -25,7 +25,7 @@
      export DB_USERNAME="root"
      export DB_PASSWORD="<your_mysql_password>"
      export MYSQL_HOST="localhost"
-     export JWT_SECRET="<optional_custom_jwt_secret>"
+     
      ```
      <!-- để kiểm tra username password hiện tại trên local  -->
      echo "DB_USERNAME: $DB_USERNAME" && echo "DB_PASSWORD: $DB_PASSWORD" && echo "MYSQL_HOST: $MYSQL_HOST"
