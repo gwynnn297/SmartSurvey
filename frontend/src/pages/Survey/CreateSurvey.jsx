@@ -30,7 +30,9 @@ function SortableSidebarItem({ id, index, text }) {
     return (
         <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="sidebar-item">
             <span className="sidebar-number">Câu {index + 1}:</span>
-            <span className="sidebar-text">{text?.slice(0, 20) || 'Chưa có nội dung'}</span>
+            <span className="sidebar-text" title={text || 'Chưa có nội dung'}>
+                {text || 'Chưa có nội dung'}
+            </span>
         </div>
     );
 }
@@ -44,6 +46,8 @@ const CreateSurvey = () => {
     const [errors, setErrors] = useState({});
     const [isEditMode, setIsEditMode] = useState(false);
     const [editSurveyId, setEditSurveyId] = useState(null);
+    const [showChoiceModal, setShowChoiceModal] = useState(false);
+    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(null);
 
     const [surveyData, setSurveyData] = useState({
         title: '',
@@ -495,11 +499,8 @@ const CreateSurvey = () => {
                                 {
                                     id: `temp_${Date.now()}`,
                                     question_text: '',
-                                    question_type: 'multiple_choice',
-                                    options: [
-                                        { id: `temp_option_${Date.now()}_1`, option_text: '' },
-                                        { id: `temp_option_${Date.now()}_2`, option_text: '' }
-                                    ],
+                                    question_type: 'open_ended',
+                                    options: [],
                                     is_required: false
                                 }
                             ])
@@ -511,7 +512,7 @@ const CreateSurvey = () => {
                         className="btn-top"
                         onClick={() => navigate('/create-ai')}
                     >
-                        ⚡ Gợi ý bằng AI
+                        ⚡Gợi ý bằng AI
                     </button>
                 </div>
                 <div className="survey-topbar-right">
@@ -578,18 +579,16 @@ const CreateSurvey = () => {
                     <div className="questions-container">
                         {questions.length === 0 ? (
                             <div className="questions-empty">
-                                <p>Chưa có câu hỏi nào.</p>
+                                <i class="fa-regular fa-circle-question" style={{ fontSize: '4rem' }}></i>
+                                <p>Chưa có câu hỏi nào</p>
                                 <button
                                     className="btn-add-question"
                                     onClick={() =>
                                         setQuestions([{
                                             id: `temp_${Date.now()}`,
                                             question_text: '',
-                                            question_type: 'multiple_choice',
-                                            options: [
-                                                { id: `temp_option_${Date.now()}_1`, option_text: '' },
-                                                { id: `temp_option_${Date.now()}_2`, option_text: '' }
-                                            ],
+                                            question_type: 'open_ended',
+                                            options: [],
                                             is_required: false
                                         }])
                                     }
@@ -608,13 +607,23 @@ const CreateSurvey = () => {
                                                     className="question-type"
                                                     value={q.question_type}
                                                     onChange={(e) => {
-                                                        const newQ = [...questions];
-                                                        newQ[idx].question_type = e.target.value;
-                                                        setQuestions(newQ);
+                                                        if (e.target.value === 'multiple_choice') {
+                                                            setCurrentQuestionIndex(idx);
+                                                            setShowChoiceModal(true);
+                                                        } else {
+                                                            const newQ = [...questions];
+                                                            newQ[idx].question_type = e.target.value;
+                                                            // Clear choice_type for non-multiple_choice questions
+                                                            if (newQ[idx].choice_type) {
+                                                                delete newQ[idx].choice_type;
+                                                            }
+                                                            setQuestions(newQ);
+                                                        }
                                                     }}
                                                 >
-                                                    <option value="multiple_choice">Trắc nghiệm</option>
-                                                    <option value="open_ended">Tự luận</option>
+                                                    <option value="multiple_choice">Câu hỏi đóng</option>
+                                                    <option value="open_ended">Câu hỏi mở</option>
+
                                                 </select>
                                                 <button
                                                     className="btn-delete-question"
@@ -624,7 +633,7 @@ const CreateSurvey = () => {
                                                         }
                                                     }}
                                                 >
-                                                    🗑
+                                                    <i class="fa-solid fa-trash"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -661,7 +670,7 @@ const CreateSurvey = () => {
                                                                     deleteOption(opt.id, idx, oIdx);
                                                                 }
                                                             }}
-                                                        >x</button>
+                                                        ><i class="fa-solid fa-delete-left"></i></button>
                                                     </div>
                                                 ))}
                                                 <button
@@ -690,11 +699,8 @@ const CreateSurvey = () => {
                                                 {
                                                     id: `temp_${Date.now()}`,
                                                     question_text: '',
-                                                    question_type: 'multiple_choice',
-                                                    options: [
-                                                        { id: `temp_option_${Date.now()}_1`, option_text: '' },
-                                                        { id: `temp_option_${Date.now()}_2`, option_text: '' }
-                                                    ],
+                                                    question_type: 'open_ended',
+                                                    options: [],
                                                     is_required: false
                                                 }
                                             ])
@@ -708,6 +714,91 @@ const CreateSurvey = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Choice Type Modal */}
+            {showChoiceModal && (
+                <div
+                    className="modal-overlay"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) {
+                            // Reset to open_ended if modal overlay is clicked
+                            const newQ = [...questions];
+                            newQ[currentQuestionIndex].question_type = 'open_ended';
+                            if (newQ[currentQuestionIndex].choice_type) {
+                                delete newQ[currentQuestionIndex].choice_type;
+                            }
+                            setQuestions(newQ);
+                            setShowChoiceModal(false);
+                        }
+                    }}
+                >
+                    <div className="choice-modal">
+                        <div className="modal-header">
+                            <h3>Chọn loại câu hỏi đóng</h3>
+                        </div>
+                        <button
+                            className="modal-close"
+                            onClick={() => {
+                                // Reset to open_ended if modal is closed without selection
+                                const newQ = [...questions];
+                                newQ[currentQuestionIndex].question_type = 'open_ended';
+                                if (newQ[currentQuestionIndex].choice_type) {
+                                    delete newQ[currentQuestionIndex].choice_type;
+                                }
+                                setQuestions(newQ);
+                                setShowChoiceModal(false);
+                            }}
+                        >
+                            ×
+                        </button>
+                        <div className="modal-content">
+                            <p>Bạn muốn tạo loại câu hỏi nào?</p>
+                            <div className="choice-options">
+                                <button
+                                    className="choice-option"
+                                    onClick={() => {
+                                        const newQ = [...questions];
+                                        newQ[currentQuestionIndex].question_type = 'multiple_choice';
+                                        newQ[currentQuestionIndex].choice_type = 'single';
+                                        newQ[currentQuestionIndex].options = [
+                                            { id: `temp_option_${Date.now()}_1`, option_text: '' },
+                                            { id: `temp_option_${Date.now()}_2`, option_text: '' }
+                                        ];
+                                        setQuestions(newQ);
+                                        setShowChoiceModal(false);
+                                    }}
+                                >
+                                    <div className="choice-icon"><i class="fa-solid fa-check"></i></div>
+                                    <div className="choice-text">
+                                        <h4>Chọn 1 đáp án</h4>
+                                        <p>Người trả lời chỉ có thể chọn một lựa chọn</p>
+                                    </div>
+                                </button>
+                                <button
+                                    className="choice-option"
+                                    onClick={() => {
+                                        const newQ = [...questions];
+                                        newQ[currentQuestionIndex].question_type = 'multiple_choice';
+                                        newQ[currentQuestionIndex].choice_type = 'multiple';
+                                        newQ[currentQuestionIndex].options = [
+                                            { id: `temp_option_${Date.now()}_1`, option_text: '' },
+                                            { id: `temp_option_${Date.now()}_2`, option_text: '' }
+                                        ];
+                                        setQuestions(newQ);
+                                        setShowChoiceModal(false);
+                                    }}
+                                >
+                                    <div className="choice-icon"><i class="fa-solid fa-dice-two"></i></div>
+                                    <div className="choice-text">
+                                        <h4>Chọn nhiều đáp án</h4>
+                                        <p>Người trả lời có thể chọn nhiều lựa chọn</p>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </MainLayout>
     );
 };

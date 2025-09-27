@@ -6,8 +6,10 @@
     background: white;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     border-bottom: 1px solid #e1e5e9;
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 1000;
 }
 
@@ -103,12 +105,13 @@
     border: 2px solid white;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     transition: all 0.2s ease;
+    cursor: pointer;
 }
 
-.user-info:hover .user-avatar {
+/* .user-info:hover .user-avatar {
     transform: scale(1.05);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
+} */
 
 .username {
     font-size: 16px;

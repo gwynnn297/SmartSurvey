@@ -222,6 +222,7 @@ export default function DashboardPage() {
   return (
     <div className="dashboard-container">
       <HeaderComponent showUserInfo={true} />
+      
       <div className="dashboard-content">
         <div className="dashboard-header">
           <div className="header-texts">

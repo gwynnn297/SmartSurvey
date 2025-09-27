@@ -162,6 +162,7 @@
 }
 
 .feature-icon {
+
     color: #28a745;
     font-weight: bold;
 }
@@ -179,17 +180,19 @@
     padding: 24px;
     width: 400px;
     max-width: 100%;
-    transition: transform 0.3s, box-shadow 0.3s; 
+    transition: transform 0.3s, box-shadow 0.3s;
 }
-.mockup:hover{
+
+.mockup:hover {
     transform: translateY(-8px);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
 }
+
 .mockup-header {
     border-bottom: 1px solid #eee;
     padding-bottom: 16px;
     margin-bottom: 20px;
-    
+
 }
 
 .mockup-header h3 {
@@ -264,8 +267,8 @@
 }
 
 .feature-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    display: flex;
+    justify-content: center;
     gap: 40px;
     max-width: 1200px;
     margin: 0 auto;
@@ -275,8 +278,14 @@
     background: #f8f9fa;
     padding: 40px 30px;
     border-radius: 16px;
-    text-align: left;
+    text-align: center;
     transition: transform 0.3s, box-shadow 0.3s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    min-height: 400px;
+    /* ép tất cả card cao bằng nhau */
 }
 
 .feature-card:hover {
@@ -287,7 +296,9 @@
 .feature-card .feature-icon {
     font-size: 48px;
     margin-bottom: 20px;
-    display: block;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .feature-card h3 {
@@ -299,22 +310,30 @@
 .feature-card ul {
     list-style: none;
     padding: 0;
+    margin: 0 auto;
+    /* căn giữa ul */
+    text-align: center;
+    /* căn giữa nội dung */
+    width: fit-content;
+    /* vừa đủ để căn giữa trong card */
 }
 
 .feature-card li {
-    padding: 8px 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    /* giữ ✓ và text thẳng hàng */
+    gap: 8px;
     color: #666;
-    position: relative;
-    padding-left: 20px;
+    padding: 8px 0;
 }
 
 .feature-card li:before {
     content: "✓";
     color: #28a745;
-    position: absolute;
-    left: 0;
     font-weight: bold;
 }
+
 
 /* How it works */
 .how-it-works {
@@ -344,10 +363,12 @@
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     transition: transform 0.3s, box-shadow 0.3s;
 }
+
 .step:hover {
     transform: translateY(-8px);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
 }
+
 .step-number {
     width: 60px;
     height: 60px;
@@ -501,7 +522,7 @@
     display: grid;
     grid-template-columns: 2fr 1fr;
     gap: 60px;
-    margin-bottom: 40px;    
+    margin-bottom: 40px;
 }
 
 .footer-logo {
@@ -529,9 +550,11 @@
     font-weight: bold;
     color: white;
 }
-.footer-left{
+
+.footer-left {
     max-width: 50%;
 }
+
 .footer-left p {
     color: #ccc;
     line-height: 1.6;

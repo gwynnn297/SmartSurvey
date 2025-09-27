@@ -51,7 +51,7 @@ const HeaderComponent = ({ showUserInfo = false, username }) => {
             {showUserInfo && (
                 <div className="header-right">
                     <div className="user-info">
-                        <div className="user-avatar">
+                        <div className="user-avatar" onClick={() => { navigate('/profile'); setShowDropdown(false); }}>
                             <span>{avatarInitial}</span>
                         </div>
                         <span className="username">{displayName}</span>

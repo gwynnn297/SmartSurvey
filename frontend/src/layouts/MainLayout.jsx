@@ -1,6 +1,6 @@
 import React from 'react';
 import HeaderComponent from '../components/HeaderComponent';
-import './MainLayout.css'; 
+import './MainLayout.css';
 
 const MainLayout = ({ children, showUserInfo = true }) => {
     return (
