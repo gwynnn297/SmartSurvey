@@ -526,7 +526,7 @@ const CreateSurvey = () => {
                 </div>
             </div>
 
-            <div className="survey-editor">
+            <div className="survey-editor horizontal-layout">
                 {/* Sidebar */}
                 <div className="survey-sidebar">
                     {questions.length === 0 ? (
