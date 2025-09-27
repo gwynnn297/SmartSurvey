@@ -65,8 +65,6 @@ const CreateSurvey = () => {
             // Sẽ xóa khỏi database khi ấn "Cập nhật"
             const newQuestions = questions.filter((_, i) => i !== questionIndex);
             setQuestions(newQuestions);
-
-            console.log('✅ Đã xóa câu hỏi khỏi giao diện. Sẽ xóa khỏi database khi ấn "Cập nhật"');
         } catch (error) {
             console.error('Error deleting question:', error);
             alert('Có lỗi xảy ra khi xóa câu hỏi. Vui lòng thử lại.');
@@ -81,8 +79,6 @@ const CreateSurvey = () => {
             const newQuestions = [...questions];
             newQuestions[questionIndex].options.splice(optionIndex, 1);
             setQuestions(newQuestions);
-
-            console.log('✅ Đã xóa tùy chọn khỏi giao diện. Sẽ xóa khỏi database khi ấn "Cập nhật"');
         } catch (error) {
             console.error('Error deleting option:', error);
             alert('Có lỗi xảy ra khi xóa lựa chọn. Vui lòng thử lại.');
@@ -119,10 +115,7 @@ const CreateSurvey = () => {
     // Function để load questions từ server
     const loadQuestionsFromServer = async (surveyId) => {
         try {
-            console.log('Loading questions from server for survey:', surveyId);
             const questionsFromServer = await questionService.getQuestionsBySurvey(surveyId);
-            console.log('Questions loaded from server:', questionsFromServer);
-
             // Load options cho mỗi question
             const questionsWithOptions = [];
             for (const question of questionsFromServer) {
@@ -130,7 +123,6 @@ const CreateSurvey = () => {
                 if (question.questionType === 'multiple_choice') {
                     try {
                         options = await optionService.getOptionsByQuestion(question.id);
-                        console.log(`Options loaded for question ${question.id}:`, options);
                     } catch (error) {
                         console.log(`No options found for question ${question.id}`);
                     }
@@ -214,22 +206,19 @@ const CreateSurvey = () => {
             if (isEditMode && editSurveyId) {
                 // Update existing survey - giữ nguyên status hiện tại
                 savedSurvey = await surveyService.updateSurvey(editSurveyId, payload);
-                console.log('✅ Survey updated:', savedSurvey);
             } else {
                 // Create new survey - backend luôn tạo với status 'draft'
                 savedSurvey = await surveyService.createSurvey(payload);
-                console.log('✅ Survey created:', savedSurvey);
 
                 // Nếu muốn status 'published', cần cập nhật status sau khi tạo
                 if (status === 'published') {
                     savedSurvey = await surveyService.updateSurvey(savedSurvey.id, { status: 'published' });
-                    console.log('✅ Survey status updated to published:', savedSurvey);
                 }
             }
 
             // Kiểm tra nếu savedSurvey tồn tại và có ID
             if (!savedSurvey || !savedSurvey.id) {
-                console.error('❌ Failed to save survey:', savedSurvey);
+                console.error('Failed to save survey:', savedSurvey);
                 throw new Error('Không thể lưu khảo sát. Vui lòng thử lại.');
             }
 
@@ -240,13 +229,10 @@ const CreateSurvey = () => {
                 try {
                     // Lấy danh sách câu hỏi hiện tại từ server
                     const serverQuestions = await questionService.getQuestionsBySurvey(surveyId);
-                    console.log('📋 Server questions:', serverQuestions);
 
                     // Tìm các câu hỏi đã bị xóa khỏi giao diện
                     const currentQuestionIds = questions.map(q => q.id).filter(id => id && !id.toString().startsWith('temp_'));
                     const deletedQuestions = serverQuestions.filter(sq => !currentQuestionIds.includes(sq.id));
-
-                    console.log('🗑️ Questions to delete from server:', deletedQuestions);
 
                     // Xóa các câu hỏi đã bị xóa
                     for (const deletedQuestion of deletedQuestions) {
@@ -255,14 +241,12 @@ const CreateSurvey = () => {
                             const options = await optionService.getOptionsByQuestion(deletedQuestion.id);
                             for (const option of options) {
                                 await optionService.deleteOption(option.id);
-                                console.log(`✅ Deleted option ${option.id}`);
                             }
 
                             // Xóa câu hỏi
                             await questionService.deleteQuestion(deletedQuestion.id);
-                            console.log(`✅ Deleted question ${deletedQuestion.id}`);
                         } catch (error) {
-                            console.error(`❌ Error deleting question ${deletedQuestion.id}:`, error);
+                            console.error(`Error deleting question ${deletedQuestion.id}:`, error);
                         }
                     }
 
@@ -277,20 +261,17 @@ const CreateSurvey = () => {
                                 const currentOptionIds = question.options?.map(o => o.id).filter(id => id && !id.toString().startsWith('temp_option_')) || [];
                                 const deletedOptions = serverOptions.filter(so => !currentOptionIds.includes(so.id));
 
-                                console.log(`🗑️ Options to delete for question ${question.id}:`, deletedOptions);
-
                                 // Xóa các options đã bị xóa
                                 for (const deletedOption of deletedOptions) {
                                     await optionService.deleteOption(deletedOption.id);
-                                    console.log(`✅ Deleted option ${deletedOption.id}`);
                                 }
                             } catch (error) {
-                                console.error(`❌ Error processing options for question ${question.id}:`, error);
+                                console.error(`Error processing options for question ${question.id}:`, error);
                             }
                         }
                     }
                 } catch (error) {
-                    console.error('❌ Error processing deletions:', error);
+                    console.error('Error processing deletions:', error);
                 }
             }
 
@@ -309,7 +290,6 @@ const CreateSurvey = () => {
                     if (question.id && question.id.toString().startsWith('temp_')) {
                         // Tạo question mới
                         savedQuestion = await questionService.createQuestion(questionPayload);
-                        console.log('✅ Question created:', savedQuestion);
                     } else if (question.id && !question.id.toString().startsWith('temp_')) {
                         // Cập nhật question hiện có
                         savedQuestion = await questionService.updateQuestion(question.id, {
@@ -317,16 +297,14 @@ const CreateSurvey = () => {
                             questionType: question.question_type,
                             isRequired: question.is_required || false
                         });
-                        console.log('✅ Question updated:', savedQuestion);
                     } else {
                         // Nếu không có ID, tạo question mới
                         savedQuestion = await questionService.createQuestion(questionPayload);
-                        console.log('✅ Question created (no ID):', savedQuestion);
                     }
 
                     // Kiểm tra nếu savedQuestion tồn tại
                     if (!savedQuestion || !savedQuestion.id) {
-                        console.error('❌ Failed to save question:', question);
+                        console.error('Failed to save question:', question);
                         throw new Error(`Không thể lưu câu hỏi: ${question.question_text}`);
                     }
 
@@ -344,17 +322,14 @@ const CreateSurvey = () => {
                                 if (option.id && option.id.toString().startsWith('temp_option_')) {
                                     // Tạo option mới
                                     savedOption = await optionService.createOption(optionPayload);
-                                    console.log('✅ Option created:', savedOption);
                                 } else if (option.id && !option.id.toString().startsWith('temp_option_')) {
                                     // Cập nhật option hiện có
                                     savedOption = await optionService.updateOption(option.id, {
                                         optionText: option.option_text
                                     });
-                                    console.log('✅ Option updated:', savedOption);
                                 } else {
                                     // Nếu không có ID, tạo option mới
                                     savedOption = await optionService.createOption(optionPayload);
-                                    console.log('✅ Option created (no ID):', savedOption);
                                 }
 
                                 if (savedOption && savedOption.id) {
@@ -363,7 +338,7 @@ const CreateSurvey = () => {
                                         option_text: savedOption.optionText
                                     });
                                 } else {
-                                    console.error('❌ Failed to save option:', option);
+                                    console.error('Failed to save option:', option);
                                     throw new Error(`Không thể lưu lựa chọn: ${option.option_text}`);
                                 }
                             }
@@ -388,10 +363,9 @@ const CreateSurvey = () => {
                 if (updatedQuestions.length > 0) {
                     const orderedQuestionIds = updatedQuestions.map(q => q.id);
                     await questionService.reorderQuestions(surveyId, orderedQuestionIds);
-                    console.log('✅ Đã lưu thứ tự câu hỏi mới lên server');
                 }
             } catch (error) {
-                console.error('❌ Lỗi khi lưu thứ tự câu hỏi:', error);
+                console.error('Lỗi khi lưu thứ tự câu hỏi:', error);
             }
 
             // Cập nhật state với questions có ID thực
@@ -403,7 +377,7 @@ const CreateSurvey = () => {
                     try {
                         await loadQuestionsFromServer(surveyId);
                     } catch (error) {
-                        console.error('❌ Error refreshing questions:', error);
+                        console.error('Error refreshing questions:', error);
                     }
                 }, 200); // Delay 1 giây để server xử lý xong
             }
@@ -543,9 +517,6 @@ const CreateSurvey = () => {
                                 const newIndex = questions.findIndex(q => q.id === over.id);
                                 const newOrder = arrayMove(questions, oldIndex, newIndex);
                                 setQuestions(newOrder);
-
-                                // Chỉ đổi thứ tự trên giao diện. Gọi API khi ấn Lưu/Cập nhật
-                                console.log('↔️ Đã thay đổi thứ tự câu hỏi trên giao diện');
                             }}
                         >
                             <SortableContext items={questions.map(q => q.id)} strategy={verticalListSortingStrategy}>
@@ -633,7 +604,7 @@ const CreateSurvey = () => {
                                                         }
                                                     }}
                                                 >
-                                                    <i class="fa-solid fa-trash"></i>
+                                                    <i class="fa-solid fa-trash" title="Xóa câu hỏi"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -670,7 +641,7 @@ const CreateSurvey = () => {
                                                                     deleteOption(opt.id, idx, oIdx);
                                                                 }
                                                             }}
-                                                        ><i class="fa-solid fa-delete-left"></i></button>
+                                                        ><i class="fa-solid fa-delete-left" title="Xóa lựa chọn"></i></button>
                                                     </div>
                                                 ))}
                                                 <button

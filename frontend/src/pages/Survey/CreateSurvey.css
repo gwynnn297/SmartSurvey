@@ -21,7 +21,7 @@
   align-items: center;
   gap: 1rem;
   margin-bottom: 0.5rem;
-  margin-top: 0.8rem;
+  margin-top: 1.5rem;
   padding: 1rem 1.5rem;
   background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
   border: 1px solid #e5e7eb;
@@ -149,7 +149,7 @@
   border-radius: 12px;
   padding: 1rem;
   width: 95%;
-  min-height: 500px;
+  min-height: 510px;
   max-height: calc(100vh - 80px);
   overflow-y: auto;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -407,11 +407,6 @@
   gap: 0.5rem;
 }
 
-.question-label::before {
-  content: '❓';
-  font-size: 1.2rem;
-}
-
 .question-header-right {
   display: flex;
   gap: .5rem;
@@ -438,36 +433,32 @@
   transform: translateY(-1px);
 }
 
-/* Nút xóa câu hỏi */
+/* Nút xóa câu hỏi - chỉ hiển thị icon */
 .btn-delete-question {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  color: #dc2626;
-  padding: 0.4rem 0.625rem;
+  background: none;
+  border: none;
+  /* color: #dc2626; */
+  padding: 0.5rem;
   cursor: pointer;
-  line-height: 1;
-  font-weight: 700;
-  font-size: 0.8rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.1);
+  font-size: 1rem;
+  transition: color 0.2s ease;
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  justify-content: center;
+  border-radius: 4px;
 }
 
 .btn-delete-question:hover {
-  background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(220, 38, 38, 0.2);
+  color: #b91c1c;
 }
 
 /* Nội dung câu hỏi */
 .question-input {
   display: block;
-  width: 100%;
+  width: 94%;
   box-sizing: border-box;
-  padding: 0.875rem 1rem;
+  padding: 0.625rem 0.875rem;
+  ;
   border-radius: 10px;
   border: 2px solid #e5e7eb;
   background: #fff;
@@ -534,25 +525,23 @@
 }
 
 
-/* Nút xóa option */
+/* Nút xóa option - chỉ hiển thị icon */
 .remove-option {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  color: #dc2626;
-  padding: 0.4rem 0.625rem;
-  line-height: 1;
+  background: none;
+  border: none;
+  /* color: #dc2626; */
+  padding: 0.5rem;
   cursor: pointer;
-  font-weight: 600;
-  font-size: 0.8rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.1);
+  font-size: 1rem;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
 }
 
 .remove-option:hover {
-  background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(220, 38, 38, 0.2);
+  color: #b91c1c;
 }
 
 /* Nút thêm option */

@@ -3,6 +3,7 @@ import HomePage from "./pages/home/HomePage";
 import LoginPage from "./pages/login/LoginPage";
 import Register from "./pages/register/Register";
 import Dashboard from "./pages/dashboard/DashboardPage";
+import SurveyListPage from "./pages/Survey/SurveyListPage";
 import ForgotPassword from "./pages/ForgotPassword/ForgotPassword";
 import CreateAI from "./pages/Survey/CreateAI";
 import CreateSurvey from "./pages/Survey/CreateSurvey";
@@ -36,6 +37,14 @@ function App() {
           element={
             <PrivateRoute>
               <Dashboard />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/surveys"
+          element={
+            <PrivateRoute>
+              <SurveyListPage />
             </PrivateRoute>
           }
         />

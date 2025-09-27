@@ -8,6 +8,17 @@
     /* px-4 trong Tailwind tương đương */
     padding-right: 1rem;
     padding-top: 4rem;
+    padding-left: 312px;
+    /* Account for sidebar width (280px) + margin (32px) */
     padding-bottom: 2rem;
     background-color: white;
+    transition: padding-left 0.3s ease;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .content {
+        padding-left: 1rem;
+        /* Remove sidebar padding on mobile */
+    }
 }

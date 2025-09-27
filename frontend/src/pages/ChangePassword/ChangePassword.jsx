@@ -107,16 +107,9 @@ const ChangePassword = () => {
         setMessage({ type: '', text: '' });
 
         try {
-            console.log('🏠 ChangePassword: Starting change password process...');
-
             // Check token before making API call
             const token = localStorage.getItem('token');
-            console.log('🔑 ChangePassword: Token check:', token ? 'Found' : 'Not found');
-
             const response = await changePasswordService.changePassword(formData);
-
-            console.log('✅ ChangePassword: Change password response:', response);
-
             if (response && response.status === 'success') {
                 setMessage({ type: 'success', text: response.message });
                 // Reset form
@@ -144,8 +137,8 @@ const ChangePassword = () => {
                 }, 2000);
             }
         } catch (error) {
-            console.error('❌ ChangePassword: Change password error:', error);
-            console.error('❌ ChangePassword: Error response:', error.response);
+            console.error('ChangePassword: Change password error:', error);
+            console.error('ChangePassword: Error response:', error.response);
 
             // Check if it's a 401 error (unauthorized)
             if (error.response?.status === 401) {
@@ -179,7 +172,7 @@ const ChangePassword = () => {
         <div className="change-password-page">
             <HeaderComponent showUserInfo={true} />
 
-            <div className="change-password-container">
+            <div className="change-password-container" style={{ paddingTop: '80px' }}>
                 {/* Modern Header with centered title */}
                 <div className="change-password-header">
                     <div className="header-content">

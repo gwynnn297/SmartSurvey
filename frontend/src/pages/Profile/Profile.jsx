@@ -306,18 +306,15 @@ const Profile = () => {
         try {
             setLoading(true);
             setError(null);
-            console.log('🏠 Profile: Starting to load profile...');
 
             // Check token before making API call
             const token = localStorage.getItem('token');
-            console.log('🔑 Profile: Token check:', token ? 'Found' : 'Not found');
 
             const profileData = await profileService.getProfile();
             setProfile(profileData);
-            console.log('🎉 Profile: Profile loaded successfully');
         } catch (err) {
-            console.error('❌ Profile: Error loading profile:', err);
-            console.error('❌ Profile: Error details:', err.response?.data);
+            console.error('Profile: Error loading profile:', err);
+            console.error('Profile: Error details:', err.response?.data);
 
             // Không set error nếu là 401 - để interceptor xử lý
             if (err.response?.status !== 401) {
@@ -351,7 +348,7 @@ const Profile = () => {
         return (
             <div className="modern-profile-page">
                 <HeaderComponent showUserInfo={true} username={profile?.fullName} />
-                <div className="modern-container">
+                <div className="modern-container" style={{ paddingTop: '80px' }}>
                     <div className="loading-container">
                         <div className="loading-spinner-large"></div>
                         <p className="loading-text">Đang tải thông tin profile...</p>
@@ -365,7 +362,7 @@ const Profile = () => {
         return (
             <div className="modern-profile-page">
                 <HeaderComponent showUserInfo={true} username={profile?.fullName} />
-                <div className="modern-container">
+                <div className="modern-container" style={{ paddingTop: '80px' }}>
                     <div className="error-container">
                         <div className="error-icon">
                             <i className="fas fa-exclamation-triangle"></i>
@@ -386,7 +383,7 @@ const Profile = () => {
         <div className="modern-profile-page">
             <HeaderComponent showUserInfo={true} username={profile?.fullName} />
 
-            <div className="modern-container">
+            <div className="modern-container" style={{ paddingTop: '80px' }}>
                 {/* Modern Header with centered title */}
                 <div className="modern-header">
                     <div className="header-content">

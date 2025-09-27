@@ -19,13 +19,13 @@ const ForgotPassword = () => {
       });
 
       if (res.ok) {
-        setMessage("✅ Vui lòng kiểm tra email để đặt lại mật khẩu.");
+        setMessage("Vui lòng kiểm tra email để đặt lại mật khẩu.");
       } else {
         const data = await res.json();
-        setMessage(`❌ Lỗi: ${data.message || "Không thể gửi email."}`);
+        setMessage(`Lỗi: ${data.message || "Không thể gửi email."}`);
       }
     } catch (err) {
-      setMessage("❌ Lỗi kết nối server.");
+      setMessage("Lỗi kết nối server.");
     }
   };
 

@@ -200,11 +200,11 @@ const HomePage = () => {
                             <span>SmartSurvey</span>
                         </div>
                         <p>Nền tảng khảo sát thông minh giúp doanh nghiệp thu thập và phân tích dữ liệu một cách hiệu quả.</p>
-                        {/* <div className="social-icons">
-                            <span>🐦</span>
-                            <span>📺</span>
-                            <span>💼</span>
-                        </div> */}
+                        <div className="social-icons">
+                            <span><i class="fa-brands fa-facebook" title="Facebook"></i></span>
+                            <span><i class="fa-brands fa-google" title="Google"></i></span>
+                            <span><i class="fa-brands fa-apple" title="Apple"></i></span>
+                        </div>
                     </div>
                     <div className="footer-right">
                         <div className="footer-links">

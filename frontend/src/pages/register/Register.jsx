@@ -41,7 +41,7 @@ const Register = () => {
             );
 
             if (response?.token) {
-                setSuccess('🎉 Đăng ký thành công! Đang chuyển đến trang đăng nhập...');
+                setSuccess('Đăng ký thành công! Đang chuyển đến trang đăng nhập...');
                 setTimeout(() => {
                     navigate('/login');
                 }, 2000);

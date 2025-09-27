@@ -29,8 +29,6 @@ const Login = () => {
                     role: data.role
                 };
                 localStorage.setItem('user', JSON.stringify(userInfo));
-
-                console.log('Login successful, token saved:', token);
                 navigate('/dashboard');
             } else {
                 setError('Đăng nhập thất bại: Không nhận được token từ server!');
