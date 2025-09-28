@@ -96,7 +96,7 @@ const HomePage = () => {
                 <h2>Tại sao chọn SmartSurvey?</h2>
                 <div className="feature-cards">
                     <div className="feature-card">
-                        <div className="feature-icon"><i class="fa-solid fa-bolt"></i></div>
+                        <div className="feature-icon"><i className="fa-solid fa-bolt" title="Tiết kiệm thời gian tạo khảo sát với AI"></i></div>
                         <h3>Tiết kiệm thời gian tạo khảo sát với AI</h3>
                         <ul>
                             <li>Tạo câu hỏi tự động với AI</li>
@@ -106,7 +106,7 @@ const HomePage = () => {
                         </ul>
                     </div>
                     <div className="feature-card">
-                        <div className="feature-icon"><i class="fa-regular fa-chart-bar"></i></div>
+                        <div className="feature-icon"><i className="fa-regular fa-chart-bar" title="Phân tích sâu, không cần chuyên gia"></i></div>
                         <h3>Phân tích sâu, không cần chuyên gia</h3>
                         <ul>
                             <li>Phân tích tự động các loại dữ liệu</li>
@@ -116,7 +116,7 @@ const HomePage = () => {
                         </ul>
                     </div>
                     <div className="feature-card">
-                        <div className="feature-icon"><i class="fa-regular fa-lightbulb"></i></div>
+                        <div className="feature-icon"><i className="fa-regular fa-lightbulb" title="Tìm kiếm insight bằng cách trò chuyện"></i></div>
                         <h3>Tìm kiếm insight bằng cách trò chuyện</h3>
                         <ul>
                             <li>AI trò chuyện tự nhiên</li>
@@ -146,11 +146,11 @@ const HomePage = () => {
                         <p>Thu thập phản hồi qua email, mạng xã hội hoặc nhúng vào website</p>
                         <div className="step-mockup">
                             <div className="channels">
-                                <span><i class="fa-brands fa-google"></i> Email</span>
-                                <span><i class="fa-solid fa-comment"></i> SMS</span>
-                                <span><i class="fa-solid fa-square-phone-flip"></i> Zalo</span>
-                                <span><i class="fa-brands fa-facebook"></i> Facebook</span>
-                                <span><i class="fa-solid fa-qrcode"></i> QR code</span>
+                                <span><i className="fa-brands fa-google" title="Email"></i> Email</span>
+                                <span><i className="fa-solid fa-comment" title="SMS"></i> SMS</span>
+                                <span><i className="fa-solid fa-square-phone-flip" title="Zalo"></i> Zalo</span>
+                                <span><i className="fa-brands fa-facebook" title="Facebook"></i> Facebook</span>
+                                <span><i className="fa-solid fa-qrcode" title="QR code"></i> QR code</span>
                             </div>
                         </div>
                     </div>
@@ -176,7 +176,7 @@ const HomePage = () => {
                     <p>Tham gia cùng hàng nghìn người đã tin tưởng SmartSurvey để thu thập và phân tích dữ liệu thông minh.</p>
                     <div className="cta-buttons">
                         <button className="btn-trial" onClick={handleRegister}>
-                            <span className="btn-icon"><i class="fa-solid fa-bolt"></i></span>
+                            <span className="btn-icon"><i className="fa-solid fa-bolt" title="Đăng ký trải nghiệm miễn phí ngay"></i></span>
                             Đăng ký trải nghiệm miễn phí ngay
                         </button>
                         <button className="btn-consult">
@@ -201,9 +201,9 @@ const HomePage = () => {
                         </div>
                         <p>Nền tảng khảo sát thông minh giúp doanh nghiệp thu thập và phân tích dữ liệu một cách hiệu quả.</p>
                         <div className="social-icons">
-                            <span><i class="fa-brands fa-facebook" title="Facebook"></i></span>
-                            <span><i class="fa-brands fa-google" title="Google"></i></span>
-                            <span><i class="fa-brands fa-apple" title="Apple"></i></span>
+                            <span><i className="fa-brands fa-facebook" title="Facebook"></i></span>
+                            <span><i className="fa-brands fa-google" title="Google"></i></span>
+                            <span><i className="fa-brands fa-apple" title="Apple"></i></span>
                         </div>
                     </div>
                     <div className="footer-right">

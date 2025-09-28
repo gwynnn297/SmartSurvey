@@ -152,11 +152,11 @@
     background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
 }
 
-/* Lưới hiển thị khảo sát (2 cột) */
+/* Danh sách khảo sát dọc */
 .survey-list.grid-3 {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
 }
 
 /* === CARD KHẢO SÁT === */
@@ -179,6 +179,11 @@
     overflow: hidden;
     /* Đổ bóng nhẹ */
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1);
+    /* Layout ngang cho nội dung */
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
 }
 
 /* Lớp overlay khi hover */
@@ -227,6 +232,8 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    flex: 1;
+    min-width: 0;
 }
 
 /* Tiêu đề khảo sát */
@@ -300,7 +307,7 @@
     border: 1px solid transparent;
 }
 
-/* Badge đã xuất bản - màu xanh lá */
+/* Badge đang mở - màu xanh lá */
 .status-badge.published {
     background: #f0fdf4;
     color: #166534;
@@ -314,18 +321,47 @@
     border-color: #bfdbfe;
 }
 
-/* Badge đã lưu trữ - màu đỏ */
+/* Badge đã đóng - màu xám */
 .status-badge.archived {
-    background: #fef2f2;
-    color: #dc2626;
-    border-color: #fecaca;
+    background: #f8fafc;
+    color: #64748b;
+    border-color: #e2e8f0;
 }
 
 /* === NỘI DUNG BÊN PHẢI CARD (BUTTONS) === */
 .survey-right {
     display: flex;
-    gap: 8px;
-    justify-content: flex-end;
+    gap: 12px;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+/* === ACTION BUTTONS === */
+.action-btn {
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    padding: 8px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+}
+
+.action-btn:hover {
+    background-color: rgba(100, 116, 139, 0.1);
+    color: #475569;
+}
+
+.action-btn.action-delete:hover {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
 }
 
 /* === BUTTONS CHUNG === */
@@ -705,17 +741,15 @@
 /* === MÀN HÌNH LỚN (≥1400px) === */
 @media (min-width: 1400px) {
     .survey-list.grid-3 {
-        /* 3 cột cho màn hình rất lớn */
-        grid-template-columns: repeat(3, 1fr);
-        gap: 24px;
+        /* Danh sách dọc với gap lớn hơn */
+        gap: 20px;
     }
 }
 
 /* === MÀN HÌNH DESKTOP NHỎ (≤1024px) === */
 @media (max-width: 1024px) {
     .survey-list.grid-3 {
-        /* Vẫn 2 cột nhưng gap nhỏ hơn */
-        grid-template-columns: repeat(2, 1fr);
+        /* Danh sách dọc với gap vừa */
         gap: 18px;
     }
 }
@@ -729,10 +763,9 @@
         padding-top: 1rem;
     }
 
-    /* Chuyển thành 1 cột */
+    /* Danh sách dọc với gap nhỏ hơn */
     .survey-list.grid-3 {
-        grid-template-columns: 1fr;
-        gap: 16px;
+        gap: 14px;
     }
 
     /* Modal responsive */

@@ -217,15 +217,15 @@ export default function DashboardPage() {
       <div className="dashboard-content">
         <div className="dashboard-header">
           <div className="header-texts">
-            <h1>Xin chào, {displayName}</h1>
-            <p>Quản lý và phân tích khảo sát một cách thông minh</p>
+            <h1>Xin chào {displayName}</h1>
+            <p>Smart Survey - Quản lý và phân tích khảo sát một cách thông minh</p>
           </div>
         </div>
 
         <div className="stats-sections">
           <section className="stats-block">
             <div className="kpi-card kpi-card-1">
-              <i class="fa-solid fa-table-list" title="Tổng khảo sát"></i>
+              <i className="fa-solid fa-table-list" title="Tổng khảo sát" style={{ color: '#3b82f6' }}></i>
               <div className="kpi-info">
                 <h3>Tổng Khảo sát</h3>
                 <span className="kpi-number">{overview.totalSurveys}</span>
@@ -235,7 +235,7 @@ export default function DashboardPage() {
 
           <section className="stats-block">
             <div className="kpi-card kpi-card-2">
-              <i class="fa-solid fa-list" title="Tổng phản hồi"></i>
+              <i className="fa-solid fa-list" title="Tổng phản hồi" style={{ color: '#10b981' }}></i>
               <div className="kpi-info">
                 <h3>Tổng Phản hồi</h3>
                 <span className="kpi-number">{overview.totalResponses}</span>
@@ -245,7 +245,7 @@ export default function DashboardPage() {
 
           <section className="stats-block">
             <div className="kpi-card kpi-card-3">
-              <i class="fa-solid fa-hexagon-nodes" title="Đang hoạt động"></i>
+              <i className="fa-solid fa-hexagon-nodes" title="Đang hoạt động" style={{ color: '#f59e0b' }}></i>
               <div className="kpi-info">
                 <h3>Đang hoạt động</h3>
                 <span className="kpi-number">{overview.activeSurveys}</span>
@@ -255,7 +255,7 @@ export default function DashboardPage() {
 
           <section className="stats-block">
             <div className="kpi-card kpi-card-4">
-              <i class="fa-solid fa-chart-line" title="Tỉ lệ hoàn thành"></i>
+              <i className="fa-solid fa-chart-line" title="Tỉ lệ hoàn thành" style={{ color: '#CC66FF' }}></i>
               <div className="kpi-info">
                 <h3>Tỉ lệ hoàn thành</h3>
                 <span className="kpi-number">{overview.completionRate}%</span>

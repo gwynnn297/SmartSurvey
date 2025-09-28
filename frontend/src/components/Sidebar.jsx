@@ -22,8 +22,6 @@ const Sidebar = () => {
 
     return (
         <div className="sidebar">
-
-
             <nav className="sidebar-nav">
                 <div className="nav-item">
                     <div
@@ -31,7 +29,7 @@ const Sidebar = () => {
                         onClick={() => navigate('/dashboard')}
                     >
                         <div className="nav-icon">
-                            <i class="fa-solid fa-newspaper"></i>
+                            <i className="fa-solid fa-newspaper" title="Dashboard"></i>
                         </div>
                         <div className="nav-content">
                             <div className="nav-title">
@@ -47,7 +45,7 @@ const Sidebar = () => {
                         onClick={() => navigate('/surveys')}
                     >
                         <div className="nav-icon">
-                            <i class="fa-solid fa-table"></i>
+                            <i className="fa-solid fa-table" title="Khảo sát"></i>
                         </div>
                         <div className="nav-content">
                             <div className="nav-title">
@@ -63,7 +61,7 @@ const Sidebar = () => {
                         onClick={() => navigate('/create-survey')}
                     >
                         <div className="nav-icon">
-                            <i class="fa-solid fa-star-half-stroke"></i>
+                            <i className="fa-solid fa-star-half-stroke" title="Tạo khảo sát"></i>
                         </div>
                         <div className="nav-content">
                             <div className="nav-title">
@@ -79,7 +77,7 @@ const Sidebar = () => {
                         onClick={() => navigate('/responses')}
                     >
                         <div className="nav-icon">
-                            <i class="fa-solid fa-signal"></i>
+                            <i className="fa-solid fa-signal" title="Phản hồi/Kết quả"></i>
                         </div>
                         <div className="nav-content">
                             <div className="nav-title">
@@ -95,7 +93,7 @@ const Sidebar = () => {
                         onClick={() => navigate('/ai-analysis')}
                     >
                         <div className="nav-icon">
-                            <i class="fa-solid fa-chart-simple"></i>
+                            <i className="fa-solid fa-chart-simple" title="Phân tích & Báo cáo"></i>
                         </div>
                         <div className="nav-content">
                             <div className="nav-title">

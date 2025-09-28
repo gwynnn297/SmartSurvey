@@ -550,7 +550,7 @@ const CreateSurvey = () => {
                     <div className="questions-container">
                         {questions.length === 0 ? (
                             <div className="questions-empty">
-                                <i class="fa-regular fa-circle-question" style={{ fontSize: '4rem' }}></i>
+                                <i className="fa-regular fa-circle-question" title="Chưa có câu hỏi nào" style={{ fontSize: '4rem' }}></i>
                                 <p>Chưa có câu hỏi nào</p>
                                 <button
                                     className="btn-add-question"
@@ -604,7 +604,7 @@ const CreateSurvey = () => {
                                                         }
                                                     }}
                                                 >
-                                                    <i class="fa-solid fa-trash" title="Xóa câu hỏi"></i>
+                                                    <i className="fa-solid fa-trash" title="Xóa câu hỏi"></i>
                                                 </button>
                                             </div>
                                         </div>
@@ -641,7 +641,7 @@ const CreateSurvey = () => {
                                                                     deleteOption(opt.id, idx, oIdx);
                                                                 }
                                                             }}
-                                                        ><i class="fa-solid fa-delete-left" title="Xóa lựa chọn"></i></button>
+                                                        ><i className="fa-solid fa-delete-left" title="Xóa lựa chọn"></i></button>
                                                     </div>
                                                 ))}
                                                 <button
@@ -686,7 +686,7 @@ const CreateSurvey = () => {
                 </div>
             </div>
 
-            {/* Choice Type Modal */}
+            {/* Modal lựa chọn câu hỏi đóng */}
             {showChoiceModal && (
                 <div
                     className="modal-overlay"
@@ -739,7 +739,7 @@ const CreateSurvey = () => {
                                         setShowChoiceModal(false);
                                     }}
                                 >
-                                    <div className="choice-icon"><i class="fa-solid fa-check"></i></div>
+                                    <div className="choice-icon"><i className="fa-solid fa-check" title="Chọn 1 đáp án"></i></div>
                                     <div className="choice-text">
                                         <h4>Chọn 1 đáp án</h4>
                                         <p>Người trả lời chỉ có thể chọn một lựa chọn</p>
@@ -759,7 +759,7 @@ const CreateSurvey = () => {
                                         setShowChoiceModal(false);
                                     }}
                                 >
-                                    <div className="choice-icon"><i class="fa-solid fa-dice-two"></i></div>
+                                    <div className="choice-icon"><i className="fa-solid fa-list" title="Chọn nhiều đáp án"></i></div>
                                     <div className="choice-text">
                                         <h4>Chọn nhiều đáp án</h4>
                                         <p>Người trả lời có thể chọn nhiều lựa chọn</p>

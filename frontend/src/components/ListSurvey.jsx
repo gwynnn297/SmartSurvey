@@ -145,61 +145,58 @@ const ListSurvey = () => {
                             style={{ cursor: 'pointer' }}
                         >
                             <div className="survey-left">
-                                <div className={`status-badge ${s.status || 'draft'}`}>
-                                    {s.status === 'published' ? 'Đã xuất bản' : s.status === 'archived' ? 'Đã lưu trữ' : 'Bản nháp'}
-                                </div>
                                 <div className="survey-title">{s.title || 'Không tiêu đề'}</div>
                                 {s.description && (
                                     <div className="survey-description">{s.description}</div>
                                 )}
                                 <div className="survey-meta">
                                     <span className="meta-item">
-                                    <i class="fa-regular fa-clock" title="Thời gian tạo"></i>
-                                        {new Date(s.createdAt || s.created_at || Date.now()).toLocaleDateString('vi-VN')}
+                                        <i className="fa-regular fa-user" title="Phản hồi"></i>
+                                        {s.responses ?? s.responseCount ?? 0} phản hồi
                                     </span>
                                     <span>•</span>
                                     <span className="meta-item">
-                                    <i class="fa-regular fa-comment" title="Phản hồi"></i>
-                                        {s.responses ?? s.responseCount ?? 0} phản hồi
+                                        <i className="fa-regular fa-clock" title="Thời gian tạo"></i>
+                                        {new Date(s.createdAt || s.created_at || Date.now()).toLocaleDateString('vi-VN')}
                                     </span>
-                                    {s.questionsCount && (
-                                        <>
-                                            <span>•</span>
-                                            <span className="meta-item">
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="icon-inline"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 1 1 5.83 1c0 2-3 2-3 4" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-                                                {s.questionsCount} câu hỏi
-                                            </span>
-                                        </>
-                                    )}
+                                    <span>•</span>
+                                    <span className={`status-badge ${s.status || 'draft'}`}>
+                                        {s.status === 'published' ? 'Đang mở' : s.status === 'archived' ? 'Đã đóng' : 'Bản nháp'}
+                                    </span>
                                 </div>
                             </div>
                             <div className="survey-right">
                                 <button
-                                    className="btn-text"
+                                    className="action-btn"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         alert('Chức năng báo cáo sẽ được phát triển');
                                     }}
+                                    title="Báo cáo"
                                 >
-                                    <span className="btn-icon-left" aria-hidden="true">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18" /><rect x="7" y="12" width="3" height="6" /><rect x="12" y="9" width="3" height="9" /><rect x="17" y="5" width="3" height="13" /></svg>
-                                    </span>
-                                    Báo cáo
+                                    <i className="fa-solid fa-chart-simple"></i>
                                 </button>
                                 <button
-                                    className="btn-text btn-danger"
+                                    className="action-btn"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        alert('Chức năng chia sẻ sẽ được phát triển');
+                                    }}
+                                    title="Chia sẻ"
+                                >
+                                    <i className="fa-solid fa-share"></i>
+                                </button>
+                                <button
+                                    className="action-btn"
                                     onClick={async (e) => {
                                         e.stopPropagation();
                                         if (window.confirm('Bạn có chắc muốn xóa khảo sát này không? Tất cả câu hỏi và tùy chọn trong khảo sát cũng sẽ bị xóa.')) {
                                             try {
                                                 const surveyId = s.id;
-                                                // Backend đã xử lý cascade delete (questions, options)
                                                 await surveyService.deleteSurvey(surveyId);
-                                                // Cập nhật UI và localStorage
                                                 const updatedSurveys = surveys.filter(survey => survey.id !== s.id);
                                                 localStorage.setItem('userSurveys', JSON.stringify(updatedSurveys));
                                                 setSurveys(updatedSurveys);
-                                                // Reset về trang đầu nếu trang hiện tại trống
                                                 if (updatedSurveys.length === 0 && currentPage > 0) {
                                                     setCurrentPage(0);
                                                 }
@@ -210,11 +207,9 @@ const ListSurvey = () => {
                                             }
                                         }
                                     }}
+                                    title="Xóa"
                                 >
-                                    <span className="btn-icon-left" aria-hidden="true">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" /></svg>
-                                    </span>
-                                    Xóa
+                                    <i className="fa-solid fa-trash"></i>
                                 </button>
                             </div>
                         </div>
@@ -261,6 +256,7 @@ const ListSurvey = () => {
                 )}
             </div>
 
+            {/* Modal tạo khảo sát */}
             {showCreateModal && (
                 <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -271,9 +267,9 @@ const ListSurvey = () => {
                         </div>
                         <div className="modal-body">
                             <div className="create-option" onClick={() => { setShowCreateModal(false); navigate('/create-ai'); }}>
-                                <div className="option-icon ai" aria-hidden="true">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
-                                </div>
+                                
+                                <i className="fa-brands fa-discord" title="Tạo bằng AI" style={{ fontSize: '50px', marginBottom: '16px', color: '#3b82f6' }}></i>
+                                
                                 <div className="option-title">Tạo bằng AI</div>
                                 <p className="option-desc">Mô tả ý tưởng của bạn, AI sẽ tự động tạo một bản nháp khảo sát để bạn bắt đầu.</p>
                                 <ul>
@@ -284,9 +280,9 @@ const ListSurvey = () => {
                                 <button className="btn-primary small">Bắt đầu ngay</button>
                             </div>
                             <div className="create-option" onClick={() => { setShowCreateModal(false); navigate('/create-survey'); }}>
-                                <div className="option-icon manual" aria-hidden="true">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>
-                                </div>
+                               
+                                <i className="fa-solid fa-square-pen" title="Tạo thủ công" style={{ fontSize: '50px', marginBottom: '16px', color: '#64748b' }}></i>
+                               
                                 <div className="option-title">Tạo thủ công</div>
                                 <p className="option-desc">Tự tay xây dựng khảo sát từ đầu để toàn quyền kiểm soát mọi câu hỏi và chi tiết.</p>
                                 <ul>
