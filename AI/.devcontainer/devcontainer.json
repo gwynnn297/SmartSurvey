@@ -1,0 +1,28 @@
+{
+    "json.schemas": [
+        {
+          "fileMatch": ["/.devcontainer/devcontainer.json"],
+          "url": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.schema.json"
+        }
+    ],
+    "name": "SmartSurvey AI Research",
+    "build": { "dockerfile": "Dockerfile", "context": ".devcontainer" },
+    "workspaceFolder": "/workspace",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    "customizations": {
+      "vscode": {
+        "extensions": [
+          "ms-python.python",
+          "ms-toolsai.jupyter",
+          "ms-python.vscode-pylance"
+        ],
+        "settings": {
+          "python.defaultInterpreterPath": "/usr/local/bin/python",
+          "python.terminal.activateEnvironment": true
+        }
+      }
+    },
+    "forwardPorts": [8888, 8501],
+    "postStartCommand": "python -m ipykernel install --user --name ss-ai --display-name 'Python (ss-ai)' || true"
+}
+  
