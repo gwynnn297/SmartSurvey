@@ -11,7 +11,6 @@
 ## Các bước cài đặt
 
 
-
 ### . Cấu hình Database MySQL (không hardcode)
 
 - Tạo database:

@@ -1,9 +1,200 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import HeaderComponent from "../../components/HeaderComponent";
 import Sidebar from "../../components/Sidebar";
 import { surveyService } from "../../services/surveyService";
 import "./DashboardPage.css";
+
+const METRIC_CARDS = [
+  {
+    key: "totalSurveys",
+    label: "Tổng khảo sát",
+    icon: "fa-solid fa-table-list",
+    accent: "blue"
+  },
+  {
+    key: "totalResponses",
+    label: "Tổng phản hồi",
+    icon: "fa-solid fa-list",
+    accent: "emerald"
+  },
+  {
+    key: "activeSurveys",
+    label: "Đang hoạt động",
+    icon: "fa-solid fa-hexagon-nodes",
+    accent: "amber"
+  },
+  {
+    key: "completionRate",
+    label: "Tỉ lệ hoàn thành",
+    icon: "fa-solid fa-chart-line",
+    accent: "violet",
+    suffix: "%"
+  }
+];
+
+const CHART_PLACEHOLDERS = [
+  {
+    title: "Phân bố trạng thái khảo sát",
+    type: "Biểu đồ tròn",
+    description: "Biểu đồ tròn hiển thị tỷ lệ khảo sát theo trạng thái",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M8 12h8" />
+        <path d="M12 8v8" />
+      </svg>
+    )
+  },
+  {
+    title: "Xu hướng phản hồi",
+    type: "Biểu đồ đường",
+    description: "Biểu đồ đường hiển thị xu hướng phản hồi theo thời gian",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 3v18h18" />
+        <path d="M19 17V9l-5 5-3-3-4 4" />
+      </svg>
+    )
+  },
+  {
+    title: "So sánh khảo sát",
+    type: "Biểu đồ cột",
+    description: "Biểu đồ cột so sánh số lượng phản hồi giữa các khảo sát",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <rect x="7" y="8" width="3" height="8" />
+        <rect x="12" y="5" width="3" height="11" />
+        <rect x="17" y="10" width="3" height="6" />
+      </svg>
+    )
+  }
+];
+
+const CREATE_OPTIONS = [
+  {
+    id: "ai",
+    title: "Tạo bằng AI",
+    description: "Mô tả ý tưởng của bạn, AI sẽ tự động tạo một bản nháp khảo sát để bạn bắt đầu.",
+    bulletPoints: ["Tiết kiệm thời gian", "Gợi ý câu hỏi thông minh", "Tối ưu mục tiêu"],
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+      </svg>
+    ),
+    navigateTo: "/create-ai"
+  },
+  {
+    id: "manual",
+    title: "Tạo thủ công",
+    description: "Tự tay xây dựng khảo sát từ đầu để toàn quyền kiểm soát mọi câu hỏi và chi tiết.",
+    bulletPoints: ["Kiểm soát hoàn toàn", "Tùy chỉnh chi tiết", "Thiết kế theo ý muốn"],
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+      </svg>
+    ),
+    navigateTo: "/create-survey"
+  }
+];
+
+const DEFAULT_PAGE_SIZE = 10;
+
+const calculateRealStats = (surveysData, metaData = null) => {
+  const totalSurveys = metaData?.total ?? surveysData.length;
+  const totalResponses = surveysData.reduce((sum, survey) => sum + (survey.responses || survey.responseCount || 0), 0);
+  const activeSurveys = surveysData.filter((survey) => survey.status === "published").length;
+  const surveysWithResponses = surveysData.filter((survey) => (survey.responses || survey.responseCount || 0) > 0);
+  const completionRate = totalSurveys > 0 ? Math.round((surveysWithResponses.length / totalSurveys) * 100) : 0;
+
+  return {
+    totalSurveys,
+    totalResponses,
+    activeSurveys,
+    completionRate
+  };
+};
+
+const KpiCard = ({ icon, label, value, accent, suffix }) => (
+  <article className={`dash-kpi dash-kpi--${accent}`}>
+    <span className="dash-kpi__icon" aria-hidden="true">
+      <i className={icon} />
+    </span>
+    <div className="dash-kpi__content">
+      <p>{label}</p>
+      <strong>{typeof value === "number" ? value.toLocaleString("vi-VN") : value}{suffix}</strong>
+    </div>
+    <span className="dash-kpi__glow" aria-hidden="true" />
+  </article>
+);
+
+const ChartCard = ({ title, type, description, icon }) => (
+  <article className="dash-chart">
+    <header className="dash-chart__header">
+      <div>
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+      <span className="dash-chart__type">{type}</span>
+    </header>
+    <div className="dash-chart__placeholder">
+      <span className="dash-chart__icon" aria-hidden="true">{icon}</span>
+    </div>
+  </article>
+);
+
+const RecentSurveyItem = ({ survey, index, onOpen }) => {
+  const statusLabel = survey.status === "published" ? "Đã xuất bản" : survey.status === "archived" ? "Đã lưu trữ" : "Bản nháp";
+  const statusClass = survey.status || "draft";
+  const createdDate = new Date(survey.createdAt || survey.created_at || Date.now()).toLocaleDateString("vi-VN");
+  const totalResponses = survey.responses ?? survey.responseCount ?? 0;
+
+  return (
+    <article className="dash-recent__item" key={survey.id || survey._id || index}>
+      <div className="dash-recent__index">{index + 1}</div>
+      <div className="dash-recent__info">
+        <h4 className="dash-recent__title">{survey.title || "Không tiêu đề"}</h4>
+        <div className="dash-recent__meta">
+          <span className={`status-badge ${statusClass}`}>{statusLabel}</span>
+          <span className="dash-recent__date">{createdDate}</span>
+          <span className="dash-recent__responses">{totalResponses} phản hồi</span>
+        </div>
+      </div>
+      <button type="button" className="dash-recent__action" onClick={() => onOpen(survey)}>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+        Xem chi tiết
+      </button>
+    </article>
+  );
+};
+
+const LoadingState = () => (
+  <div className="dash-loading">
+    <div className="dash-loading__spinner" />
+    <p>Đang tải dữ liệu dashboard...</p>
+  </div>
+);
+
+const CreateOptionCard = ({ option, onClick }) => (
+  <button type="button" className={`dash-create__option dash-create__option--${option.id}`} onClick={onClick}>
+    <span className="dash-create__icon" aria-hidden="true">{option.icon}</span>
+    <div className="dash-create__body">
+      <h4>{option.title}</h4>
+      <p>{option.description}</p>
+      <ul>
+        {option.bulletPoints.map((point) => (
+          <li key={point}>{point}</li>
+        ))}
+      </ul>
+    </div>
+    <span className="dash-create__cta">Bắt đầu ngay</span>
+  </button>
+);
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -17,418 +208,251 @@ export default function DashboardPage() {
   const [surveys, setSurveys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
-  const [pageSize] = useState(10);
-
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Lấy user từ localStorage
-        const storedUser = (() => {
-          try {
-            return JSON.parse(localStorage.getItem("user")) || null;
-          } catch (e) {
-            return null;
-          }
-        })();
-        if (storedUser) {
-          setUser(storedUser);
-        }
-
-        // Check token before making API calls
-        const token = localStorage.getItem('token');
-        // Load surveys from localStorage first
-        const localSurveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
-        // Try to get data from API
-        let apiOverview = null;
-        let apiSurveys = null;
-        try {
-          apiOverview = await surveyService.getDashboardOverview();
-        } catch (error) {
-          console.log('Dashboard: API overview failed, using local data');
-        }
-
-        try {
-          apiSurveys = await surveyService.getSurveys(currentPage, pageSize);
-        } catch (error) {
-          console.log('Dashboard: API surveys failed, using local data');
-        }
-        // Calculate real statistics from actual data
-        const calculateRealStats = (surveysData, metaData = null) => {
-          let totalSurveys, totalResponses, activeSurveys, completionRate;
-          if (metaData) {
-            // Use meta data for accurate total count
-            totalSurveys = metaData.total || 0;
-          } else {
-            totalSurveys = surveysData.length;
-          }
-
-          totalResponses = surveysData.reduce((sum, s) => sum + (s.responses || s.responseCount || 0), 0);
-          activeSurveys = surveysData.filter(s => s.status === 'published').length;
-
-          // Calculate completion rate based on surveys with responses
-          const surveysWithResponses = surveysData.filter(s => (s.responses || s.responseCount || 0) > 0);
-          completionRate = totalSurveys > 0 ? Math.round((surveysWithResponses.length / totalSurveys) * 100) : 0;
-
-          return {
-            totalSurveys,
-            totalResponses,
-            activeSurveys,
-            completionRate
-          };
-        };
-
-        // Use real data from API or local storage
-        let finalSurveysData = [];
-        let metaData = null;
-
-        if (apiSurveys) {
-          if (apiSurveys.meta) {
-            metaData = apiSurveys.meta;
-            // Try to get all surveys from API for detailed stats
-            try {
-              const allSurveysResponse = await surveyService.getSurveys(0, 1000);
-              finalSurveysData = Array.isArray(allSurveysResponse?.result) ? allSurveysResponse.result : [];
-            } catch (error) {
-              console.log('Could not fetch all surveys, using current page data');
-              finalSurveysData = surveysList;
-            }
-          } else {
-            finalSurveysData = surveysList;
-          }
-        } else {
-          finalSurveysData = localSurveys;
-        }
-
-        const realStats = calculateRealStats(finalSurveysData, metaData);
-        setOverview(realStats);
-
-        // Set surveys data (prefer API, fallback to local)
-        let surveysList = [];
-        if (apiSurveys) {
-          // Backend trả về { meta: {...}, result: [...] }
-          if (apiSurveys.meta) {
-            // Có thông tin phân trang từ API
-            surveysList = Array.isArray(apiSurveys.result) ? apiSurveys.result : [];
-            setTotalPages(apiSurveys.meta.pages || 0);
-            setTotalElements(apiSurveys.meta.total || 0);
-          } else {
-            // Không có thông tin phân trang, xử lý như cũ
-            surveysList = Array.isArray(apiSurveys?.result) ? apiSurveys.result :
-              Array.isArray(apiSurveys) ? apiSurveys : localSurveys;
-            setTotalPages(1);
-            setTotalElements(surveysList.length);
-          }
-        } else {
-          // Fallback to local data with pagination
-          const startIndex = currentPage * pageSize;
-          const endIndex = startIndex + pageSize;
-          surveysList = localSurveys.slice(startIndex, endIndex);
-          setTotalPages(Math.ceil(localSurveys.length / pageSize));
-          setTotalElements(localSurveys.length);
-        }
-
-        setSurveys(surveysList);
-      } catch (error) {
-        console.error('Dashboard: Error loading data:', error);
-        console.error('Dashboard: Error details:', error.response?.data);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, [currentPage, pageSize]);
+  const [pageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const displayName = user?.name || user?.username || user?.fullName || "User";
 
-  const handleViewSurvey = (survey) => {
-    alert('Chức năng xem khảo sát sẽ được phát triển');
-  };
+  const recentSurveys = useMemo(() => surveys.slice(0, 5), [surveys]);
 
-  // Pagination handlers
-  const handlePageChange = (newPage) => {
-    if (newPage >= 0 && newPage < totalPages) {
-      setCurrentPage(newPage);
+  const openSurveyForEditing = useCallback(
+    (survey) => navigate("/create-survey", { state: { editSurvey: survey } }),
+    [navigate]
+  );
+
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const storedUser = (() => {
+        try {
+          return JSON.parse(localStorage.getItem("user")) || null;
+        } catch (error) {
+          return null;
+        }
+      })();
+      if (storedUser) {
+        setUser(storedUser);
+      }
+
+      const localSurveys = JSON.parse(localStorage.getItem("userSurveys") || "[]");
+
+      let pageResponse = null;
+      try {
+        pageResponse = await surveyService.getSurveys(currentPage, pageSize);
+      } catch (error) {
+        console.log("Dashboard: API surveys failed, falling back to local cache");
+      }
+
+      let surveysForDisplay = [];
+      let paginationMeta = { pages: 0, total: 0 };
+
+      if (pageResponse?.meta) {
+        surveysForDisplay = Array.isArray(pageResponse.result) ? pageResponse.result : [];
+        paginationMeta = {
+          pages: pageResponse.meta.pages || 0,
+          total: pageResponse.meta.total || surveysForDisplay.length
+        };
+      } else if (Array.isArray(pageResponse?.result)) {
+        surveysForDisplay = pageResponse.result;
+        paginationMeta = {
+          pages: 1,
+          total: surveysForDisplay.length
+        };
+      } else if (Array.isArray(pageResponse)) {
+        surveysForDisplay = pageResponse;
+        paginationMeta = {
+          pages: 1,
+          total: surveysForDisplay.length
+        };
+      } else {
+        const startIndex = currentPage * pageSize;
+        const endIndex = startIndex + pageSize;
+        surveysForDisplay = localSurveys.slice(startIndex, endIndex);
+        paginationMeta = {
+          pages: localSurveys.length ? Math.ceil(localSurveys.length / pageSize) : 0,
+          total: localSurveys.length
+        };
+      }
+
+      setSurveys(surveysForDisplay);
+      setTotalPages(paginationMeta.pages);
+      setTotalElements(paginationMeta.total);
+
+      let surveysForStatistics = surveysForDisplay;
+      if (pageResponse?.meta) {
+        try {
+          const allSurveysResponse = await surveyService.getSurveys(0, 1000);
+          const allSurveys = Array.isArray(allSurveysResponse?.result)
+            ? allSurveysResponse.result
+            : Array.isArray(allSurveysResponse)
+              ? allSurveysResponse
+              : [];
+          if (allSurveys.length > 0) {
+            surveysForStatistics = allSurveys;
+          }
+        } catch (error) {
+          console.log("Dashboard: Unable to fetch all surveys, using current page for statistics");
+        }
+      } else if (!pageResponse) {
+        surveysForStatistics = localSurveys;
+      }
+
+      const stats = calculateRealStats(surveysForStatistics, pageResponse?.meta || paginationMeta);
+      setOverview(stats);
+    } catch (error) {
+      console.error("Dashboard: Error loading data", error);
+      console.error("Dashboard: Error details", error.response?.data);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [currentPage, pageSize, navigate]);
 
-  const handlePreviousPage = () => {
-    if (currentPage > 0) {
-      setCurrentPage(currentPage - 1);
-    }
-  };
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
-  const handleNextPage = () => {
-    if (currentPage < totalPages - 1) {
-      setCurrentPage(currentPage + 1);
-    }
-  };
+  const handleCreateSurvey = useCallback(() => {
+    setShowCreateModal(true);
+  }, []);
 
-  // Generate page numbers for pagination
-  const getPageNumbers = () => {
-    const pages = [];
-    const maxVisiblePages = 5;
-    let startPage = Math.max(0, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 1);
-
-    if (endPage - startPage < maxVisiblePages - 1) {
-      startPage = Math.max(0, endPage - maxVisiblePages + 1);
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-      pages.push(i);
-    }
-    return pages;
-  };
-
+  const handleModalOption = useCallback(
+    (path) => {
+      setShowCreateModal(false);
+      navigate(path);
+    },
+    [navigate]
+  );
 
   if (loading) {
     return (
-      <div className="dashboard-container">
-        <div className="dashboard-content">
-          <div className="loading">
-            <div className="loading-spinner"></div>
-            <span>Đang tải...</span>
-          </div>
-        </div>
+      <div className="dashboard-shell">
+        <HeaderComponent showUserInfo={true} />
+        <Sidebar />
+        <main className="dashboard-main">
+          <LoadingState />
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="dashboard-container">
+    <div className="dashboard-shell">
       <HeaderComponent showUserInfo={true} />
       <Sidebar />
 
-      {/* Mobile menu overlay */}
-      {sidebarOpen && (
-        <div
-          className="mobile-overlay"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      <div className="dashboard-content">
-        <div className="dashboard-header">
-          <div className="header-texts">
+      <main className="dashboard-main">
+        <section className="dash-hero">
+          <div>
+            <p className="dash-hero__eyebrow">SmartSurvey Insights</p>
             <h1>Xin chào {displayName}</h1>
-            <p>Smart Survey - Quản lý và phân tích khảo sát một cách thông minh</p>
+            <p className="dash-hero__subtitle">Quản lý và phân tích khảo sát thông minh, trực quan và hiện đại.</p>
           </div>
-        </div>
-
-        <div className="stats-sections">
-          <section className="stats-block">
-            <div className="kpi-card kpi-card-1">
-              <i className="fa-solid fa-table-list" title="Tổng khảo sát" style={{ color: '#3b82f6' }}></i>
-              <div className="kpi-info">
-                <h3>Tổng Khảo sát</h3>
-                <span className="kpi-number">{overview.totalSurveys}</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="stats-block">
-            <div className="kpi-card kpi-card-2">
-              <i className="fa-solid fa-list" title="Tổng phản hồi" style={{ color: '#10b981' }}></i>
-              <div className="kpi-info">
-                <h3>Tổng Phản hồi</h3>
-                <span className="kpi-number">{overview.totalResponses}</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="stats-block">
-            <div className="kpi-card kpi-card-3">
-              <i className="fa-solid fa-hexagon-nodes" title="Đang hoạt động" style={{ color: '#f59e0b' }}></i>
-              <div className="kpi-info">
-                <h3>Đang hoạt động</h3>
-                <span className="kpi-number">{overview.activeSurveys}</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="stats-block">
-            <div className="kpi-card kpi-card-4">
-              <i className="fa-solid fa-chart-line" title="Tỉ lệ hoàn thành" style={{ color: '#CC66FF' }}></i>
-              <div className="kpi-info">
-                <h3>Tỉ lệ hoàn thành</h3>
-                <span className="kpi-number">{overview.completionRate}%</span>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        {/* Quick Charts Section */}
-        <div className="charts-section">
-          <div className="section">
-            <div className="section-header">
-              <h2>Thống kê nhanh</h2>
-            </div>
-            <div className="charts-grid">
-              <div className="chart-card">
-                <div className="chart-header">
-                  <h3>Phân bố trạng thái khảo sát</h3>
-                  <div className="chart-type">Biểu đồ tròn</div>
-                </div>
-                <div className="chart-placeholder">
-                  <div className="chart-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10" />
-                      <path d="M8 12h8" />
-                      <path d="M12 8v8" />
-                    </svg>
-                  </div>
-                  <p>Biểu đồ tròn hiển thị tỷ lệ khảo sát theo trạng thái</p>
-                </div>
-              </div>
-
-              <div className="chart-card">
-                <div className="chart-header">
-                  <h3>Xu hướng phản hồi</h3>
-                  <div className="chart-type">Biểu đồ đường</div>
-                </div>
-                <div className="chart-placeholder">
-                  <div className="chart-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 3v18h18" />
-                      <path d="M19 17V9l-5 5-3-3-4 4" />
-                    </svg>
-                  </div>
-                  <p>Biểu đồ đường hiển thị xu hướng phản hồi theo thời gian</p>
-                </div>
-              </div>
-
-              <div className="chart-card">
-                <div className="chart-header">
-                  <h3>So sánh khảo sát</h3>
-                  <div className="chart-type">Biểu đồ cột</div>
-                </div>
-                <div className="chart-placeholder">
-                  <div className="chart-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <rect x="7" y="8" width="3" height="8" />
-                      <rect x="12" y="5" width="3" height="11" />
-                      <rect x="17" y="10" width="3" height="6" />
-                    </svg>
-                  </div>
-                  <p>Biểu đồ cột so sánh số lượng phản hồi giữa các khảo sát</p>
-                </div>
-              </div>
-            </div>
+          <div className="dash-hero__actions">
+            <button type="button" className="dash-hero__btn dash-hero__btn--ghost" onClick={() => navigate("/surveys")}>
+              Khảo sát của tôi
+            </button>
+            <button type="button" className="dash-hero__btn dash-hero__btn--primary" onClick={handleCreateSurvey}>
+              <span aria-hidden="true">+</span> Tạo khảo sát mới
+            </button>
           </div>
-        </div>
+        </section>
 
-        {/* Recent Surveys Section */}
-        <div className="recent-surveys-section">
-          <div className="section">
-            <div className="section-header">
-              <h2>5 khảo sát gần đây</h2>
-              <button className="btn-view-all" onClick={() => navigate('/surveys')}>
-                Xem tất cả
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </button>
-            </div>
-            <div className="recent-surveys-list">
-              {surveys.slice(0, 5).length === 0 ? (
-                <div className="empty-recent">
-                  <div className="empty-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9" />
-                      <path d="M9 3v4a2 2 0 0 0 2 2h4" />
-                    </svg>
-                  </div>
-                  <span>Chưa có khảo sát nào.</span>
-                </div>
-              ) : (
-                surveys.slice(0, 5).map((survey, index) => (
-                  <div key={survey.id || survey._id} className="recent-survey-item">
-                    <div className="survey-number">{index + 1}</div>
-                    <div className="survey-info">
-                      <div className="survey-title">{survey.title || 'Không tiêu đề'}</div>
-                      <div className="survey-meta">
-                        <span className={`status-badge ${survey.status || 'draft'}`}>
-                          {survey.status === 'published' ? 'Đã xuất bản' : survey.status === 'archived' ? 'Đã lưu trữ' : 'Bản nháp'}
-                        </span>
-                        <span className="survey-date">
-                          {new Date(survey.createdAt || survey.created_at || Date.now()).toLocaleDateString('vi-VN')}
-                        </span>
-                        <span className="survey-responses">
-                          {survey.responses ?? survey.responseCount ?? 0} phản hồi
-                        </span>
-                      </div>
-                    </div>
-                    <div className="survey-actions">
-                      <button
-                        className="btn-view"
-                        onClick={() => navigate('/create-survey', { state: { editSurvey: survey } })}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                          <circle cx="12" cy="12" r="3" />
-                        </svg>
-                        Xem
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+        <section className="dash-metrics" aria-label="Tổng quan khảo sát">
+          {METRIC_CARDS.map((card) => (
+            <KpiCard
+              key={card.key}
+              icon={card.icon}
+              label={card.label}
+              value={overview[card.key] ?? 0}
+              accent={card.accent}
+              suffix={card.suffix || ""}
+            />
+          ))}
+        </section>
+
+        <section className="dash-charts" aria-label="Thống kê nhanh">
+          <header className="dash-section__header">
+            <h2>Thống kê nhanh</h2>
+            <p>Cập nhật tổng quan trực quan để bạn sẵn sàng ra quyết định.</p>
+          </header>
+          <div className="dash-charts__grid">
+            {CHART_PLACEHOLDERS.map((chart) => (
+              <ChartCard key={chart.title} {...chart} />
+            ))}
           </div>
-        </div>
+        </section>
 
-        {showCreateModal && (
-          <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <button className="modal-close-btn" onClick={() => setShowCreateModal(false)}>&times;</button>
-              <div className="modal-header">
-                <h3>Bạn muốn bắt đầu như thế nào?</h3>
-                <p>Chọn phương thức tạo khảo sát phù hợp với nhu cầu của bạn</p>
+        <section className="dash-recent" aria-label="Khảo sát gần đây">
+          <header className="dash-section__header">
+            <h2>5 khảo sát gần đây</h2>
+            <button type="button" className="dash-link" onClick={() => navigate("/surveys")}>
+              Xem tất cả
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+          </header>
+          <div className="dash-recent__list">
+            {recentSurveys.length === 0 ? (
+              <div className="dash-empty">
+                <span className="dash-empty__icon" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9" />
+                    <path d="M9 3v4a2 2 0 0 0 2 2h4" />
+                  </svg>
+                </span>
+                <p>Chưa có khảo sát nào. Hãy tạo khảo sát đầu tiên của bạn!</p>
               </div>
-              <div className="modal-body">
-                <div className="create-option" onClick={() => { setShowCreateModal(false); navigate('/create-ai'); }}>
-                  <div className="option-icon ai" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
-                  </div>
-                  <div className="option-title">Tạo bằng AI</div>
-                  <p className="option-desc">Mô tả ý tưởng của bạn, AI sẽ tự động tạo một bản nháp khảo sát để bạn bắt đầu.</p>
-                  <ul>
-                    <li>Tiết kiệm thời gian</li>
-                    <li>Gợi ý câu hỏi thông minh</li>
-                    <li>Tối ưu mục tiêu</li>
-                  </ul>
-                  <button className="btn-primary small">Bắt đầu ngay</button>
-                </div>
-                <div className="create-option" onClick={() => { setShowCreateModal(false); navigate('/create-survey'); }}>
-                  <div className="option-icon manual" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" /></svg>
-                  </div>
-                  <div className="option-title">Tạo thủ công</div>
-                  <p className="option-desc">Tự tay xây dựng khảo sát từ đầu để toàn quyền kiểm soát mọi câu hỏi và chi tiết.</p>
-                  <ul>
-                    <li>Kiểm soát hoàn toàn</li>
-                    <li>Tùy chỉnh chi tiết</li>
-                    <li>Thiết kế theo ý muốn</li>
-                  </ul>
-                  <button className="btn-primary small">Bắt đầu ngay</button>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <p className="note">Lưu ý: Bạn có thể chỉnh sửa và tùy chỉnh khảo sát sau khi tạo bằng cả hai phương thức.</p>
-              </div>
-            </div>
+            ) : (
+              recentSurveys.map((survey, index) => (
+                <RecentSurveyItem key={survey.id || survey._id || index} survey={survey} index={index} onOpen={openSurveyForEditing} />
+              ))
+            )}
+          </div>
+        </section>
+
+        {totalElements > pageSize && (
+          <div className="dash-pagination" role="navigation" aria-label="Phân trang khảo sát">
+            <button type="button" className="dash-pagination__btn" onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 0))} disabled={currentPage === 0}>
+              Trước
+            </button>
+            <span className="dash-pagination__info">
+              Trang {currentPage + 1} / {Math.max(totalPages, 1)}
+            </span>
+            <button
+              type="button"
+              className="dash-pagination__btn"
+              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, Math.max(totalPages - 1, 0)))}
+              disabled={currentPage >= Math.max(totalPages - 1, 0)}
+            >
+              Tiếp
+            </button>
           </div>
         )}
 
-      </div>
+        {showCreateModal && (
+          <div className="dash-modal" role="dialog" aria-modal="true" aria-labelledby="dash-create-title">
+            <div className="dash-modal__backdrop" onClick={() => setShowCreateModal(false)} />
+            <div className="dash-modal__content">
+              <button type="button" className="dash-modal__close" onClick={() => setShowCreateModal(false)} aria-label="Đóng" />
+              <header className="dash-modal__header">
+                <h3 id="dash-create-title">Bạn muốn bắt đầu như thế nào?</h3>
+                <p>Chọn phương thức tạo khảo sát phù hợp với nhu cầu của bạn.</p>
+              </header>
+              <div className="dash-create__grid">
+                {CREATE_OPTIONS.map((option) => (
+                  <CreateOptionCard key={option.id} option={option} onClick={() => handleModalOption(option.navigateTo)} />
+                ))}
+              </div>
+              <footer className="dash-modal__footer">
+                <p>Lưu ý: Bạn có thể chỉnh sửa khảo sát chi tiết sau khi tạo bằng cả hai phương thức.</p>
+              </footer>
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
