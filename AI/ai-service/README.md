@@ -23,3 +23,19 @@ GET  /ai/sentiment/{survey_id}
 ## Ghi chú
 - Lần đầu model load có thể chậm vài giây.
 - Khi có DB `survey_answers`, sửa loader để đọc từ DB thay vì CSV.
+
+## Chạy lệnh này trong mysql
+USE smartsurvey;
+
+ALTER TABLE activity_log
+  MODIFY action_type ENUM(
+    'login','logout',
+    'create_survey','edit_survey','delete_survey',
+    'add_question','edit_question','delete_question',
+    'add_option','edit_option','delete_option',
+    'submit_response',
+    'ai_generate','ai_refresh_one','ai_refresh_all',
+    'chat_ai',
+    'ai_query',      -- thêm mới
+    'ai_sentiment'   -- thêm mới
+  ) NOT NULL;

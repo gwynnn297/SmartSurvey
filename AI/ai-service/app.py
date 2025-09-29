@@ -105,6 +105,17 @@ def compute_and_save_sentiment(survey_id: int, db: Session, question_id: Optiona
 @app.post("/ai/sentiment/{survey_id}")
 def run_sentiment_now(survey_id: int, question_id: Optional[int] = None, db: Session = Depends(get_db)):
     rec = compute_and_save_sentiment(survey_id, db, question_id)
+
+    # 🟢 Thêm ActivityLog sau khi lưu ai_sentiment
+    db.add(ActivityLog(
+        user_id=None,  # hoặc truyền user_id nếu bạn có thông tin người gọi
+        action_type="ai_generate",             # đúng theo spec
+        target_id=rec.sentiment_id,
+        target_table="ai_sentiment",
+        description=f"Recomputed sentiment for survey_id={survey_id}"
+    ))
+    db.commit()
+
     return {"survey_id": survey_id, "result_id": rec.sentiment_id, "created_at": rec.created_at}
 
 @app.get("/ai/sentiment/{survey_id}")
@@ -214,3 +225,5 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
         ))
         db.commit()
         raise HTTPException(status_code=500, detail=f"Lỗi xử lý AI chat: {e}")
+    
+
