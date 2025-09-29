@@ -40,30 +40,42 @@
 
 .header-buttons {
     display: flex;
-    gap: 10px;
+    gap: 16px;
 }
 
 .btn-login {
-    background: #fff;
-    background-color: #ccd7e2;
-    border: 2px solid #ccd7e2;
-    color: black;
+    background: transparent;
+    border: 2px solid #007bff;
+    color: #007bff;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s;
+    width: 110px;
+    height: 40px;
 }
 
 .btn-login:hover {
-    background: rgba(255, 255, 255, 0.25);
-    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+    background: #007bff;
+    color: white;
 }
 
 .btn-register {
-    background: #838dde !important;
-    border: 2px solid #838dde;
-    color: #fff;
+    width: 110px;
+    height: 40px;
+    background: #007bff;
+    border: none;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.3s;
 }
 
 .btn-register:hover {
-    background: rgba(255, 255, 255, 0.25);
-    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+    background: #0056b3;
 }
 
 .register-content {
@@ -81,7 +93,7 @@
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
     padding: 40px;
     width: 100%;
-    max-width: 500px;
+    max-width: 450px;
     text-align: center;
 }
 
@@ -162,11 +174,11 @@
 
 .btn-primary {
     width: 100%;
-    background: linear-gradient(135deg, #667eea, #764ba2) !important;
+    background: linear-gradient(135deg, #667eea, #764ba2);
     color: white;
     border: none;
     padding: 14px;
-    border-radius: 999px !important;
+    border-radius: 8px;
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
