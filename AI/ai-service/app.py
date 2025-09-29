@@ -1,19 +1,19 @@
-# ai-service/app.py
-from fastapi import FastAPI, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from sqlalchemy import and_
-from collections import Counter
+# app.py
+from __future__ import annotations
+from typing import Optional, Dict, Any, List
 from datetime import datetime
-import json
-from typing import Optional, List, Tuple
 
+from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+
+from settings import settings
 from db import init_db, SessionLocal, AiSentiment, Answer, Response
 from sentiment_adapter import SentimentAdapter
-from analysis import aggregate_sentiment
 
 app = FastAPI(title="SmartSurvey AI Service")
-init_db()
 
+# ---- DB session dependency ----
 def get_db():
     db = SessionLocal()
     try:
@@ -21,105 +21,110 @@ def get_db():
     finally:
         db.close()
 
+# ---- Khởi tạo DB khi server start ----
+@app.on_event("startup")
+def on_startup():
+    init_db()
+    print("[startup] DB_URL =", settings.DB_URL)
+    print("[startup] MODEL_DIR =", settings.MODEL_DIR)
+
+# ---- Adapter (singleton trong process) ----
 _adapter: Optional[SentimentAdapter] = None
 def get_adapter() -> SentimentAdapter:
     global _adapter
     if _adapter is None:
+        print("[adapter] Booting with MODEL_DIR =", settings.MODEL_DIR)
         _adapter = SentimentAdapter()
     return _adapter
 
-def _load_texts_from_db(
-    db: Session, survey_id: int, question_id: Optional[int] = None
-) -> List[Tuple[int, str]]:
-    """
-    Trả về list (answer_id, answer_text) cho 1 survey (và 1 câu hỏi nếu có).
-    """
+# ================== Business logic ==================
+def _fetch_texts(db: Session, survey_id: int, question_id: Optional[int] = None) -> List[str]:
     q = (
         db.query(Answer.answer_id, Answer.answer_text)
           .join(Response, Response.response_id == Answer.response_id)
           .filter(Response.survey_id == survey_id)
-          .filter(Answer.answer_text.isnot(None))
-          .filter(Answer.answer_text != "")
+          .filter(func.length(func.trim(func.coalesce(Answer.answer_text, ""))) > 0)  # loại NULL/''/space
     )
     if question_id is not None:
         q = q.filter(Answer.question_id == question_id)
 
     rows = q.order_by(Answer.answer_id.asc()).all()
-    return [(aid, txt) for aid, txt in rows if txt]
+    return [r.answer_text for r in rows]
 
-def compute_and_save_sentiment(
-    survey_id: int, db: Session, question_id: Optional[int] = None
-) -> AiSentiment:
+def _aggregate(labels: List[str]) -> Dict[str, Any]:
+    total = len(labels)
+    counts = {"POS": 0, "NEU": 0, "NEG": 0}
+    for lb in labels:
+        counts[lb] = counts.get(lb, 0) + 1
+    def pct(n): return (n * 100.0 / total) if total else 0.0
+    return {
+        "total_responses": total,
+        "positive_percent": pct(counts["POS"]),
+        "neutral_percent": pct(counts["NEU"]),
+        "negative_percent": pct(counts["NEG"]),
+        "counts": counts,
+        "sample_size": total,
+    }
+
+def compute_and_save_sentiment(survey_id: int, db: Session, question_id: Optional[int] = None) -> AiSentiment:
+    texts = _fetch_texts(db, survey_id, question_id)
+    if not texts:
+        raise HTTPException(status_code=400, detail="Không có câu trả lời văn bản hợp lệ cho survey này.")
+
     adapter = get_adapter()
-    pairs = _load_texts_from_db(db, survey_id, question_id)
+    pred = adapter.predict_texts(texts)
 
-    if not pairs:
-        raise HTTPException(status_code=404, detail="Survey chưa có câu trả lời văn bản trong DB.")
+    aggr = _aggregate(pred.labels)
 
-    _, texts = zip(*pairs)
-    preds = adapter.predict_texts(list(texts))  # ['POS','NEU','NEG',...]
-
-    agg = aggregate_sentiment(preds)
-    counts = Counter([p for p in preds if p])
-
+    # LƯU Ý: Bảng ai_sentiment không có question_id → KHÔNG truyền question_id
     rec = AiSentiment(
         survey_id=survey_id,
-        total_responses=agg["sample_size"],
-        positive_percent=round(agg["positive"] * 100.0, 2),
-        neutral_percent =round(agg["neutral"]  * 100.0, 2),
-        negative_percent=round(agg["negative"] * 100.0, 2),
-        details=json.dumps(
-            {"counts": counts, "sample_size": agg["sample_size"], "question_id": question_id},
-            ensure_ascii=False,
-        ),
+        total_responses=aggr["total_responses"],
+        positive_percent=aggr["positive_percent"],
+        neutral_percent=aggr["neutral_percent"],
+        negative_percent=aggr["negative_percent"],
+        # details là cột JSON → truyền dict, KHÔNG ép str
+        details={
+            "counts": aggr["counts"],
+            "sample_size": aggr["sample_size"],
+            "question_id": question_id,  # nếu muốn lưu thông tin tham chiếu, để trong JSON
+        },
+        # với MySQL, created_at/updated_at đã có server_default/auto update, nhưng set thêm cũng không sao
         created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
     )
     db.add(rec)
     db.commit()
     db.refresh(rec)
     return rec
 
+
+# ================== API ==================
 @app.post("/ai/sentiment/{survey_id}")
-def run_sentiment_now(
-    survey_id: int,
-    question_id: Optional[int] = Query(None, description="Chỉ phân tích 1 câu hỏi cụ thể (optional)"),
-    db: Session = Depends(get_db),
-):
+def run_sentiment_now(survey_id: int, question_id: Optional[int] = None, db: Session = Depends(get_db)):
     rec = compute_and_save_sentiment(survey_id, db, question_id)
-    return {
-        "message": "DONE",
-        "survey_id": survey_id,
-        "result": {
-            "id": getattr(rec, "sentiment_id", None),
-            "total_responses": rec.total_responses,
-            "positive_percent": float(rec.positive_percent),
-            "neutral_percent":  float(rec.neutral_percent),
-            "negative_percent": float(rec.negative_percent),
-            "details": rec.details,
-            "created_at": rec.created_at,
-        },
-    }
+    return {"survey_id": survey_id, "result_id": rec.sentiment_id, "created_at": rec.created_at}
 
 @app.get("/ai/sentiment/{survey_id}")
 def get_latest_sentiment(survey_id: int, db: Session = Depends(get_db)):
     rec = (
         db.query(AiSentiment)
           .filter(AiSentiment.survey_id == survey_id)
-          .order_by(AiSentiment.created_at.desc())
+          .order_by(AiSentiment.sentiment_id.desc())  # đổi sang sentiment_id
           .first()
     )
     if not rec:
-        raise HTTPException(status_code=404, detail="Chưa có dữ liệu sentiment cho survey này.")
+        raise HTTPException(status_code=404, detail="Chưa có bản ghi sentiment cho survey này.")
     return {
         "survey_id": survey_id,
         "result": {
-            "id": getattr(rec, "sentiment_id", None),
+            "id": rec.sentiment_id,                   # đổi id → sentiment_id
             "total_responses": rec.total_responses,
             "positive_percent": float(rec.positive_percent),
-            "neutral_percent":  float(rec.neutral_percent),
+            "neutral_percent": float(rec.neutral_percent),
             "negative_percent": float(rec.negative_percent),
-            "details": rec.details,
+            "details": rec.details,                   # là JSON/dict
             "created_at": rec.created_at,
+            "updated_at": rec.updated_at,
         },
     }
+
