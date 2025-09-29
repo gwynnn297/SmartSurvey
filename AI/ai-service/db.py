@@ -59,6 +59,30 @@ class Answer(Base):
 
     response = relationship("Response", back_populates="answers")
 
+# ====== AI Chat Logs (KHỚP cột với ảnh bạn gửi) ======
+class AiChatLog(Base):
+    __tablename__ = "ai_chat_logs"
+    chat_id       = Column(BigInteger, primary_key=True, autoincrement=True, index=True)  # PK
+    survey_id     = Column(BigInteger, nullable=False, index=True)
+    user_id       = Column(BigInteger, nullable=True, index=True)
+    question_text = Column(Text, nullable=False)
+    ai_response   = Column(Text, nullable=False)
+    context       = Column(Text, nullable=True)   # lưu JSON string
+    created_at    = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at    = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+# ====== Activity Log (KHỚP cột với ảnh bạn gửi) ======
+class ActivityLog(Base):
+    __tablename__ = "activity_log"
+    log_id       = Column(BigInteger, primary_key=True, autoincrement=True, index=True)
+    user_id      = Column(BigInteger, nullable=True, index=True)
+    action_type  = Column(String(50), nullable=False)   # ví dụ: 'ai_query', 'ai_generate', ...
+    target_id    = Column(BigInteger, nullable=True)    # id bản ghi mục tiêu (vd chat_id)
+    target_table = Column(String(50), nullable=True)    # 'ai_chat_logs' / 'ai_sentiment' ...
+    description  = Column(Text, nullable=True)
+    created_at   = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at   = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
 
 def init_db() -> None:
     # an toàn: checkfirst, không ghi đè cấu trúc đang có

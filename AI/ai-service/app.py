@@ -1,4 +1,3 @@
-# app.py
 from __future__ import annotations
 from typing import Optional, Dict, Any, List
 from datetime import datetime
@@ -8,8 +7,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from settings import settings
-from db import init_db, SessionLocal, AiSentiment, Answer, Response
+from db import init_db, SessionLocal, AiSentiment, Answer, Response, AiChatLog, ActivityLog
 from sentiment_adapter import SentimentAdapter
+from pydantic import BaseModel
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import json
 
 app = FastAPI(title="SmartSurvey AI Service")
 
@@ -128,3 +131,86 @@ def get_latest_sentiment(survey_id: int, db: Session = Depends(get_db)):
         },
     }
 
+# ================== Chat MVP ==================
+class ChatRequest(BaseModel):
+    survey_id: int
+    question_text: str
+    user_id: Optional[int] = None
+    top_k: int = 5
+
+class ChatResponse(BaseModel):
+    survey_id: int
+    question_text: str
+    answer_text: str
+    context: List[str]
+    top_k: int
+    created_at: datetime
+
+def retrieve_topk(texts: list[str], query: str, top_k: int = 5) -> list[str]:
+    if not texts:
+        return []
+    top_k = max(1, min(int(top_k), 20))
+    vec = TfidfVectorizer(ngram_range=(1, 2), max_features=20000)
+    X = vec.fit_transform(texts)
+    q = vec.transform([query])
+    sims = cosine_similarity(q, X).ravel()
+    idx = sims.argsort()[::-1][:top_k]
+    return [texts[i] for i in idx]
+
+def craft_answer(question: str, context: list[str]) -> str:
+    if not context:
+        return "Hiện chưa có phản hồi phù hợp để trả lời câu hỏi này."
+    bullets = "\n".join([f"- {c}" for c in context[:3]])
+    return (
+        f"Dựa trên các phản hồi phù hợp nhất cho câu hỏi: “{question}”, "
+        f"các ý tiêu biểu như sau:\n{bullets}\n"
+        "Tóm lại, xu hướng chung có thể rút ra từ các phản hồi trên."
+    )
+
+@app.post("/ai/chat", response_model=ChatResponse)
+def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
+    try:
+        texts = _fetch_texts(db, req.survey_id)
+        topk_ctx = retrieve_topk(texts, req.question_text, req.top_k)
+        answer = craft_answer(req.question_text, topk_ctx)
+
+        now = datetime.utcnow()
+        # 1) Lưu ai_chat_logs
+        chat = AiChatLog(
+            survey_id=req.survey_id,
+            user_id=req.user_id,
+            question_text=req.question_text,
+            ai_response=answer,
+            context=json.dumps(topk_ctx, ensure_ascii=False),
+        )
+        db.add(chat); db.commit(); db.refresh(chat)
+
+        # 2) Lưu activity_log
+        db.add(ActivityLog(
+            user_id=req.user_id,
+            action_type="ai_query",
+            target_id=chat.chat_id,
+            target_table="ai_chat_logs",
+            description=f"AI chat for survey_id={req.survey_id}"
+        ))
+        db.commit()
+
+        return ChatResponse(
+            survey_id=req.survey_id,
+            question_text=req.question_text,
+            answer_text=answer,
+            context=topk_ctx,
+            top_k=req.top_k,
+            created_at=now
+        )
+    except Exception as e:
+        # Nếu muốn log lỗi vào activity_log:
+        db.add(ActivityLog(
+            user_id=req.user_id,
+            action_type="ai_query_error",
+            target_id=None,
+            target_table="ai_chat_logs",
+            description=f"Error: {e}"
+        ))
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Lỗi xử lý AI chat: {e}")
