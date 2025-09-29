@@ -180,30 +180,6 @@ const LoadingState = () => (
   </div>
 );
 
-const SkeletonCard = () => (
-  <div className="dash-kpi dash-kpi--skeleton">
-    <div className="dash-kpi__icon dash-kpi__icon--skeleton" />
-    <div className="dash-kpi__content">
-      <div className="dash-kpi__label--skeleton" />
-      <div className="dash-kpi__value--skeleton" />
-    </div>
-  </div>
-);
-
-const SkeletonHero = () => (
-  <div className="dash-hero dash-hero--skeleton">
-    <div className="dash-hero__content--skeleton">
-      <div className="dash-hero__eyebrow--skeleton" />
-      <div className="dash-hero__title--skeleton" />
-      <div className="dash-hero__subtitle--skeleton" />
-    </div>
-    <div className="dash-hero__actions--skeleton">
-      <div className="dash-hero__btn--skeleton" />
-      <div className="dash-hero__btn--skeleton" />
-    </div>
-  </div>
-);
-
 const CreateOptionCard = ({ option, onClick }) => (
   <button type="button" className={`dash-create__option dash-create__option--${option.id}`} onClick={onClick}>
     <span className="dash-create__icon" aria-hidden="true">{option.icon}</span>
@@ -248,10 +224,6 @@ export default function DashboardPage() {
 
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
-
-    // Set a minimum loading time for better UX
-    const minLoadingTime = new Promise(resolve => setTimeout(resolve, 300));
-
     try {
       const storedUser = (() => {
         try {
@@ -268,12 +240,7 @@ export default function DashboardPage() {
 
       let pageResponse = null;
       try {
-        // Add timeout to API call
-        const apiPromise = surveyService.getSurveys(currentPage, pageSize);
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('API timeout')), 2000)
-        );
-        pageResponse = await Promise.race([apiPromise, timeoutPromise]);
+        pageResponse = await surveyService.getSurveys(currentPage, pageSize);
       } catch (error) {
         console.log("Dashboard: API surveys failed, falling back to local cache");
       }
@@ -334,9 +301,6 @@ export default function DashboardPage() {
 
       const stats = calculateRealStats(surveysForStatistics, pageResponse?.meta || paginationMeta);
       setOverview(stats);
-
-      // Wait for minimum loading time
-      await minLoadingTime;
     } catch (error) {
       console.error("Dashboard: Error loading data", error);
       console.error("Dashboard: Error details", error.response?.data);
@@ -367,23 +331,7 @@ export default function DashboardPage() {
         <HeaderComponent showUserInfo={true} />
         <Sidebar />
         <main className="dashboard-main">
-          <SkeletonHero />
-          <section className="dash-metrics" aria-label="Tổng quan khảo sát">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <SkeletonCard key={index} />
-            ))}
-          </section>
-          <section className="dash-charts" aria-label="Thống kê nhanh">
-            <header className="dash-section__header">
-              <h2>Thống kê nhanh</h2>
-              <p>Cập nhật tổng quan trực quan để bạn sẵn sàng ra quyết định.</p>
-            </header>
-            <div className="dash-charts__grid">
-              {CHART_PLACEHOLDERS.map((chart) => (
-                <ChartCard key={chart.title} {...chart} />
-              ))}
-            </div>
-          </section>
+          <LoadingState />
         </main>
       </div>
     );
@@ -438,7 +386,7 @@ export default function DashboardPage() {
 
         <section className="dash-recent" aria-label="Khảo sát gần đây">
           <header className="dash-section__header">
-            <h2>Khảo sát gần đây</h2>
+            <h2>5 khảo sát gần đây</h2>
             <button type="button" className="dash-link" onClick={() => navigate("/surveys")}>
               Xem tất cả
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -484,45 +432,26 @@ export default function DashboardPage() {
           </div>
         )}
 
-          {showCreateModal && (
-          <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <button className="modal-close-btn" onClick={() => setShowCreateModal(false)}>&times;</button>
-              <div className="modal-header">
-                <h3>Bạn muốn bắt đầu như thế nào?</h3>
-                <p>Chọn phương thức tạo khảo sát phù hợp với nhu cầu của bạn</p>
+        {showCreateModal && (
+          <div className="dash-modal" role="dialog" aria-modal="true" aria-labelledby="dash-create-title">
+            <div className="dash-modal__backdrop" onClick={() => setShowCreateModal(false)} />
+            <div className="dash-modal__content">
+              <button type="button" className="dash-modal__close" onClick={() => setShowCreateModal(false)} aria-label="Đóng" />
+              <header className="dash-modal__header">
+                <h3 id="dash-create-title">Bạn muốn bắt đầu như thế nào?</h3>
+                <p>Chọn phương thức tạo khảo sát phù hợp với nhu cầu của bạn.</p>
+              </header>
+              <div className="dash-create__grid">
+                {CREATE_OPTIONS.map((option) => (
+                  <CreateOptionCard key={option.id} option={option} onClick={() => handleModalOption(option.navigateTo)} />
+                ))}
               </div>
-              <div className="modal-body">
-                <div className="create-option" onClick={() => { setShowCreateModal(false); navigate('/create-ai'); }}>
-                <i className="fa-brands fa-discord" title="Tạo bằng AI" style={{ fontSize: '40px', color: '#6699FF',marginBottom: '15px' }}></i>
-                  <div className="option-title">Tạo bằng AI</div>
-                  <p className="option-desc">Mô tả ý tưởng của bạn, AI sẽ tự động tạo một bản nháp khảo sát để bạn bắt đầu.</p>
-                  <ul>
-                    <li>Tiết kiệm thời gian</li>
-                    <li>Gợi ý câu hỏi thông minh</li>
-                    <li>Tối ưu mục tiêu</li>
-                  </ul>
-                  <button className="btn-primary small">Bắt đầu ngay</button>
-                </div>
-                <div className="create-option" onClick={() => { setShowCreateModal(false); navigate('/create-survey'); }}>
-                <i className="fa-solid fa-pen-to-square" title="Tạo thủ công" style={{ fontSize: '40px', color: '#999999',marginBottom: '15px' }}></i>
-                  <div className="option-title">Tạo thủ công</div>
-                  <p className="option-desc">Tự tay xây dựng khảo sát từ đầu để toàn quyền kiểm soát mọi câu hỏi và chi tiết.</p>
-                  <ul>
-                    <li>Kiểm soát hoàn toàn</li>
-                    <li>Tùy chỉnh chi tiết</li>
-                    <li>Thiết kế theo ý muốn</li>
-                  </ul>
-                  <button className="btn-primary small">Bắt đầu ngay</button>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <p className="note">Lưu ý: Bạn có thể chỉnh sửa và tùy chỉnh khảo sát sau khi tạo bằng cả hai phương thức.</p>
-              </div>
+              <footer className="dash-modal__footer">
+                <p>Lưu ý: Bạn có thể chỉnh sửa khảo sát chi tiết sau khi tạo bằng cả hai phương thức.</p>
+              </footer>
             </div>
           </div>
         )}
-
       </main>
     </div>
   );

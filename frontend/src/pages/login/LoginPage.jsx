@@ -1,14 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from "../../services/authService";
 import './LoginPage.css';
 import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
+
+const AuthNavButton = ({ label, onClick, variant = 'ghost' }) => (
+    <button
+        type="button"
+        className={`auth-nav-btn auth-nav-btn--${variant}`}
+        onClick={onClick}
+    >
+        {label}
+    </button>
+);
+
+const FormField = ({ label, type, placeholder, value, onChange, disabled }) => (
+    <label className="auth-form-field">
+        <span className="auth-form-label">{label}</span>
+        <input
+            type={type}
+            placeholder={placeholder}
+            value={value}
+            onChange={onChange}
+            required
+            disabled={disabled}
+            autoComplete={type === 'password' ? 'current-password' : 'email'}
+        />
+    </label>
+);
+
 const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
+
+    const formFields = useMemo(() => ([
+        {
+            id: 'email',
+            label: 'Email',
+            type: 'email',
+            placeholder: 'Nhập email của bạn',
+            value: email,
+            onChange: (e) => setEmail(e.target.value)
+        },
+        {
+            id: 'password',
+            label: 'Mật khẩu',
+            type: 'password',
+            placeholder: 'Nhập mật khẩu',
+            value: password,
+            onChange: (e) => setPassword(e.target.value)
+        }
+    ]), [email, password]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -29,8 +74,6 @@ const Login = () => {
                     role: data.role
                 };
                 localStorage.setItem('user', JSON.stringify(userInfo));
-
-                console.log('Login successful, token saved:', token);
                 navigate('/dashboard');
             } else {
                 setError('Đăng nhập thất bại: Không nhận được token từ server!');
@@ -51,93 +94,75 @@ const Login = () => {
         }
     };
 
-    const handleLogin = () => {
-        navigate("/login");
-    };
-
-    const handleRegister = () => {
-        navigate("/register");
-    };
-
-    const handleHome = () => {
-        navigate("/home");
-    };
-
-    const handleForgotPassword = () => {
-        navigate("/forgot-password");
-    };
+    const navigateTo = (path) => () => navigate(path);
 
     return (
-        <div className="login-container">
-            {/* Header */}
-            <header className="header">
-                <div className="logo">
-                    <img onClick={handleHome} className="logo-smart-survey" src={logoSmartSurvey} alt="logoSmartSurvey" />
+        <div className="login-page">
+            <div className="login-background"></div>
+            <div className="login-shape login-shape--one" aria-hidden="true"></div>
+            <div className="login-shape login-shape--two" aria-hidden="true"></div>
+
+            <header className="auth-header">
+                <div className="auth-logo" role="button" tabIndex={0} onClick={navigateTo('/home')} onKeyDown={(e) => (e.key === 'Enter') && navigateTo('/home')()}>
+                    <img className="auth-logo__img" src={logoSmartSurvey} alt="SmartSurvey" />
                 </div>
-                <div className="header-buttons">
-                    <button className="btn-login" onClick={handleLogin}>
-                        Đăng nhập
-                    </button>
-                    <button className="btn-register" onClick={handleRegister}>
-                        Đăng kí
-                    </button>
-                </div>
+                <nav className="auth-nav">
+                    <AuthNavButton label="Đăng nhập" onClick={navigateTo('/login')} variant="ghost" />
+                    <AuthNavButton label="Đăng kí" onClick={navigateTo('/register')} variant="solid" />
+                </nav>
             </header>
 
-            <div className="login-content">
-                <div className="login-card">
-                    <div className="login-header">
-                        <img className="logo-smart-survey" src={logoSmartSurvey} alt="logoSmartSurvey" />
-                        <h2>Đăng Nhập</h2>
+            <main className="auth-main">
+                <section className="auth-card" aria-labelledby="login-title">
+                    <div className="auth-card__header">
+                        <div className="auth-card__logo-wrapper">
+                            <span className="auth-card__logo-glow" aria-hidden="true"></span>
+                            <span className="auth-card__logo-ring" aria-hidden="true"></span>
+                            <img className="auth-card__logo" src={logoSmartSurvey} alt="SmartSurvey" />
+                        </div>
+                        <h1 id="login-title">Đăng nhập</h1>
                         <p>Chào mừng bạn quay trở lại SmartSurvey</p>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="login-form">
-                        <label>Email</label>
-                        <input
-                            type="email"
-                            placeholder="Nhập email của bạn"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                            disabled={isLoading}
-                        />
+                    <form onSubmit={handleSubmit} className="auth-form" noValidate>
+                        {formFields.map((field) => (
+                            <FormField
+                                key={field.id}
+                                label={field.label}
+                                type={field.type}
+                                placeholder={field.placeholder}
+                                value={field.value}
+                                onChange={field.onChange}
+                                disabled={isLoading}
+                            />
+                        ))}
 
-                        <label>Mật khẩu</label>
-                        <input
-                            type="password"
-                            placeholder="Nhập mật khẩu"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            required
-                            disabled={isLoading}
-                        />
-
-                        <div className="login-options">
-                            <label>
-                                <input type="checkbox" /> Ghi nhớ đăng nhập
+                        <div className="auth-form__options">
+                            <label className="auth-remember">
+                                <input type="checkbox" />
+                                <span>Ghi nhớ đăng nhập</span>
                             </label>
-                            <button
-                                type="button"
-                                className="link-button"
-                                onClick={handleForgotPassword}
-                            >
+                            <button type="button" className="auth-link" onClick={navigateTo('/forgot-password')}>
                                 Quên mật khẩu?
                             </button>
                         </div>
 
-                        <button type="submit" className="btn-primary" disabled={isLoading}>
-                            {isLoading ? 'Đang đăng nhập...' : 'Đăng Nhập'}
+                        {error && <p className="auth-error" role="alert">{error}</p>}
+
+                        <button type="submit" className="auth-submit" disabled={isLoading}>
+                            {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+                            <span className="auth-submit__glow" aria-hidden="true" />
                         </button>
                     </form>
 
-                    {error && <p className="error">{error}</p>}
-
-                    <p className="register-text">
-                        Chưa có tài khoản? <a href="/register">Đăng ký ngay</a>
+                    <p className="auth-footer-text">
+                        Chưa có tài khoản?
+                        <button type="button" className="auth-link auth-link--inline" onClick={navigateTo('/register')}>
+                            Đăng ký ngay
+                        </button>
                     </p>
-                </div>
-            </div>
+                </section>
+            </main>
         </div>
     );
 };
