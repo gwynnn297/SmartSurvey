@@ -180,6 +180,30 @@ const LoadingState = () => (
   </div>
 );
 
+const SkeletonCard = () => (
+  <div className="dash-kpi dash-kpi--skeleton">
+    <div className="dash-kpi__icon dash-kpi__icon--skeleton" />
+    <div className="dash-kpi__content">
+      <div className="dash-kpi__label--skeleton" />
+      <div className="dash-kpi__value--skeleton" />
+    </div>
+  </div>
+);
+
+const SkeletonHero = () => (
+  <div className="dash-hero dash-hero--skeleton">
+    <div className="dash-hero__content--skeleton">
+      <div className="dash-hero__eyebrow--skeleton" />
+      <div className="dash-hero__title--skeleton" />
+      <div className="dash-hero__subtitle--skeleton" />
+    </div>
+    <div className="dash-hero__actions--skeleton">
+      <div className="dash-hero__btn--skeleton" />
+      <div className="dash-hero__btn--skeleton" />
+    </div>
+  </div>
+);
+
 const CreateOptionCard = ({ option, onClick }) => (
   <button type="button" className={`dash-create__option dash-create__option--${option.id}`} onClick={onClick}>
     <span className="dash-create__icon" aria-hidden="true">{option.icon}</span>
@@ -224,6 +248,10 @@ export default function DashboardPage() {
 
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
+
+    // Set a minimum loading time for better UX
+    const minLoadingTime = new Promise(resolve => setTimeout(resolve, 300));
+
     try {
       const storedUser = (() => {
         try {
@@ -240,7 +268,12 @@ export default function DashboardPage() {
 
       let pageResponse = null;
       try {
-        pageResponse = await surveyService.getSurveys(currentPage, pageSize);
+        // Add timeout to API call
+        const apiPromise = surveyService.getSurveys(currentPage, pageSize);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('API timeout')), 2000)
+        );
+        pageResponse = await Promise.race([apiPromise, timeoutPromise]);
       } catch (error) {
         console.log("Dashboard: API surveys failed, falling back to local cache");
       }
@@ -301,6 +334,9 @@ export default function DashboardPage() {
 
       const stats = calculateRealStats(surveysForStatistics, pageResponse?.meta || paginationMeta);
       setOverview(stats);
+
+      // Wait for minimum loading time
+      await minLoadingTime;
     } catch (error) {
       console.error("Dashboard: Error loading data", error);
       console.error("Dashboard: Error details", error.response?.data);
@@ -331,7 +367,23 @@ export default function DashboardPage() {
         <HeaderComponent showUserInfo={true} />
         <Sidebar />
         <main className="dashboard-main">
-          <LoadingState />
+          <SkeletonHero />
+          <section className="dash-metrics" aria-label="Tổng quan khảo sát">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <SkeletonCard key={index} />
+            ))}
+          </section>
+          <section className="dash-charts" aria-label="Thống kê nhanh">
+            <header className="dash-section__header">
+              <h2>Thống kê nhanh</h2>
+              <p>Cập nhật tổng quan trực quan để bạn sẵn sàng ra quyết định.</p>
+            </header>
+            <div className="dash-charts__grid">
+              {CHART_PLACEHOLDERS.map((chart) => (
+                <ChartCard key={chart.title} {...chart} />
+              ))}
+            </div>
+          </section>
         </main>
       </div>
     );

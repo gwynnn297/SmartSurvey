@@ -97,11 +97,7 @@ const Login = () => {
     const navigateTo = (path) => () => navigate(path);
 
     return (
-        <div className="login-page">
-            <div className="login-background"></div>
-            <div className="login-shape login-shape--one" aria-hidden="true"></div>
-            <div className="login-shape login-shape--two" aria-hidden="true"></div>
-
+        <div className="login-page">          
             <header className="auth-header">
                 <div className="auth-logo" role="button" tabIndex={0} onClick={navigateTo('/home')} onKeyDown={(e) => (e.key === 'Enter') && navigateTo('/home')()}>
                     <img className="auth-logo__img" src={logoSmartSurvey} alt="SmartSurvey" />
