@@ -12,6 +12,15 @@ const apiClient = axios.create({
 // Request interceptor để tự động thêm token vào header
 apiClient.interceptors.request.use(
   (config) => {
+    const url = config.url || '';
+    const isPublicAuth = url.includes('/auth/login') || url.includes('/auth/register');
+
+    if (isPublicAuth) {
+      // Đối với login/register: không cần token và không log cảnh báo gây nhiễu
+      console.log('📤 Public auth request:', url);
+      return config;
+    }
+
     const token = localStorage.getItem('token');
     console.log('🔑 Request interceptor - Token from localStorage:', token ? 'Found' : 'Not found');
     if (token) {
@@ -81,7 +90,7 @@ export const register = async (fullName, email, password) => {
 
 export const login = async (email, password) => {
   try {
-    console.log('Attempting login with:', { email, password });
+    // console.log('Attempting login with:', { email, password });
     const response = await apiClient.post('/auth/login', { email, password });
     console.log('Login response:', response.data);
     return response.data; // { token, user }

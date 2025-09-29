@@ -168,7 +168,7 @@ const Register = () => {
                     <button className="btn-facebook" disabled={isLoading}>Đăng ký với Facebook</button> */}
 
                     <p className="login-text">
-                        Đã có tài khoản? <button onClick={handleLogin} className="link-button">Đăng nhập ngay</button>
+                        Chưa có tài khoản? <a href="/login">Đăng nhập ngay</a>
                     </p>
                 </div>
             </div>
@@ -176,4 +176,4 @@ const Register = () => {
     );
 };
 
-export default Register;
+export default Register;    
