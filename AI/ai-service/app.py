@@ -12,7 +12,9 @@ from sentiment_adapter import SentimentAdapter
 from pydantic import BaseModel
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sqlalchemy.sql import text
 import json
+import re
 
 app = FastAPI(title="SmartSurvey AI Service")
 
@@ -178,14 +180,36 @@ def craft_answer(question: str, context: list[str]) -> str:
         "Tóm lại, xu hướng chung có thể rút ra từ các phản hồi trên."
     )
 
+def answer_count_query(db, survey_id: int, question_text: str) -> Optional[str]:
+    # Detect câu hỏi đếm
+    if re.search(r"\b(bao nhiêu|bao %|bao phần trăm)\b", question_text, re.IGNORECASE):
+        # Ví dụ đơn giản: đếm số câu trả lời có chữ "Yes"
+        count = db.execute(text("""
+            SELECT COUNT(*) FROM answers a
+            JOIN responses r ON a.response_id = r.response_id
+            WHERE r.survey_id = :sid
+              AND a.answer_text LIKE '%Yes%'
+        """), {"sid": survey_id}).scalar()
+        return f"Có {count} câu trả lời Yes trong survey {survey_id}."
+    return None
+
 @app.post("/ai/chat", response_model=ChatResponse)
 def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
     try:
         texts = _fetch_texts(db, req.survey_id)
         topk_ctx = retrieve_topk(texts, req.question_text, req.top_k)
         answer = craft_answer(req.question_text, topk_ctx)
-
+        count_answer = answer_count_query(db, req.survey_id, req.question_text)
+        if count_answer:
+            answer = count_answer
+            topk_ctx = []
+        else:
+            # fallback TF-IDF
+            texts = _fetch_texts(db, req.survey_id)
+            topk_ctx = retrieve_topk(texts, req.question_text, req.top_k)
+            answer = craft_answer(req.question_text, topk_ctx)
         now = datetime.utcnow()
+
         # 1) Lưu ai_chat_logs
         chat = AiChatLog(
             survey_id=req.survey_id,
