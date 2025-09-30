@@ -93,6 +93,7 @@ const createEmptyQuestion = (type = 'short_text') => {
     if (type === 'rating') {
         return {
             ...base,
+            // cố định thang điểm 5 sao
             rating_scale: 5
         };
     }
@@ -419,16 +420,8 @@ const CreateSurvey = () => {
         });
     };
 
-    const handleRatingScaleChange = (questionIndex, value) => {
-        const numericValue = Number(value);
-        setQuestions(prev => {
-            const next = [...prev];
-            const question = { ...next[questionIndex] };
-            question.rating_scale = Number.isNaN(numericValue) ? 5 : Math.min(10, Math.max(3, numericValue));
-            next[questionIndex] = question;
-            return next;
-        });
-    };
+    // Rating cố định 5 sao nên không cần thay đổi
+    const handleRatingScaleChange = () => { };
 
     const handleToggleRequired = (questionIndex) => {
         setQuestions(prev => {
@@ -598,12 +591,7 @@ const CreateSurvey = () => {
                     newErrors[`question_${idx}_options`] = 'Câu hỏi Yes/No cần tối thiểu 2 lựa chọn';
                 }
             }
-            if (q.question_type === 'rating') {
-                const scale = Number(q.rating_scale || 0);
-                if (Number.isNaN(scale) || scale < 3 || scale > 10) {
-                    newErrors[`question_${idx}_rating`] = 'Thang điểm phải nằm trong khoảng từ 3 đến 10';
-                }
-            }
+            // rating cố định 5 sao, bỏ validate phạm vi
         });
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -1169,25 +1157,13 @@ const CreateSurvey = () => {
                                         {isRating && (
                                             <div className="editor-section">
                                                 <div className="editor-section-header">
-                                                    <span className="section-title">Thang điểm</span>
-                                                    <span className="rating-scale-value">{activeQuestion.rating_scale || 5}</span>
+                                                    <span className="section-title">Đánh giá (tối đa 5 sao)</span>
                                                 </div>
-                                                <input
-                                                    className="rating-slider"
-                                                    type="range"
-                                                    min="3"
-                                                    max="10"
-                                                    value={activeQuestion.rating_scale || 5}
-                                                    onChange={(e) => handleRatingScaleChange(activeQuestionIndex, e.target.value)}
-                                                />
                                                 <div className="rating-preview">
-                                                    {Array.from({ length: activeQuestion.rating_scale || 5 }).map((_, idx) => (
+                                                    {Array.from({ length: 5 }).map((_, idx) => (
                                                         <span key={idx} className="rating-star">★</span>
                                                     ))}
                                                 </div>
-                                                {activeQuestionRatingError && (
-                                                    <p className="error-message">{activeQuestionRatingError}</p>
-                                                )}
                                             </div>
                                         )}
 
@@ -1246,8 +1222,8 @@ const CreateSurvey = () => {
 
                                     {isRating && (
                                         <div className="panel-field">
-                                            <label>Điểm tối đa</label>
-                                            <div className="rating-scale-chip">{activeQuestion.rating_scale || 5}</div>
+                                            <label>Tối đa</label>
+                                            <div className="rating-scale-chip">5 sao</div>
                                         </div>
                                     )}
 

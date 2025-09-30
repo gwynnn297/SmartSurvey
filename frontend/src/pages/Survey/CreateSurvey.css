@@ -221,6 +221,44 @@
   justify-content: flex-end;
 }
 
+/* -----------------------------
+     Khung thông tin khảo sát (Tiêu đề & Mô tả)
+  ------------------------------*/
+.survey-info-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 22px;
+  padding: 1.4rem 1.6rem;
+  box-shadow: 0 26px 42px -28px rgba(15, 23, 42, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.survey-info-card.compact {
+  padding: 1.1rem 1.35rem 1.25rem;
+}
+
+.survey-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.survey-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.survey-field--full {
+  grid-column: 1 / -1;
+}
+
+.field-required {
+  color: #ef4444;
+}
+
 .btn-top.btn-ghost {
   background: transparent;
   border: none;
@@ -474,15 +512,17 @@
   border: 1px solid rgba(226, 232, 240, 0.85);
   border-radius: 18px;
   background: linear-gradient(135deg, rgba(248, 250, 252, 0.96) 0%, rgba(241, 245, 249, 0.92) 100%);
-  padding: 1rem 1.15rem;
+  padding: 0.9rem 1.15rem;
   font-size: 1.05rem;
   font-weight: 600;
   color: #0f172a;
   line-height: 1.6;
-  min-height: 132px;
+  min-height: 120px;
   resize: vertical;
   transition: border 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   box-shadow: 0 24px 44px -32px rgba(15, 23, 42, 0.3);
+  box-sizing: border-box;
+  display: block;
 }
 
 .question-input::placeholder {
@@ -831,6 +871,7 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  overflow: hidden;
 }
 
 .question-editor-header {
@@ -893,6 +934,8 @@
   display: flex;
   flex-direction: column;
   gap: 1.3rem;
+  width: 100%;
+  overflow: hidden;
 }
 
 .question-label {
@@ -914,6 +957,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  width: 100%;
 }
 
 .editor-section-header {
@@ -933,15 +977,21 @@
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+  width: 100%;
 }
 
 .options-list.two-column {
   flex-direction: row;
   gap: 0.75rem;
+  align-items: stretch;
+  width: 100%;
 }
 
 .options-list.two-column .option-item {
   flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .option-item {
@@ -953,6 +1003,8 @@
   border: 1px solid rgba(226, 232, 240, 0.9);
   background: rgba(248, 250, 252, 0.8);
   transition: all 0.2s ease;
+  width: 90%;
+  overflow: hidden;
 }
 
 .option-item.soft {
@@ -983,6 +1035,9 @@
   padding: 0.45rem 0.5rem;
   border-radius: 8px;
   transition: border 0.2s ease;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .option-input:focus {
@@ -1003,6 +1058,8 @@
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .remove-option:hover:not(:disabled) {
@@ -1021,19 +1078,22 @@
 }
 
 .rating-slider {
-  width: 100%;
-  accent-color: #2563eb;
+  display: none;
 }
 
 .rating-preview {
   display: flex;
   gap: 0.35rem;
+  align-items: center;
   font-size: 1.25rem;
   color: #facc15;
+  width: 100%;
 }
 
 .rating-star {
   text-shadow: 0 4px 12px rgba(250, 204, 21, 0.25);
+  color: #fbbf24;
+  font-size: 1.25rem;
 }
 
 .question-footnote {
