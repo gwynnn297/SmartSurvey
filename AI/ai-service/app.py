@@ -16,6 +16,11 @@ from sqlalchemy.sql import text
 import json
 import re
 
+def vn_normalize(s: str) -> str:
+    s = (s or "").strip()
+    s = re.sub(r"\s+", " ", s)  # gộp khoảng trắng thừa
+    return s
+
 app = FastAPI(title="SmartSurvey AI Service")
 
 # ---- DB session dependency ----
@@ -181,25 +186,64 @@ def craft_answer(question: str, context: list[str]) -> str:
     )
 
 def answer_count_query(db, survey_id: int, question_text: str) -> Optional[str]:
-    # Detect câu hỏi đếm
-    if re.search(r"\b(bao nhiêu|bao %|bao phần trăm)\b", question_text, re.IGNORECASE):
-        # Ví dụ đơn giản: đếm số câu trả lời có chữ "Yes"
+    q = (question_text or "").lower()
+
+    # Bắt các dạng câu hỏi "bao nhiêu / bao % / bao phần trăm"
+    if not re.search(r"\b(bao nhiêu|bao %|bao phần trăm|bao phan tram)\b", q, re.IGNORECASE):
+        return None
+
+    # 1) Đếm Đồng ý / Yes
+    if any(k in q for k in ["đồng ý", "dong y", "yes"]):
         count = db.execute(text("""
             SELECT COUNT(*) FROM answers a
             JOIN responses r ON a.response_id = r.response_id
             WHERE r.survey_id = :sid
-              AND a.answer_text LIKE '%Yes%'
+              AND (
+                    a.answer_text LIKE '%đồng ý%' OR
+                    a.answer_text LIKE '%dong y%' OR
+                    a.answer_text LIKE '%Yes%'
+                  )
         """), {"sid": survey_id}).scalar()
-        return f"Có {count} câu trả lời Yes trong survey {survey_id}."
+        return f"Có {count} câu trả lời Đồng ý/Yes trong survey {survey_id}."
+
+    # 2) Đếm Không / No
+    if any(k in q for k in ["không", "khong", "no"]):
+        count = db.execute(text("""
+            SELECT COUNT(*) FROM answers a
+            JOIN responses r ON a.response_id = r.response_id
+            WHERE r.survey_id = :sid
+              AND (
+                    a.answer_text LIKE '%không%' OR
+                    a.answer_text LIKE '%khong%' OR
+                    a.answer_text LIKE '%No%'
+                  )
+        """), {"sid": survey_id}).scalar()
+        return f"Có {count} câu trả lời Không/No trong survey {survey_id}."
+
+    # 3) Đếm theo từ khóa tự do sau cụm "bao nhiêu ..."
+    #    ví dụ: "Bao nhiêu phản hồi nói giao hàng nhanh?"
+    m = re.search(r"bao nhiêu.*?(trả lời|answer|phản hồi|phan hoi)?\s*(.+)$", q)
+    if m:
+        kw = m.group(2).strip()
+        if kw:
+            count = db.execute(text("""
+                SELECT COUNT(*) FROM answers a
+                JOIN responses r ON a.response_id = r.response_id
+                WHERE r.survey_id = :sid
+                  AND a.answer_text LIKE :kw
+            """), {"sid": survey_id, "kw": f"%{kw}%"}).scalar()
+            return f"Có {count} câu trả lời chứa \"{kw}\" trong survey {survey_id}."
+
     return None
 
 @app.post("/ai/chat", response_model=ChatResponse)
 def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
     try:
+        question_text_norm = vn_normalize(req.question_text)
         texts = _fetch_texts(db, req.survey_id)
-        topk_ctx = retrieve_topk(texts, req.question_text, req.top_k)
-        answer = craft_answer(req.question_text, topk_ctx)
-        count_answer = answer_count_query(db, req.survey_id, req.question_text)
+        topk_ctx = retrieve_topk(texts, question_text_norm, req.top_k)
+        answer = craft_answer(question_text_norm, topk_ctx)
+        count_answer = answer_count_query(db, req.survey_id, question_text_norm)
         if count_answer:
             answer = count_answer
             topk_ctx = []
@@ -249,5 +293,5 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
         ))
         db.commit()
         raise HTTPException(status_code=500, detail=f"Lỗi xử lý AI chat: {e}")
-    
+
 

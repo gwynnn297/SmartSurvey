@@ -53,15 +53,24 @@ Response 200 (success):
 ## Chạy lệnh này trong mysql
 USE smartsurvey;
 
-ALTER TABLE activity_log
-  MODIFY action_type ENUM(
-    'login','logout',
-    'create_survey','edit_survey','delete_survey',
-    'add_question','edit_question','delete_question',
-    'add_option','edit_option','delete_option',
-    'submit_response',
-    'ai_generate','ai_refresh_one','ai_refresh_all',
-    'chat_ai',
-    'ai_query',      -- thêm mới
-    'ai_sentiment'   -- thêm mới
-  ) NOT NULL;
+ALTER TABLE activity_log 
+MODIFY action_type ENUM(
+  'login','logout',
+  'create_survey','edit_survey','delete_survey',
+  'add_question','edit_question','delete_question',
+  'add_option','edit_option','delete_option',
+  'submit_response',
+  'ai_generate','ai_refresh_one','ai_refresh_all',
+  'chat_ai','ai_query','ai_query_error','ai_eval'
+);
+
+## Chú ý Pin dependency để BE và local giống nhau
+fastapi==0.115.0
+uvicorn==0.30.6
+SQLAlchemy==2.0.34
+pymysql==1.1.1
+scikit-learn==1.5.1
+transformers==4.43.3
+torch==2.3.1
+
+
