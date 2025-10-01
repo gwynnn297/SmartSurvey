@@ -1,0 +1,33 @@
+package vn.duytan.c1se09.smartsurvey.controller;
+
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import vn.duytan.c1se09.smartsurvey.domain.request.response.ResponseSubmitRequestDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.response.ResponseWithAnswersDTO;
+import vn.duytan.c1se09.smartsurvey.service.ResponseService;
+import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
+import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
+
+import java.util.List;
+
+@RestController
+@RequiredArgsConstructor
+public class ResponseController {
+	private final ResponseService responseService;
+
+	@PostMapping("/responses")
+	@ApiMessage("Submit survey response")
+	public ResponseEntity<ResponseWithAnswersDTO> submitResponse(@Valid @RequestBody ResponseSubmitRequestDTO request)
+			throws IdInvalidException {
+		return ResponseEntity.ok(responseService.submitResponse(request));
+	}
+
+	@GetMapping("/responses/{surveyId}")
+	@ApiMessage("Get responses by survey")
+	public ResponseEntity<List<ResponseWithAnswersDTO>> getResponsesBySurvey(@PathVariable("surveyId") Long surveyId)
+			throws IdInvalidException {
+		return ResponseEntity.ok(responseService.getResponsesBySurvey(surveyId));
+	}
+}
