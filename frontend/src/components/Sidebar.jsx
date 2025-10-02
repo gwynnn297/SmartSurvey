@@ -89,8 +89,8 @@ const Sidebar = () => {
 
                 <div className="nav-item">
                     <div
-                        className={`nav-link ${isActive('/ai-analysis') ? 'active' : ''}`}
-                        onClick={() => navigate('/ai-analysis')}
+                        className={`nav-link ${isActive('/report') ? 'active' : ''}`}
+                        onClick={() => navigate('/report')}
                     >
                         <div className="nav-icon">
                             <i className="fa-solid fa-chart-simple" title="Phân tích & Báo cáo"></i>

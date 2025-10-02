@@ -881,6 +881,39 @@ const CreateSurvey = () => {
     const isYesNo = activeQuestion?.question_type === 'yes_no';
     const isRating = activeQuestion?.question_type === 'rating';
 
+    // Build preview survey xem trước khảo sát ResponseFormPage
+    const buildPreviewSurvey = () => {
+        const mappedQuestions = questions.map(q => {
+            let type = 'open-text';
+            if (q.question_type === 'multiple_choice') {
+                type = q.choice_type === 'multiple' ? 'multiple-choice-multiple' : 'multiple-choice-single';
+            } else if (q.question_type === 'yes_no') {
+                type = 'multiple-choice-single';
+            } else if (q.question_type === 'rating') {
+                type = 'rating-scale';
+            }
+            return {
+                id: q.id,
+                text: q.question_text,
+                type,
+                options: (q.options || []).map(o => o.option_text),
+                scale: q.question_type === 'rating' ? [1, 2, 3, 4, 5] : undefined,
+                is_required: !!q.is_required
+            };
+        });
+        return {
+            id: editSurveyId || 'preview',
+            title: surveyData.title || 'Xem trước khảo sát',
+            description: surveyData.description || '',
+            questions: mappedQuestions
+        };
+    };
+
+    const handlePreview = () => {
+        const preview = buildPreviewSurvey();
+        navigate('/response-preview', { state: { survey: preview } });
+    };
+
     return (
         <MainLayout>
             <div className="create-survey-wrapper">
@@ -905,6 +938,16 @@ const CreateSurvey = () => {
                     </div>
                     <div className="survey-toolbar-right">
                         <button
+                            className="btn-view"
+                            type="button"
+                            onClick={handlePreview}
+                            disabled={questions.length === 0}
+                            title="Xem trước khảo sát"
+                        >
+                            <i className="fa-regular fa-eye" aria-hidden="true"></i>
+                            <span> Xem trước</span>
+                        </button>
+                        <button
                             className="btn-share"
                             type="button"
                             onClick={() => saveSurvey('published')}
@@ -915,7 +958,7 @@ const CreateSurvey = () => {
                             ) : (
                                 <>
                                     <i className="fa-solid fa-share-nodes" aria-hidden="true"></i>
-                                    <span>{isEditMode ? 'Cập nhật chia sẻ' : 'Chia sẻ'}</span>
+                                    <span>{isEditMode ? 'Cập nhật' : 'Chia sẻ'}</span>
                                 </>
                             )}
                         </button>

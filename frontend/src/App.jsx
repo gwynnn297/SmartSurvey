@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import HomePage from "./pages/home/HomePage";
 import LoginPage from "./pages/login/LoginPage";
 import Register from "./pages/register/Register";
@@ -11,6 +11,8 @@ import Profile from "./pages/Profile/Profile";
 import ChangePassword from "./pages/ChangePassword/ChangePassword";
 // import './lib/fontawesome';
 import '@fortawesome/fontawesome-free/css/all.min.css';
+import DashboardReportPage from "./pages/report/DashboardReportPage";
+import ResponseFormPage from "./pages/Response/ResponseFormPage";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -22,6 +24,15 @@ function ProtectedHomeRoute({ children }) {
   // Nếu đã đăng nhập, chuyển về dashboard
   // Nếu chưa đăng nhập, hiển thị trang chủ
   return token ? <Navigate to="/dashboard" /> : children;
+}
+
+function ResponsePreviewRoute() {
+  const location = useLocation();
+  const survey = location.state?.survey;
+  if (!survey) {
+    return <Navigate to="/dashboard" />;
+  }
+  return <ResponseFormPage survey={survey} />;
 }
 
 function App() {
@@ -85,6 +96,22 @@ function App() {
           element={
             <PrivateRoute>
               <ChangePassword />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/report"
+          element={
+            <PrivateRoute>
+              <DashboardReportPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/response-preview"
+          element={
+            <PrivateRoute>
+              <ResponsePreviewRoute />
             </PrivateRoute>
           }
         />

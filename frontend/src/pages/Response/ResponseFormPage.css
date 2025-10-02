@@ -1,0 +1,166 @@
+.response-container {
+    background: #f3f4f6;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 40px 16px;
+  }
+  
+  .survey-card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    max-width: 700px;
+    width: 100%;
+    padding: 32px;
+    animation: fadeIn 0.3s ease;
+  }
+  .survey-header{
+    height: auto;
+    text-align: center;
+  }
+  .survey-header h1 {
+    margin-top: 0;  
+    font-size: 30px;
+    font-weight: 700;
+    margin-bottom: -15px; /* giảm từ 12px xuống 4px cho gần hơn */
+  }
+  
+  .survey-header p {
+    color: #555;
+    margin-top: 0;      /* bỏ khoảng cách mặc định phía trên */
+    margin-bottom: 0;   /* tuỳ, nếu muốn p sát dưới luôn thì để 0 */
+  }
+  
+  
+  .question-card {
+    background: #fafafa;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  
+  .question-card.error {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+  }
+  
+  .question-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-top: 3px;
+    margin-bottom: 12px;
+  }
+  
+  .required {
+    color: #ef4444;
+  }
+  
+  .option-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+  
+  textarea {
+    width: 96%;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 14px;
+    resize: none;
+  }
+  
+  .rating-scale {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  
+  .rating-circle {
+    cursor: pointer;
+  }
+  
+  .rating-circle div {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid #ccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  
+  .rating-circle input {
+    display: none;
+  }
+  
+  .rating-circle input:checked + div {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+  }
+  
+  .error-message {
+    color: #ef4444;
+    font-size: 13px;
+    margin-top: 6px;
+  }
+  
+  .form-footer {
+    margin-top: 24px;
+    text-align: center;
+  }
+  
+  .form-footer button {
+    background: linear-gradient(135deg, #6366f1, #7c3aed);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+  }
+  
+  .form-footer button:hover {
+    background: #1e40af;
+  }
+  
+  .form-footer button:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+  }
+  
+  .note {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #666;
+  }
+  
+  .success-modal {
+    text-align: center;
+    padding: 40px;
+  }
+  
+  .success-modal .checkmark {
+    font-size: 40px;
+    color: #22c55e;
+    margin-bottom: 20px;
+  }
+  
+  .success-modal h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  
+  .success-modal p {
+    color: #555;
+    margin-bottom: 20px;
+  }
+  

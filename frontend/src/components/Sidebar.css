@@ -48,7 +48,7 @@
     inset: 18px 20px auto 20px;
     height: 140px;
     border-radius: 24px;
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(139, 92, 246, 0.08));
+    /* background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(139, 92, 246, 0.08)); */
     opacity: 0.75;
     filter: blur(0.5px);
     z-index: -1;
