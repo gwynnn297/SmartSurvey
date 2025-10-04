@@ -1,29 +1,288 @@
 from __future__ import annotations
-from typing import Optional, Dict, Any, List
+
+
+import os
+import re
+import json
+import math
+import hashlib
+import unicodedata
+from pathlib import Path
+from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
 
+
+import numpy as np
+import pymysql
+import torch
+import torch.nn.functional as F
 from fastapi import FastAPI, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.sql import text
 
+
+# sentence-transformers cho kNN
+from sentence_transformers import SentenceTransformer
+from sklearn.neighbors import NearestNeighbors
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+
+# dự án sẵn có
 from settings import settings
 from db import init_db, SessionLocal, AiSentiment, Answer, Response, AiChatLog, ActivityLog
 from sentiment_adapter import SentimentAdapter
-from pydantic import BaseModel
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from sqlalchemy.sql import text
-import json
-import re
 
-def vn_normalize(s: str) -> str:
-    s = (s or "").strip()
-    s = re.sub(r"\s+", " ", s)  # gộp khoảng trắng thừa
+# =============== Tiện ích text ===============
+SPACE_RE = re.compile(r"\s+")
+def normalize(s: str) -> str:
+    if not s:
+        return ""
+    s = unicodedata.normalize("NFC", s).strip().lower()
+    s = SPACE_RE.sub(" ", s)
     return s
 
+def sha1(s: str) -> str:
+    return hashlib.sha1(s.encode("utf-8")).hexdigest()
+
+def sha256(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+# ranh giới nghịch liên từ
+_ADVER = re.compile(
+    r"\b(nhưng|tuy nhiên|song|mặc dù|mặc dù vậy|dù vậy|trái lại|ngược lại|tuy thế|dẫu vậy)\b",
+    re.IGNORECASE,
+)
+def split_clauses(text: str) -> Tuple[List[str], bool]:
+    t = normalize(text)
+    parts = _ADVER.split(t)
+    if len(parts) >= 3:
+        clauses = [parts[0]] + parts[2::2]
+        clauses = [c.strip(" ,.;:!?") for c in clauses if c.strip()]
+        return clauses, True
+    return ([t] if t else []), False
+
+# =============== DB helpers (PyMySQL thuần) ===============
+def _conn():
+    return pymysql.connect(
+        host=settings.DB_HOST,
+        port=settings.DB_PORT,
+        user=settings.DB_USER,
+        password=settings.DB_PASS,
+        database=settings.DB_NAME,
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor,
+    )
+
+def sql_one(q: str, args=None):
+    with _conn() as con:
+        with con.cursor() as cur:
+            cur.execute(q, args or ())
+            return cur.fetchone()
+
+def sql_all(q: str, args=None):
+    with _conn() as con:
+        with con.cursor() as cur:
+            cur.execute(q, args or ())
+            return cur.fetchall()
+
+def sql_exec(q: str, args=None):
+    with _conn() as con:
+        with con.cursor() as cur:
+            cur.execute(q, args or ())
+        con.commit()
+
+# =============== Embedding + kNN ===============
+# dùng mE5 multilingual cho TViet rất ổn
+_EMBED: Optional[SentenceTransformer] = None
+def get_embed() -> SentenceTransformer:
+    global _EMBED
+    if _EMBED is None:
+        # đổi model khác nếu muốn
+        _EMBED = SentenceTransformer("intfloat/multilingual-e5-base")
+    return _EMBED
+
+def encode(texts: List[str]) -> np.ndarray:
+    # e5 cần prefix "query: "
+    model = get_embed()
+    inputs = [f"query: {t}" for t in texts]
+    vecs = model.encode(inputs, convert_to_numpy=True, normalize_embeddings=True, batch_size=32)
+    return vecs.astype("float32")
+
+class KNNIndex:
+    def __init__(self):
+        self.nn: Optional[NearestNeighbors] = None
+        self.X: Optional[np.ndarray] = None
+        self.labels: List[int] = []
+        self.hashes: List[str] = []
+
+    def fit(self, X: np.ndarray, labels: List[int], hashes: List[str]):
+        if X.shape[0] == 0:
+            self.nn = None
+            self.X = None
+            self.labels = []
+            self.hashes = []
+            return
+        self.nn = NearestNeighbors(n_neighbors=min(5, X.shape[0]), metric="cosine")
+        self.nn.fit(X)
+        self.X = X
+        self.labels = labels
+        self.hashes = hashes
+
+    def query(self, qvec: np.ndarray) -> Tuple[List[int], List[float]]:
+        if self.nn is None or self.X is None or self.X.shape[0] == 0:
+            return [], []
+        dist, idx = self.nn.kneighbors(qvec, return_distance=True)
+        sims = (1.0 - dist[0]).tolist()
+        ids = idx[0].tolist()
+        labs = [self.labels[i] for i in ids]
+        return labs, sims
+
+KNN = KNNIndex()
+KNN_SIM_TH = 0.86   # đủ giống thì nhận
+
+# =============== PhoBERT adapter ===============
+_ADAPTER: Optional[SentimentAdapter] = None
+def get_adapter() -> SentimentAdapter:
+    global _ADAPTER
+    if _ADAPTER is None:
+        print("[adapter] Booting with MODEL_DIR =", settings.MODEL_DIR)
+        _ADAPTER = SentimentAdapter()
+        cfg = getattr(_ADAPTER.model, "config", None)
+        if cfg is not None and hasattr(cfg, "id2label"):
+            print("[adapter] id2label =", cfg.id2label)
+    return _ADAPTER
+
+# Chuẩn hóa kết quả dự đoán đa dạng
+NEG, NEU, POS = 0, 1, 2
+def model_predict(text: str) -> Tuple[int, float, Dict[str, Any]]:
+    adapter = get_adapter()
+    out = adapter.predict(text)
+    # dạng dict
+    if isinstance(out, dict):
+        lab = str(out.get("label", out.get("pred_label", "neutral"))).lower()
+        score = float(out.get("score", out.get("prob", out.get("confidence", 0.5))))
+        m = {"negative": NEG, "neg": NEG, "0": NEG,
+             "neutral": NEU, "neu": NEU, "1": NEU,
+             "positive": POS, "pos": POS, "2": POS}
+        lid = m.get(lab, NEU)
+        return int(lid), float(score), {"raw": out}
+    # dạng (label_id, prob)
+    if isinstance(out, (list, tuple)) and len(out) >= 2:
+        return int(out[0]), float(out[1]), {}
+    # fallback
+    return NEU, 0.5, {"raw": str(out)}
+
+# =============== Resolver (mệnh đề + prototype) ===============
+def _logits_for_text(t: str, adapter: SentimentAdapter) -> np.ndarray:
+    tok = getattr(adapter, "tokenizer", None)
+    mdl = getattr(adapter, "model", None)
+    if tok is None or mdl is None:
+        # fallback
+        lid, prob, _ = model_predict(t)
+        if lid == NEG:
+            p = np.array([max(prob, 1e-3), 1e-3, 1e-3], dtype=np.float32)
+        elif lid == POS:
+            p = np.array([1e-3, 1e-3, max(prob, 1e-3)], dtype=np.float32)
+        else:
+            p = np.array([1e-3, max(prob, 1e-3), 1e-3], dtype=np.float32)
+        return np.log(p)
+    inputs = tok(t, return_tensors="pt", truncation=True, max_length=128)
+    with torch.no_grad():
+        out = mdl(**inputs)
+        logits = out.logits.squeeze().cpu().numpy()
+    return logits
+
+def _probs(t: str, adapter: SentimentAdapter) -> np.ndarray:
+    lg = _logits_for_text(t, adapter)
+    e = np.exp(lg - lg.max())
+    return (e / e.sum()).astype(np.float32)
+
+# store prototype embeddings (tùy chọn; để trống nếu không dùng)
+PROTOS_PATH = Path("./prototypes.json")
+_PROTOS: Optional[Dict[str, List[List[float]]]] = None
+def load_protos() -> Dict[str, List[List[float]]]:
+    global _PROTOS
+    if _PROTOS is None:
+        if PROTOS_PATH.exists():
+            _PROTOS = json.loads(PROTOS_PATH.read_text(encoding="utf-8"))
+        else:
+            _PROTOS = {}
+    return _PROTOS
+
+def embed_roberta(texts: List[str], tok, model) -> np.ndarray:
+    if not texts:
+        return np.zeros((0, 768), dtype=np.float32)
+    model.eval()
+    with torch.no_grad():
+        batch = tok(texts, padding=True, truncation=True, max_length=128, return_tensors="pt")
+        for k in batch:
+            if hasattr(batch[k], "to"):
+                batch[k] = batch[k].to(model.device)
+        out = model.roberta(**batch, output_hidden_states=True, return_dict=True)
+        last = out.last_hidden_state
+        mask = batch["attention_mask"].unsqueeze(-1)
+        emb = (last * mask).sum(1) / (mask.sum(1).clamp(min=1))
+        emb = F.normalize(emb, p=2, dim=1)
+        return emb.cpu().numpy().astype(np.float32)
+
+def proto_knn_label(t: str, adapter: SentimentAdapter, k: int = 7) -> Tuple[Optional[int], float]:
+    protos = load_protos()
+    if not protos:
+        return None, 0.0
+    emb = embed_roberta([t], adapter.tokenizer, adapter.model)[0]
+    best_lbl, best_score = None, -1e9
+    for lbl, vecs in protos.items():
+        if not vecs:
+            continue
+        V = np.asarray(vecs, dtype=np.float32)
+        sims = np.dot(V, emb)
+        score = float(np.sort(sims)[-k:].mean())
+        if score > best_score:
+            best_score = score
+            best_lbl = int(lbl)
+    return best_lbl, best_score
+
+HEDGE_PATTERNS = ["tùy", "tuỳ", "khó nói chắc", "khó nói", "còn sớm", "tạm ổn", "để xem", "có lúc", "đôi khi"]
+
+def looks_neutral(norm_text: str) -> bool:
+    return any(p in norm_text for p in HEDGE_PATTERNS)
+
+def resolve_label(text: str, adapter: SentimentAdapter,
+                  tau: float = 0.5, margin: float = 0.08, alpha: float = 1.8,
+                  use_protos: bool = True) -> Tuple[int, Dict[str, Any]]:
+    probs = _probs(text, adapter)              # [neg, neu, pos]
+    order = list(np.argsort(probs)[::-1])
+    maxp, gap = float(probs[order[0]]), float(probs[order[0]] - probs[order[1]])
+
+    # đủ tự tin
+    if maxp >= tau and gap >= margin:
+        return int(order[0]), {"route": "confident", "probs": probs.tolist()}
+
+    # tách mệnh đề
+    clauses, has_adv = split_clauses(text)
+    if has_adv and len(clauses) >= 2:
+        after = clauses[-1]
+        p0 = probs
+        p1 = _probs(after, adapter)
+        log_mix = np.log(np.maximum(p0, 1e-8)) + alpha * np.log(np.maximum(p1, 1e-8))
+        pmix = np.exp(log_mix - log_mix.max()); pmix = pmix / pmix.sum()
+        lid = int(np.argmax(pmix))
+        return lid, {"route": "clause_mix", "probs": pmix.tolist(), "clauses": clauses}
+
+    # prototype (nếu có)
+    if use_protos:
+        lidp, score = proto_knn_label(text, adapter)
+        if lidp is not None:
+            return int(lidp), {"route": "proto_knn", "proto_score": float(score)}
+
+    return int(np.argmax(probs)), {"route": "fallback", "probs": probs.tolist()}
+
+# =============== FastAPI app ===============
 app = FastAPI(title="SmartSurvey AI Service")
 
-# ---- DB session dependency ----
 def get_db():
     db = SessionLocal()
     try:
@@ -31,125 +290,171 @@ def get_db():
     finally:
         db.close()
 
-# ---- Khởi tạo DB khi server start ----
 @app.on_event("startup")
 def on_startup():
     init_db()
-    print("[startup] DB_URL =", settings.DB_URL)
+    print("[startup] DB =", settings.DB_URL)
     print("[startup] MODEL_DIR =", settings.MODEL_DIR)
 
-# ---- Adapter (singleton trong process) ----
-_adapter: Optional[SentimentAdapter] = None
-def get_adapter() -> SentimentAdapter:
-    global _adapter
-    if _adapter is None:
-        print("[adapter] Booting with MODEL_DIR =", settings.MODEL_DIR)
-        _adapter = SentimentAdapter()
-    return _adapter
-
-# ================== Business logic ==================
-def _fetch_texts(db: Session, survey_id: int, question_id: Optional[int] = None) -> List[str]:
+# =============== Business helpers ===============
+def fetch_answer_rows(db: Session, survey_id: int, question_id: Optional[int] = None):
     q = (
-        db.query(Answer.answer_id, Answer.answer_text)
-          .join(Response, Response.response_id == Answer.response_id)
-          .filter(Response.survey_id == survey_id)
-          .filter(func.length(func.trim(func.coalesce(Answer.answer_text, ""))) > 0)  # loại NULL/''/space
+        db.query(Answer.answer_id, Answer.question_id, Answer.answer_text)
+        .join(Response, Response.response_id == Answer.response_id)
+        .filter(Response.survey_id == survey_id)
+        .filter(func.length(func.trim(func.coalesce(Answer.answer_text, ""))) > 0)
     )
     if question_id is not None:
         q = q.filter(Answer.question_id == question_id)
+    return q.order_by(Answer.answer_id.asc()).all()
 
-    rows = q.order_by(Answer.answer_id.asc()).all()
-    return [r.answer_text for r in rows]
+# ghi 1 inference vào ai_inference (dùng PyMySQL để gọn)
+def log_inference(
+    survey_id: int,
+    question_id: Optional[int],
+    answer_id: Optional[int],
+    raw_text: str,
+    norm_text: str,
+    source: str,
+    pred_label: int,
+    pred_conf: float,
+    final_label: Optional[int],
+    status: str,
+    meta: Dict[str, Any],
+):
+    sql_exec(
+        """
+        INSERT INTO ai_inference
+          (survey_id, question_id, answer_id, raw_text, norm_text, text_hash,
+           embed, source, pred_label, pred_conf, final_label, status, meta_json, created_at, updated_at)
+        VALUES
+          (%s,%s,%s,%s,%s,%s,
+           NULL,%s,%s,%s,%s,%s,%s,NOW(),NOW())
+        ON DUPLICATE KEY UPDATE
+          source=VALUES(source), pred_label=VALUES(pred_label), pred_conf=VALUES(pred_conf),
+          final_label=VALUES(final_label), status=VALUES(status), meta_json=VALUES(meta_json), updated_at=NOW()
+        """,
+        (
+            survey_id,
+            question_id,
+            answer_id,
+            raw_text,
+            norm_text,
+            sha256(norm_text),
+            source,
+            int(pred_label),
+            float(pred_conf),
+            int(final_label) if final_label is not None else None,
+            status,
+            json.dumps(meta, ensure_ascii=False),
+        ),
+    )
 
-def _aggregate(labels: List[str]) -> Dict[str, Any]:
+def aggregate_percent(labels: List[int]) -> Dict[str, Any]:
     total = len(labels)
-    counts = {"POS": 0, "NEU": 0, "NEG": 0}
-    for lb in labels:
-        counts[lb] = counts.get(lb, 0) + 1
-    def pct(n): return (n * 100.0 / total) if total else 0.0
+    c = {NEG: 0, NEU: 0, POS: 0}
+    for l in labels:
+        c[l] = c.get(l, 0) + 1
+
+    pct = lambda n: (n * 100.0 / total) if total else 0.0
     return {
         "total_responses": total,
-        "positive_percent": pct(counts["POS"]),
-        "neutral_percent": pct(counts["NEU"]),
-        "negative_percent": pct(counts["NEG"]),
-        "counts": counts,
+        "positive_percent": pct(c[POS]),
+        "neutral_percent": pct(c[NEU]),
+        "negative_percent": pct(c[NEG]),
+        "counts": {"POS": c[POS], "NEU": c[NEU], "NEG": c[NEG]},
         "sample_size": total,
     }
 
-def compute_and_save_sentiment(survey_id: int, db: Session, question_id: Optional[int] = None) -> AiSentiment:
-    texts = _fetch_texts(db, survey_id, question_id)
-    if not texts:
-        raise HTTPException(status_code=400, detail="Không có câu trả lời văn bản hợp lệ cho survey này.")
+# core: cache → kNN → resolver/model → log
+def classify_and_log(survey_id: int, question_id: Optional[int], answer_id: Optional[int], raw: str) -> int:
+    nt = normalize(raw)
+    th = sha256(nt)
 
+    # cache: nếu đã có final_label
+    row = sql_one("SELECT final_label, pred_conf FROM ai_inference WHERE text_hash=%s AND final_label IS NOT NULL LIMIT 1", (th,))
+    if row:
+        log_inference(survey_id, question_id, answer_id, raw, nt, "cache-final",
+                      int(row["final_label"]), float(row["pred_conf"]), int(row["final_label"]),
+                      "cached", {"note": "cache"})
+        return int(row["final_label"])
+
+    # kNN
+    labs, sims = KNN.query(encode([nt]))
+    if labs and sims[0] >= KNN_SIM_TH:
+        lab = int(labs[0]); conf = float(sims[0])
+        log_inference(survey_id, question_id, answer_id, raw, nt, "knn", lab, conf, lab, "cached",
+                      {"knn_top_sim": conf})
+        return lab
+
+    # model + resolver
     adapter = get_adapter()
-    pred = adapter.predict_texts(texts)
+    lid, info = resolve_label(raw, adapter, tau=0.5, margin=0.08, alpha=1.8, use_protos=True)
+    conf = 0.66  # nếu muốn có conf thực, có thể lấy max prob từ info["probs"]
+    final_lab = lid
+    # nếu mơ hồ hoặc mang sắc thái NEU theo heuristics
+    if looks_neutral(nt):
+        final_lab = NEU
+    status = "needs_review" if final_lab != lid else "ok"
 
-    aggr = _aggregate(pred.labels)
+    log_inference(survey_id, question_id, answer_id, raw, nt, "model", lid, conf, final_lab, status, info)
+    return final_lab
 
-    # LƯU Ý: Bảng ai_sentiment không có question_id → KHÔNG truyền question_id
+# =============== Endpoints sentiment ===============
+@app.post("/ai/sentiment/{survey_id}")
+def run_sentiment_now(survey_id: int, question_id: Optional[int] = None, db: Session = Depends(get_db)):
+    rows = fetch_answer_rows(db, survey_id, question_id)
+    if not rows:
+        raise HTTPException(400, "Không có câu trả lời hợp lệ.")
+
+    final_labels: List[int] = []
+    for r in rows:
+        lab = classify_and_log(survey_id, r.question_id, r.answer_id, r.answer_text or "")
+        final_labels.append(lab)
+
+    aggr = aggregate_percent(final_labels)
     rec = AiSentiment(
         survey_id=survey_id,
         total_responses=aggr["total_responses"],
         positive_percent=aggr["positive_percent"],
         neutral_percent=aggr["neutral_percent"],
         negative_percent=aggr["negative_percent"],
-        # details là cột JSON → truyền dict, KHÔNG ép str
-        details={
-            "counts": aggr["counts"],
-            "sample_size": aggr["sample_size"],
-            "question_id": question_id,  # nếu muốn lưu thông tin tham chiếu, để trong JSON
-        },
-        # với MySQL, created_at/updated_at đã có server_default/auto update, nhưng set thêm cũng không sao
+        details={"counts": aggr["counts"], "sample_size": aggr["sample_size"], "question_id": question_id},
         created_at=datetime.utcnow(),
     )
-    db.add(rec)
+    db.add(rec); db.commit(); db.refresh(rec)
+
+    db.add(ActivityLog(user_id=None, action_type="ai_generate",
+                       target_id=rec.sentiment_id, target_table="ai_sentiment",
+                       description=f"Recomputed with cache/kNN/resolver"))
     db.commit()
-    db.refresh(rec)
-    return rec
-
-
-# ================== API ==================
-@app.post("/ai/sentiment/{survey_id}")
-def run_sentiment_now(survey_id: int, question_id: Optional[int] = None, db: Session = Depends(get_db)):
-    rec = compute_and_save_sentiment(survey_id, db, question_id)
-
-    # 🟢 Thêm ActivityLog sau khi lưu ai_sentiment
-    db.add(ActivityLog(
-        user_id=None,  # hoặc truyền user_id nếu bạn có thông tin người gọi
-        action_type="ai_generate",             # đúng theo spec
-        target_id=rec.sentiment_id,
-        target_table="ai_sentiment",
-        description=f"Recomputed sentiment for survey_id={survey_id}"
-    ))
-    db.commit()
-
-    return {"survey_id": survey_id, "result_id": rec.sentiment_id, "created_at": rec.created_at}
+    return {"survey_id": survey_id, "result": rec.sentiment_id, "created_at": str(rec.created_at)}
 
 @app.get("/ai/sentiment/{survey_id}")
 def get_latest_sentiment(survey_id: int, db: Session = Depends(get_db)):
     rec = (
         db.query(AiSentiment)
-          .filter(AiSentiment.survey_id == survey_id)
-          .order_by(AiSentiment.sentiment_id.desc())  # đổi sang sentiment_id
-          .first()
+        .filter(AiSentiment.survey_id == survey_id)
+        .order_by(AiSentiment.sentiment_id.desc())
+        .first()
     )
     if not rec:
-        raise HTTPException(status_code=404, detail="Chưa có bản ghi sentiment cho survey này.")
+        raise HTTPException(404, "Chưa có bản ghi sentiment.")
     return {
         "survey_id": survey_id,
         "result": {
-            "id": rec.sentiment_id,                   # đổi id → sentiment_id
+            "id": rec.sentiment_id,
             "total_responses": rec.total_responses,
             "positive_percent": float(rec.positive_percent),
             "neutral_percent": float(rec.neutral_percent),
             "negative_percent": float(rec.negative_percent),
-            "details": rec.details,                   # là JSON/dict
+            "details": rec.details,
             "created_at": rec.created_at,
             "updated_at": rec.updated_at,
         },
     }
 
-# ================== Chat MVP ==================
+# =============== Chat giữ nguyên (RAG nội bộ đơn giản) ===============
 class ChatRequest(BaseModel):
     survey_id: int
     question_text: str
@@ -164,7 +469,7 @@ class ChatResponse(BaseModel):
     top_k: int
     created_at: datetime
 
-def retrieve_topk(texts: list[str], query: str, top_k: int = 5) -> list[str]:
+def retrieve_topk(texts: List[str], query: str, top_k: int = 5) -> List[str]:
     if not texts:
         return []
     top_k = max(1, min(int(top_k), 20))
@@ -175,86 +480,51 @@ def retrieve_topk(texts: list[str], query: str, top_k: int = 5) -> list[str]:
     idx = sims.argsort()[::-1][:top_k]
     return [texts[i] for i in idx]
 
-def craft_answer(question: str, context: list[str]) -> str:
+def craft_answer(question: str, context: List[str]) -> str:
     if not context:
         return "Hiện chưa có phản hồi phù hợp để trả lời câu hỏi này."
     bullets = "\n".join([f"- {c}" for c in context[:3]])
-    return (
-        f"Dựa trên các phản hồi phù hợp nhất cho câu hỏi: “{question}”, "
-        f"các ý tiêu biểu như sau:\n{bullets}\n"
-        "Tóm lại, xu hướng chung có thể rút ra từ các phản hồi trên."
-    )
+    return f"Dựa trên các phản hồi cho câu hỏi: “{question}”:\n{bullets}\nTóm lại, xu hướng chung có thể rút ra từ các phản hồi trên."
 
-def answer_count_query(db, survey_id: int, question_text: str) -> Optional[str]:
+def answer_count_query(db: Session, survey_id: int, question_text: str) -> Optional[str]:
     q = (question_text or "").lower()
-
-    # Bắt các dạng câu hỏi "bao nhiêu / bao % / bao phần trăm"
     if not re.search(r"\b(bao nhiêu|bao %|bao phần trăm|bao phan tram)\b", q, re.IGNORECASE):
         return None
-
-    # 1) Đếm Đồng ý / Yes
     if any(k in q for k in ["đồng ý", "dong y", "yes"]):
         count = db.execute(text("""
-            SELECT COUNT(*) FROM answers a
-            JOIN responses r ON a.response_id = r.response_id
-            WHERE r.survey_id = :sid
-              AND (
-                    a.answer_text LIKE '%đồng ý%' OR
-                    a.answer_text LIKE '%dong y%' OR
-                    a.answer_text LIKE '%Yes%'
-                  )
+            SELECT COUNT(*) FROM answers a JOIN responses r ON a.response_id = r.response_id
+            WHERE r.survey_id = :sid AND (a.answer_text LIKE '%đồng ý%' OR a.answer_text LIKE '%dong y%' OR a.answer_text LIKE '%Yes%')
         """), {"sid": survey_id}).scalar()
         return f"Có {count} câu trả lời Đồng ý/Yes trong survey {survey_id}."
-
-    # 2) Đếm Không / No
     if any(k in q for k in ["không", "khong", "no"]):
         count = db.execute(text("""
-            SELECT COUNT(*) FROM answers a
-            JOIN responses r ON a.response_id = r.response_id
-            WHERE r.survey_id = :sid
-              AND (
-                    a.answer_text LIKE '%không%' OR
-                    a.answer_text LIKE '%khong%' OR
-                    a.answer_text LIKE '%No%'
-                  )
+            SELECT COUNT(*) FROM answers a JOIN responses r ON a.response_id = r.response_id
+            WHERE r.survey_id = :sid AND (a.answer_text LIKE '%không%' OR a.answer_text LIKE '%khong%' OR a.answer_text LIKE '%No%')
         """), {"sid": survey_id}).scalar()
         return f"Có {count} câu trả lời Không/No trong survey {survey_id}."
-
-    # 3) Đếm theo từ khóa tự do sau cụm "bao nhiêu ..."
-    #    ví dụ: "Bao nhiêu phản hồi nói giao hàng nhanh?"
     m = re.search(r"bao nhiêu.*?(trả lời|answer|phản hồi|phan hoi)?\s*(.+)$", q)
     if m:
         kw = m.group(2).strip()
         if kw:
             count = db.execute(text("""
-                SELECT COUNT(*) FROM answers a
-                JOIN responses r ON a.response_id = r.response_id
-                WHERE r.survey_id = :sid
-                  AND a.answer_text LIKE :kw
+                SELECT COUNT(*) FROM answers a JOIN responses r ON a.response_id = r.response_id
+                WHERE r.survey_id = :sid AND a.answer_text LIKE :kw
             """), {"sid": survey_id, "kw": f"%{kw}%"}).scalar()
             return f"Có {count} câu trả lời chứa \"{kw}\" trong survey {survey_id}."
-
     return None
 
 @app.post("/ai/chat", response_model=ChatResponse)
 def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
     try:
-        question_text_norm = vn_normalize(req.question_text)
-        texts = _fetch_texts(db, req.survey_id)
-        topk_ctx = retrieve_topk(texts, question_text_norm, req.top_k)
-        answer = craft_answer(question_text_norm, topk_ctx)
-        count_answer = answer_count_query(db, req.survey_id, question_text_norm)
+        q_norm = normalize(req.question_text)
+        count_answer = answer_count_query(db, req.survey_id, q_norm)
         if count_answer:
-            answer = count_answer
-            topk_ctx = []
+            answer, topk_ctx = count_answer, []
         else:
-            # fallback TF-IDF
-            texts = _fetch_texts(db, req.survey_id)
-            topk_ctx = retrieve_topk(texts, req.question_text, req.top_k)
-            answer = craft_answer(req.question_text, topk_ctx)
+            texts = [r.answer_text for r in fetch_answer_rows(db, req.survey_id)]
+            topk_ctx = retrieve_topk(texts, q_norm, req.top_k)
+            answer = craft_answer(q_norm, topk_ctx)
         now = datetime.utcnow()
-
-        # 1) Lưu ai_chat_logs
         chat = AiChatLog(
             survey_id=req.survey_id,
             user_id=req.user_id,
@@ -263,35 +533,97 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
             context=json.dumps(topk_ctx, ensure_ascii=False),
         )
         db.add(chat); db.commit(); db.refresh(chat)
-
-        # 2) Lưu activity_log
         db.add(ActivityLog(
-            user_id=req.user_id,
-            action_type="ai_query",
-            target_id=chat.chat_id,
-            target_table="ai_chat_logs",
-            description=f"AI chat for survey_id={req.survey_id}"
+            user_id=req.user_id, action_type="ai_query",
+            target_id=chat.chat_id, target_table="ai_chat_logs",
+            description=f"AI chat for survey_id={req.survey_id}",
         ))
         db.commit()
-
         return ChatResponse(
-            survey_id=req.survey_id,
-            question_text=req.question_text,
-            answer_text=answer,
-            context=topk_ctx,
-            top_k=req.top_k,
-            created_at=now
+            survey_id=req.survey_id, question_text=req.question_text,
+            answer_text=answer, context=topk_ctx,
+            top_k=req.top_k, created_at=now,
         )
     except Exception as e:
-        # Nếu muốn log lỗi vào activity_log:
         db.add(ActivityLog(
-            user_id=req.user_id,
-            action_type="ai_query_error",
-            target_id=None,
-            target_table="ai_chat_logs",
-            description=f"Error: {e}"
+            user_id=req.user_id, action_type="ai_query_error",
+            target_id=None, target_table="ai_chat_logs",
+            description=f"Error: {e}",
         ))
         db.commit()
         raise HTTPException(status_code=500, detail=f"Lỗi xử lý AI chat: {e}")
 
+# =============== Correct & kNN reload ===============
+class CorrectionIn(BaseModel):
+    final_label: int  # 0/1/2
 
+@app.post("/ai/analysis/{inference_id}/correct")
+def correct_analysis(inference_id: int, body: CorrectionIn):
+    row = sql_one("SELECT * FROM ai_inference WHERE inference_id=%s", (inference_id,))
+    if not row:
+        raise HTTPException(404, "inference_id not found")
+
+    # 1) cập nhật inference
+    sql_exec("UPDATE ai_inference SET final_label=%s, status='corrected' WHERE inference_id=%s",
+             (int(body.final_label), inference_id))
+
+    # 2) upsert vào kho chuẩn vàng (ai_training_samples)
+    nt = row["norm_text"]; h = row["text_hash"]; y = int(body.final_label)
+    ex = sql_one("SELECT sample_id FROM ai_training_samples WHERE text_hash=%s", (h,))
+    if ex:
+        sql_exec("UPDATE ai_training_samples SET label=%s WHERE sample_id=%s", (y, ex["sample_id"]))
+    else:
+        v = encode([nt])[0]
+        sql_exec(
+            "INSERT INTO ai_training_samples (text, norm_text, text_hash, label, embed, source) VALUES (%s,%s,%s,%s,%s,'review')",
+            (row["raw_text"], nt, h, y, v.tobytes()),
+        )
+    return {"ok": True}
+
+@app.post("/ai/reload-knn", summary="Reload Knn")
+def reload_knn():
+    """
+    Nạp lại index kNN từ:
+      - ai_training_samples (ưu tiên)
+      - cộng thêm ai_calib_items nếu muốn (neutral/hedge,…)
+    """
+    try:
+        rows = sql_all("SELECT norm_text, text_hash, label, embed FROM ai_training_samples ORDER BY sample_id ASC")
+        texts, labels, hashes, embs, need_encode_idx = [], [], [], [], []
+        for i, r in enumerate(rows):
+            nt = (r["norm_text"] or "").strip()
+            if not nt:
+                continue
+            texts.append(nt)
+            labels.append(int(r["label"]))
+            hashes.append(r["text_hash"])
+            if r["embed"] is None:
+                embs.append(None)
+                need_encode_idx.append(i)
+            else:
+                embs.append(np.frombuffer(r["embed"], dtype="float32"))
+
+        # nếu thiếu embed -> mã hoá và lưu lại
+        if need_encode_idx:
+            new_vecs = encode([texts[i] for i in need_encode_idx])
+            # cập nhật DB
+            with _conn() as con:
+                with con.cursor() as cur:
+                    for j, row_i in enumerate(need_encode_idx):
+                        cur.execute(
+                            "UPDATE ai_training_samples SET embed=%s WHERE text_hash=%s",
+                            (new_vecs[j].tobytes(), hashes[row_i]),
+                        )
+                con.commit()
+            # điền vào mảng embs
+            j = 0
+            for t in range(len(embs)):
+                if embs[t] is None:
+                    embs[t] = new_vecs[j]
+                    j += 1
+
+        X = np.vstack(embs).astype("float32") if embs else np.zeros((0, 768), dtype="float32")
+        KNN.fit(X, labels, hashes)
+        return {"ok": True, "index": {"samples": len(texts), "dim": int(X.shape[1])}}
+    except Exception as e:
+        raise HTTPException(500, f"reload_knn failed: {e}")
