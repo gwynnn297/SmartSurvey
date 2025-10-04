@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 import os
 import re
 import json
@@ -10,7 +9,6 @@ import unicodedata
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
-
 
 import numpy as np
 import pymysql
@@ -22,27 +20,75 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.sql import text
 
-
 # sentence-transformers cho kNN
 from sentence_transformers import SentenceTransformer
 from sklearn.neighbors import NearestNeighbors
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-
 # dự án sẵn có
 from settings import settings
 from db import init_db, SessionLocal, AiSentiment, Answer, Response, AiChatLog, ActivityLog
 from sentiment_adapter import SentimentAdapter
 
-# =============== Tiện ích text ===============
+# ============================================================
+# BƯỚC 2: CHUẨN HOÁ VĂN BẢN (nâng cấp theo checklist)
+# ============================================================
+# Ánh xạ viết tắt/biến thể + emoji → từ thường
+_ABBR = {
+    "ko": "không", "k": "không", "k0": "không", "kh": "không",
+    "dc": "được", "đc": "được", "ok": "ổn",
+    "bt": "bình thường", "bthg": "bình thường", "bth": "bình thường",
+    "tuyet": "tuyệt", "tuyetvoi": "tuyệt vời",
+}
+_EMO = {":))": "vui", ":)": "vui", ":D": "vui", ":(": "buồn", ":((": "buồn"}
+
 SPACE_RE = re.compile(r"\s+")
-def normalize(s: str) -> str:
-    if not s:
-        return ""
-    s = unicodedata.normalize("NFC", s).strip().lower()
-    s = SPACE_RE.sub(" ", s)
+
+def _normalize_unicode(s: str) -> str:
+    # NFC/NFKC đều được; dùng NFKC để “đưa” ký tự hợp dạng
+    return unicodedata.normalize("NFKC", s)
+
+def _squash_repeats(s: str) -> str:
+    # "tuyệtttt quá!!!" -> "tuyệt quá!!"
+    s = re.sub(r"(.)\1{2,}", r"\1\1", s)
+    s = re.sub(r"([!?.])\1{2,}", r"\1\1", s)
     return s
+
+def _map_abbrev(tokens: List[str]) -> List[str]:
+    out = []
+    for t in tokens:
+        out.append(_ABBR.get(t, t))
+    return out
+
+def _map_emoji(s: str) -> str:
+    for k, v in _EMO.items():
+        s = s.replace(k, f" {v} ")
+    return s
+
+def norm_text(t: str) -> str:
+    """
+    Chuẩn hoá nâng cao: unicode, emoji, viết tắt, URL/mention/hashtag, repeat...
+    """
+    if not t:
+        return ""
+    t = _normalize_unicode(t).lower().strip()
+    t = _map_emoji(t)
+    # xoá URL/mention/hashtag noise đơn giản
+    t = re.sub(r"https?://\S+|www\.\S+", " ", t)
+    t = re.sub(r"[@#]\S+", " ", t)
+    t = _squash_repeats(t)
+    # tách token đơn giản (từ/ số/ dấu)
+    toks = re.findall(r"[a-zà-ỹ0-9]+|[^\w\s]", t, flags=re.UNICODE)
+    toks = _map_abbrev(toks)
+    # ghép lại, bỏ khoảng trắng thừa
+    t = " ".join(toks)
+    t = re.sub(r"\s{2,}", " ", t).strip()
+    return t
+
+# Giữ alias để các chỗ cũ dùng 'normalize()' vẫn chạy, nhưng giờ dùng logic mới
+def normalize(s: str) -> str:
+    return norm_text(s)
 
 def sha1(s: str) -> str:
     return hashlib.sha1(s.encode("utf-8")).hexdigest()
@@ -50,13 +96,14 @@ def sha1(s: str) -> str:
 def sha256(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
-# ranh giới nghịch liên từ
+# Ranh giới nghịch liên từ (để tách mệnh đề kiểu “... nhưng ...”)
 _ADVER = re.compile(
     r"\b(nhưng|tuy nhiên|song|mặc dù|mặc dù vậy|dù vậy|trái lại|ngược lại|tuy thế|dẫu vậy)\b",
     re.IGNORECASE,
 )
 def split_clauses(text: str) -> Tuple[List[str], bool]:
-    t = normalize(text)
+    # dùng norm_text để tách ổn định hơn
+    t = norm_text(text)
     parts = _ADVER.split(t)
     if len(parts) >= 3:
         clauses = [parts[0]] + parts[2::2]
@@ -64,7 +111,9 @@ def split_clauses(text: str) -> Tuple[List[str], bool]:
         return clauses, True
     return ([t] if t else []), False
 
-# =============== DB helpers (PyMySQL thuần) ===============
+# ============================================================
+# DB helpers (PyMySQL thuần)
+# ============================================================
 def _conn():
     return pymysql.connect(
         host=settings.DB_HOST,
@@ -94,13 +143,14 @@ def sql_exec(q: str, args=None):
             cur.execute(q, args or ())
         con.commit()
 
-# =============== Embedding + kNN ===============
-# dùng mE5 multilingual cho TViet rất ổn
+# ============================================================
+# Embedding + kNN
+# ============================================================
 _EMBED: Optional[SentenceTransformer] = None
 def get_embed() -> SentenceTransformer:
     global _EMBED
     if _EMBED is None:
-        # đổi model khác nếu muốn
+        # dùng multilingual-e5-base cho TViệt
         _EMBED = SentenceTransformer("intfloat/multilingual-e5-base")
     return _EMBED
 
@@ -143,7 +193,9 @@ class KNNIndex:
 KNN = KNNIndex()
 KNN_SIM_TH = 0.86   # đủ giống thì nhận
 
-# =============== PhoBERT adapter ===============
+# ============================================================
+# PhoBERT adapter + Calibration (Bước 8)
+# ============================================================
 _ADAPTER: Optional[SentimentAdapter] = None
 def get_adapter() -> SentimentAdapter:
     global _ADAPTER
@@ -155,8 +207,30 @@ def get_adapter() -> SentimentAdapter:
             print("[adapter] id2label =", cfg.id2label)
     return _ADAPTER
 
-# Chuẩn hóa kết quả dự đoán đa dạng
+# Calibration: đọc calib.json (temperature)
+CALIB_PATH = Path("./calib.json")
+_CALIB_CACHE = {"temperature": 1.0, "mtime": 0.0}
+
+def get_temperature() -> float:
+    try:
+        st = CALIB_PATH.stat()
+        if st.st_mtime != _CALIB_CACHE["mtime"]:
+            t = 1.0
+            with CALIB_PATH.open("r", encoding="utf-8") as f:
+                cfg = json.load(f)
+                t = float(cfg.get("temperature", 1.0))
+                if t <= 0:
+                    t = 1.0
+            _CALIB_CACHE.update({"temperature": t, "mtime": st.st_mtime})
+    except FileNotFoundError:
+        _CALIB_CACHE.update({"temperature": 1.0, "mtime": 0.0})
+    except Exception:
+        # nếu lỗi parse: giữ cache cũ
+        pass
+    return float(_CALIB_CACHE["temperature"])
+
 NEG, NEU, POS = 0, 1, 2
+
 def model_predict(text: str) -> Tuple[int, float, Dict[str, Any]]:
     adapter = get_adapter()
     out = adapter.predict(text)
@@ -175,12 +249,11 @@ def model_predict(text: str) -> Tuple[int, float, Dict[str, Any]]:
     # fallback
     return NEU, 0.5, {"raw": str(out)}
 
-# =============== Resolver (mệnh đề + prototype) ===============
 def _logits_for_text(t: str, adapter: SentimentAdapter) -> np.ndarray:
     tok = getattr(adapter, "tokenizer", None)
     mdl = getattr(adapter, "model", None)
     if tok is None or mdl is None:
-        # fallback
+        # fallback nếu không có model/tokenizer
         lid, prob, _ = model_predict(t)
         if lid == NEG:
             p = np.array([max(prob, 1e-3), 1e-3, 1e-3], dtype=np.float32)
@@ -197,6 +270,8 @@ def _logits_for_text(t: str, adapter: SentimentAdapter) -> np.ndarray:
 
 def _probs(t: str, adapter: SentimentAdapter) -> np.ndarray:
     lg = _logits_for_text(t, adapter)
+    T = max(1e-6, get_temperature())  # Bước 8: temperature scaling
+    lg = lg / T
     e = np.exp(lg - lg.max())
     return (e / e.sum()).astype(np.float32)
 
@@ -280,7 +355,9 @@ def resolve_label(text: str, adapter: SentimentAdapter,
 
     return int(np.argmax(probs)), {"route": "fallback", "probs": probs.tolist()}
 
-# =============== FastAPI app ===============
+# ============================================================
+# FastAPI app
+# ============================================================
 app = FastAPI(title="SmartSurvey AI Service")
 
 def get_db():
@@ -296,7 +373,9 @@ def on_startup():
     print("[startup] DB =", settings.DB_URL)
     print("[startup] MODEL_DIR =", settings.MODEL_DIR)
 
-# =============== Business helpers ===============
+# ============================================================
+# Business helpers
+# ============================================================
 def fetch_answer_rows(db: Session, survey_id: int, question_id: Optional[int] = None):
     q = (
         db.query(Answer.answer_id, Answer.question_id, Answer.answer_text)
@@ -308,13 +387,12 @@ def fetch_answer_rows(db: Session, survey_id: int, question_id: Optional[int] = 
         q = q.filter(Answer.question_id == question_id)
     return q.order_by(Answer.answer_id.asc()).all()
 
-# ghi 1 inference vào ai_inference (dùng PyMySQL để gọn)
 def log_inference(
     survey_id: int,
     question_id: Optional[int],
     answer_id: Optional[int],
     raw_text: str,
-    norm_text: str,
+    norm_text_val: str,
     source: str,
     pred_label: int,
     pred_conf: float,
@@ -339,8 +417,8 @@ def log_inference(
             question_id,
             answer_id,
             raw_text,
-            norm_text,
-            sha256(norm_text),
+            norm_text_val,
+            sha256(norm_text_val),
             source,
             int(pred_label),
             float(pred_conf),
@@ -355,7 +433,6 @@ def aggregate_percent(labels: List[int]) -> Dict[str, Any]:
     c = {NEG: 0, NEU: 0, POS: 0}
     for l in labels:
         c[l] = c.get(l, 0) + 1
-
     pct = lambda n: (n * 100.0 / total) if total else 0.0
     return {
         "total_responses": total,
@@ -368,11 +445,14 @@ def aggregate_percent(labels: List[int]) -> Dict[str, Any]:
 
 # core: cache → kNN → resolver/model → log
 def classify_and_log(survey_id: int, question_id: Optional[int], answer_id: Optional[int], raw: str) -> int:
-    nt = normalize(raw)
+    nt = norm_text(raw)       # dùng chuẩn hoá nâng cao
     th = sha256(nt)
 
     # cache: nếu đã có final_label
-    row = sql_one("SELECT final_label, pred_conf FROM ai_inference WHERE text_hash=%s AND final_label IS NOT NULL LIMIT 1", (th,))
+    row = sql_one(
+        "SELECT final_label, pred_conf FROM ai_inference WHERE text_hash=%s AND final_label IS NOT NULL LIMIT 1",
+        (th,),
+    )
     if row:
         log_inference(survey_id, question_id, answer_id, raw, nt, "cache-final",
                       int(row["final_label"]), float(row["pred_conf"]), int(row["final_label"]),
@@ -390,9 +470,17 @@ def classify_and_log(survey_id: int, question_id: Optional[int], answer_id: Opti
     # model + resolver
     adapter = get_adapter()
     lid, info = resolve_label(raw, adapter, tau=0.5, margin=0.08, alpha=1.8, use_protos=True)
-    conf = 0.66  # nếu muốn có conf thực, có thể lấy max prob từ info["probs"]
+
+    # Tính confidence thực tế hơn để phục vụ auto-audit (Bước 5)
+    conf = 0.66
+    if isinstance(info, dict):
+        if "probs" in info:
+            conf = float(max(info["probs"]))
+        elif info.get("route") == "proto_knn":
+            conf = float((info.get("proto_score", 0.0) + 1.0) / 2.0)
+
     final_lab = lid
-    # nếu mơ hồ hoặc mang sắc thái NEU theo heuristics
+    # nếu mơ hồ / từ ngữ lưng chừng -> NEU
     if looks_neutral(nt):
         final_lab = NEU
     status = "needs_review" if final_lab != lid else "ok"
@@ -400,7 +488,9 @@ def classify_and_log(survey_id: int, question_id: Optional[int], answer_id: Opti
     log_inference(survey_id, question_id, answer_id, raw, nt, "model", lid, conf, final_lab, status, info)
     return final_lab
 
-# =============== Endpoints sentiment ===============
+# ============================================================
+# Endpoints sentiment
+# ============================================================
 @app.post("/ai/sentiment/{survey_id}")
 def run_sentiment_now(survey_id: int, question_id: Optional[int] = None, db: Session = Depends(get_db)):
     rows = fetch_answer_rows(db, survey_id, question_id)
@@ -454,7 +544,9 @@ def get_latest_sentiment(survey_id: int, db: Session = Depends(get_db)):
         },
     }
 
-# =============== Chat giữ nguyên (RAG nội bộ đơn giản) ===============
+# ============================================================
+# Chat (RAG nội bộ đơn giản)
+# ============================================================
 class ChatRequest(BaseModel):
     survey_id: int
     question_text: str
@@ -516,7 +608,7 @@ def answer_count_query(db: Session, survey_id: int, question_text: str) -> Optio
 @app.post("/ai/chat", response_model=ChatResponse)
 def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
     try:
-        q_norm = normalize(req.question_text)
+        q_norm = norm_text(req.question_text)  # dùng chuẩn hoá mới
         count_answer = answer_count_query(db, req.survey_id, q_norm)
         if count_answer:
             answer, topk_ctx = count_answer, []
@@ -553,7 +645,9 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
         db.commit()
         raise HTTPException(status_code=500, detail=f"Lỗi xử lý AI chat: {e}")
 
-# =============== Correct & kNN reload ===============
+# ============================================================
+# Correct & kNN reload
+# ============================================================
 class CorrectionIn(BaseModel):
     final_label: int  # 0/1/2
 
@@ -585,11 +679,17 @@ def reload_knn():
     """
     Nạp lại index kNN từ:
       - ai_training_samples (ưu tiên)
-      - cộng thêm ai_calib_items nếu muốn (neutral/hedge,…)
+      - cộng thêm ai_calib_items (nếu có) cho các mẫu 'đinh' (neutral/hedge,…)
     """
     try:
+        # 1) Lấy từ ai_training_samples
         rows = sql_all("SELECT norm_text, text_hash, label, embed FROM ai_training_samples ORDER BY sample_id ASC")
-        texts, labels, hashes, embs, need_encode_idx = [], [], [], [], []
+        texts: List[str] = []
+        labels: List[int] = []
+        hashes: List[str] = []
+        embs: List[Optional[np.ndarray]] = []
+        need_encode_idx_ts: List[int] = []
+
         for i, r in enumerate(rows):
             nt = (r["norm_text"] or "").strip()
             if not nt:
@@ -599,17 +699,16 @@ def reload_knn():
             hashes.append(r["text_hash"])
             if r["embed"] is None:
                 embs.append(None)
-                need_encode_idx.append(i)
+                need_encode_idx_ts.append(i)
             else:
                 embs.append(np.frombuffer(r["embed"], dtype="float32"))
 
-        # nếu thiếu embed -> mã hoá và lưu lại
-        if need_encode_idx:
-            new_vecs = encode([texts[i] for i in need_encode_idx])
-            # cập nhật DB
+        # 1.1) Mã hoá phần thiếu embed và lưu lại DB
+        if need_encode_idx_ts:
+            new_vecs = encode([texts[i] for i in need_encode_idx_ts])
             with _conn() as con:
                 with con.cursor() as cur:
-                    for j, row_i in enumerate(need_encode_idx):
+                    for j, row_i in enumerate(need_encode_idx_ts):
                         cur.execute(
                             "UPDATE ai_training_samples SET embed=%s WHERE text_hash=%s",
                             (new_vecs[j].tobytes(), hashes[row_i]),
@@ -622,8 +721,41 @@ def reload_knn():
                     embs[t] = new_vecs[j]
                     j += 1
 
+        # 2) Cộng thêm từ ai_calib_items (nếu có)
+        try:
+            rows_cal = sql_all("SELECT text, norm_text, label FROM ai_calib_items")
+            hash_set = set(hashes)
+            cal_texts: List[str] = []
+            cal_labels: List[int] = []
+            cal_hashes: List[str] = []
+
+            for r in rows_cal:
+                nt = (r.get("norm_text") or "").strip()
+                if not nt:
+                    nt = norm_text(r.get("text") or "")
+                if not nt:
+                    continue
+                h = sha256(nt)
+                if h in hash_set:
+                    continue
+                cal_texts.append(nt)
+                cal_labels.append(int(r["label"]))
+                cal_hashes.append(h)
+                hash_set.add(h)
+
+            if cal_texts:
+                cal_vecs = encode(cal_texts)
+                for v, yl, hh, tt in zip(cal_vecs, cal_labels, cal_hashes, cal_texts):
+                    texts.append(tt)
+                    labels.append(yl)
+                    hashes.append(hh)
+                    embs.append(v)
+        except Exception:
+            # nếu bảng không tồn tại: bỏ qua
+            pass
+
         X = np.vstack(embs).astype("float32") if embs else np.zeros((0, 768), dtype="float32")
         KNN.fit(X, labels, hashes)
-        return {"ok": True, "index": {"samples": len(texts), "dim": int(X.shape[1])}}
+        return {"ok": True, "index": {"samples": len(texts), "dim": int(X.shape[1]) if X.size else 0}}
     except Exception as e:
         raise HTTPException(500, f"reload_knn failed: {e}")
