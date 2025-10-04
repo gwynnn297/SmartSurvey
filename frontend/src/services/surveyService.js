@@ -49,6 +49,11 @@ export const surveyService = {
         }
     },
 
+    // Alias cho getSurveyById
+    getSurveyDetail: async (surveyId) => {
+        return surveyService.getSurveyById(surveyId);
+    },
+
     // Cập nhật khảo sát
     updateSurvey: async (surveyId, data) => {
         try {
@@ -80,6 +85,73 @@ export const surveyService = {
             return response.data;
         } catch (error) {
             console.error('Get categories error:', error);
+            throw error;
+        }
+    },
+    // ❓ Questions
+    createQuestion: async (surveyId, questionData) => {
+        try {
+            const response = await apiClient.post('/questions', {
+                surveyId,
+                ...questionData
+            });
+            return response.data;
+        } catch (error) {
+            console.error('Create question error:', error);
+            throw error;
+        }
+    },
+
+    updateQuestion: async (questionId, data) => {
+        try {
+            const response = await apiClient.put(`/questions/${questionId}`, data);
+            return response.data;
+        } catch (error) {
+            console.error('Update question error:', error);
+            throw error;
+        }
+    },
+
+    deleteQuestion: async (questionId) => {
+        try {
+            const response = await apiClient.delete(`/questions/${questionId}`);
+            return response.data;
+        } catch (error) {
+            console.error('Delete question error:', error);
+            throw error;
+        }
+    },
+
+    // 🔘 Options
+    createOption: async (questionId, text) => {
+        try {
+            const response = await apiClient.post('/options', {
+                questionId,
+                text
+            });
+            return response.data;
+        } catch (error) {
+            console.error('Create option error:', error);
+            throw error;
+        }
+    },
+
+    updateOption: async (optionId, text) => {
+        try {
+            const response = await apiClient.put(`/options/${optionId}`, { text });
+            return response.data;
+        } catch (error) {
+            console.error('Update option error:', error);
+            throw error;
+        }
+    },
+
+    deleteOption: async (optionId) => {
+        try {
+            const response = await apiClient.delete(`/options/${optionId}`);
+            return response.data;
+        } catch (error) {
+            console.error('Delete option error:', error);
             throw error;
         }
     }
