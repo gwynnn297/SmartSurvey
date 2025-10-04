@@ -27,10 +27,10 @@ class Settings(BaseSettings):
 
     # ==== Model config ====
     # Hãy trỏ tới checkpoint có thật (ví dụ checkpoint-4854)
-    MODEL_DIR: str = r"D:\NghienCuuKhoaHoc\Group_Project\SmartSurvey\AI\ai-research\checkpoints\phobert-out\checkpoint-4854"
+    MODEL_DIR: str = r"D:\NghienCuuKhoaHoc\Group_Project\SmartSurvey\AI\ai-research\checkpoints\phobert-out-20251002-compat1"
     HF_MODEL_NAME: str = "vinai/phobert-base"  # fallback online nếu MODEL_DIR không tồn tại
-    NEUTRAL_THRESHOLD: float = 0.60
-
+    NEUTRAL_THRESHOLD: float = 0.50
+    
     # Pydantic v2 config / v1 fallback
     if SettingsConfigDict:
         model_config = SettingsConfigDict(
