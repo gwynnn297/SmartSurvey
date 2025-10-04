@@ -1,14 +1,17 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import MainLayout from '../../layouts/MainLayout';
 import "./ResponseFormPage.css";
 import { responseService } from '../../services/responseService';
 
 const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) => {
+  const navigate = useNavigate();
   const [responses, setResponses] = useState({});
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const isView = typeof isViewProp === 'boolean' ? isViewProp : mode === 'view';
+  const isPreview = survey?.id === 'ai-preview' || survey?.id === 'preview';
 
   // Handle input change
   const handleChange = (questionId, value, multiple = false) => {
@@ -145,18 +148,35 @@ const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) =
           {!success ? (
             <form onSubmit={handleSubmit}>
               <div className="survey-header">
+                {isPreview && (
+                  <div className="preview-header">
+                    <button
+                      type="button"
+                      className="btn-close-preview"
+                      onClick={() => navigate('/create-ai')}
+                      title="Quay lại chỉnh sửa"
+                    >
+                      <i className="fa-solid fa-arrow-left"></i>
+                      Quay lại chỉnh sửa
+                    </button>
+                    <div className="preview-badge">
+                      <i className="fa-regular fa-eye"></i>
+                      Xem trước
+                    </div>
+                  </div>
+                )}
                 <h1>{survey.title}</h1>
                 <p>{survey.description}</p>
               </div>
 
-              {survey.questions.map((q) => (
+              {survey.questions.map((q, index) => (
                 <div
                   key={q.id}
                   className={`question-card ${errors[q.id] ? "error" : ""
                     }`}
                 >
                   <h3>
-                    {q.text}{" "}
+                    <span className="question-number">Câu {index + 1}:</span> {q.text}{" "}
                     {q.is_required && <span className="required">*</span>}
                   </h3>
                   {renderQuestion(q)}
