@@ -216,26 +216,27 @@
   }
   
   /* ===== NÚT CHÍNH: giống login ===== */
-  .btn-primary {
+  .btn-dangky {
     width: 100%;
-    background: linear-gradient(135deg, #6366f1, #7c3aed) !important;
-    color: #fff;
-    border: none;
-    padding: 14px;
-    border-radius: 999px !important;             /* bỏ pill, đồng bộ login */
-    font-size: 16px;
-    font-weight: 700;
+    height: 40px;
+    background: radial-gradient(120% 120% at 10% 10%, rgba(102, 126, 234, 0.55), transparent),
+        radial-gradient(120% 120% at 90% 20%, rgba(118, 75, 162, 0.58), transparent),
+        linear-gradient(135deg, #4f46e5 0%, #9333ea 100%);
+    border: 2px solid #838dde;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 999px;
     cursor: pointer;
-    transition: transform .2s, box-shadow .2s, opacity .2s;
-    margin-bottom: 14px;
-  }
-  
-  .btn-primary:hover:not(:disabled) {
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.3s;
+    /* margin-bottom: 12px; */
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+  .btn-dangky:hover {
     transform: translateY(-2px);
     box-shadow: 0 12px 26px rgba(99, 102, 241, 0.35);
   }
-  
-  .btn-primary:disabled { opacity: .7; cursor: not-allowed; }
   
   /* ===== THÔNG BÁO ===== */
   .error {

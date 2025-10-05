@@ -154,7 +154,7 @@ const Register = () => {
                             />
                         </div>
 
-                        <button type="submit" className="btn-primary" disabled={isLoading || success}>
+                        <button type="submit" className="btn-dangky" disabled={isLoading || success}>
                             {isLoading ? 'Đang đăng ký...' : success ? 'Đang chuyển trang...' : 'Đăng Ký'}
                         </button>
                     </form>

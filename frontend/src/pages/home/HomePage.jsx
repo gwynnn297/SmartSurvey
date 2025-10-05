@@ -43,7 +43,7 @@ const HomePage = () => {
                         Sử dụng AI để tạo câu hỏi, phân tích cảm xúc và trích xuất insight từ cuộc trò chuyện.
                         Không cần kinh nghiệm chuyên môn, chỉ cần mô tả mục tiêu của bạn.
                     </p>
-                    <button className="btn-primary" onClick={handleRegister}>
+                    <button className="btn-startfree" onClick={handleRegister}>
                         Bắt đầu miễn phí ngay
                     </button>
 

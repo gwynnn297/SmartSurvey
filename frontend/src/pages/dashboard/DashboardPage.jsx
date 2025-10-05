@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import HeaderComponent from "../../components/HeaderComponent";
 import Sidebar from "../../components/Sidebar";
+import MainLayout from "../../layouts/MainLayout";
 import { surveyService } from "../../services/surveyService";
 import "./DashboardPage.css";
 
@@ -287,18 +288,15 @@ export default function DashboardPage() {
       <div className="dashboard-shell">
         <HeaderComponent showUserInfo={true} />
         <Sidebar />
-        <main className="dashboard-main">
-          <LoadingState />
-        </main>
+        {/* <main className="dashboard-main"> */}
+        <LoadingState />
+        {/* </main> */}
       </div>
     );
   }
 
   return (
-    <div className="dashboard-shell">
-      <HeaderComponent showUserInfo={true} />
-      <Sidebar />
-
+    <MainLayout>
       <main className="dashboard-main">
         <section className="dash-hero">
           <div>
@@ -428,6 +426,7 @@ export default function DashboardPage() {
           </div>
         )}
       </main>
-    </div>
+
+    </MainLayout>
   );
 }

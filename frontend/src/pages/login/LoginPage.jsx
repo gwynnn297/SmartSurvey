@@ -127,7 +127,7 @@ const Login = () => {
                             </button>
                         </div>
 
-                        <button type="submit" className="btn-primary" disabled={isLoading}>
+                        <button type="submit" className="btn-dangnhap" disabled={isLoading}>
                             {isLoading ? 'Đang đăng nhập...' : 'Đăng Nhập'}
                         </button>
                     </form>

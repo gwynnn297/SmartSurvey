@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import MainLayout from '../../layouts/MainLayout';
 import "./ResponseFormPage.css";
 import { responseService } from '../../services/responseService';
+import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
 
 const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) => {
   const [responses, setResponses] = useState({});
@@ -157,6 +158,7 @@ const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) =
           {!success ? (
             <form onSubmit={handleSubmit}>
               <div className="survey-header">
+              <img className="logo-smart-survey" src={logoSmartSurvey} alt="logoSmartSurvey" />
                 <h1>{survey.title}</h1>
                 <p>{survey.description}</p>
               </div>
