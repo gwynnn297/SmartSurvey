@@ -170,7 +170,7 @@ const ListSurvey = () => {
                                     className="action-btn"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        alert('Chức năng báo cáo sẽ được phát triển');
+                                        navigate('/report');
                                     }}
                                     title="Báo cáo"
                                 >
@@ -267,9 +267,9 @@ const ListSurvey = () => {
                         </div>
                         <div className="modal-body">
                             <div className="create-option" onClick={() => { setShowCreateModal(false); navigate('/create-ai'); }}>
-                                
+
                                 <i className="fa-brands fa-discord" title="Tạo bằng AI" style={{ fontSize: '50px', marginBottom: '16px', color: '#3b82f6' }}></i>
-                                
+
                                 <div className="option-title">Tạo bằng AI</div>
                                 <p className="option-desc">Mô tả ý tưởng của bạn, AI sẽ tự động tạo một bản nháp khảo sát để bạn bắt đầu.</p>
                                 <ul>
@@ -280,9 +280,9 @@ const ListSurvey = () => {
                                 <button className="btn-primary small">Bắt đầu ngay</button>
                             </div>
                             <div className="create-option" onClick={() => { setShowCreateModal(false); navigate('/create-survey'); }}>
-                               
+
                                 <i className="fa-solid fa-square-pen" title="Tạo thủ công" style={{ fontSize: '50px', marginBottom: '16px', color: '#64748b' }}></i>
-                               
+
                                 <div className="option-title">Tạo thủ công</div>
                                 <p className="option-desc">Tự tay xây dựng khảo sát từ đầu để toàn quyền kiểm soát mọi câu hỏi và chi tiết.</p>
                                 <ul>

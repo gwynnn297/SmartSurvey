@@ -57,8 +57,8 @@ const createEmptyOption = (text = '') => ({
 });
 
 const createDefaultOptions = () => [
-    createEmptyOption('Lựa chọn 1'),
-    createEmptyOption('Lựa chọn 2')
+    createEmptyOption(''),
+    createEmptyOption('')
 ];
 
 const createYesNoOptions = () => [
@@ -198,19 +198,10 @@ function SortableSidebarItem({ id, index, text, isActive, onSelect, onDuplicate,
             ref={setNodeRef}
             style={style}
             className={`sidebar-item ${isActive ? 'is-active' : ''}`}
+            {...attributes}
+            {...listeners}
             onClick={onSelect}
         >
-            <button
-                type="button"
-                className="sidebar-drag-handle"
-                ref={setActivatorNodeRef}
-                {...attributes}
-                {...listeners}
-                onClick={(e) => e.stopPropagation()}
-                aria-label={`Kéo để sắp xếp câu ${index + 1}`}
-            >
-                <i className="fa-solid fa-grip-vertical" aria-hidden="true"></i>
-            </button>
             <div className="sidebar-item-body">
                 <span className="sidebar-number">Câu {index + 1}</span>
                 <span className="sidebar-text" title={text || 'Chưa có nội dung'}>
@@ -920,7 +911,7 @@ const CreateSurvey = () => {
                 <div className="survey-toolbar">
                     <div className="survey-toolbar-left">
                         <button
-                            className="btn-top btn-ghost"
+                            className="btn-top btn-quaylai"
                             type="button"
                             onClick={() => navigate('/dashboard')}
                         >
@@ -958,7 +949,7 @@ const CreateSurvey = () => {
                             ) : (
                                 <>
                                     <i className="fa-solid fa-share-nodes" aria-hidden="true"></i>
-                                    <span>{isEditMode ? 'Cập nhật' : 'Chia sẻ'}</span>
+                                    <span>{isEditMode ? 'Cập nhật' : 'Xuất bản'}</span>
                                 </>
                             )}
                         </button>
@@ -1209,10 +1200,6 @@ const CreateSurvey = () => {
                                                 </div>
                                             </div>
                                         )}
-
-                                        <div className="question-footnote">
-                                            Kéo thả trong danh sách bên trái để sắp xếp lại thứ tự câu hỏi.
-                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -1241,7 +1228,7 @@ const CreateSurvey = () => {
                                         </div>
                                     </div>
 
-                                    {isMultipleChoice && (
+                                    {/* {isMultipleChoice && (
                                         <div className="panel-field">
                                             <label>Chế độ lựa chọn</label>
                                             <div className="choice-toggle">
@@ -1261,7 +1248,7 @@ const CreateSurvey = () => {
                                                 </button>
                                             </div>
                                         </div>
-                                    )}
+                                    )} */}
 
                                     {isRating && (
                                         <div className="panel-field">

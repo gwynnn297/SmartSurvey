@@ -23,12 +23,13 @@
 
 /* Sidebar Shell */
 .sidebar {
+
     position: fixed;
     top: 80px;
     left: 0;
     width: var(--sidebar-width);
     height: calc(100vh - 80px);
-    padding: 24px 22px;
+    padding: 24px 20px;
     display: flex;
     flex-direction: column;
     gap: 18px;
@@ -38,7 +39,7 @@
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
     overflow-y: auto;
-    z-index: 999;
+    /* z-index: 999; */
     transition: transform 0.35s var(--transition-default), box-shadow 0.35s var(--transition-default), border-color 0.35s ease;
 }
 

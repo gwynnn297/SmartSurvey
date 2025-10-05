@@ -1,17 +1,15 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import MainLayout from '../../layouts/MainLayout';
 import "./ResponseFormPage.css";
 import { responseService } from '../../services/responseService';
+import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
 
 const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) => {
-  const navigate = useNavigate();
   const [responses, setResponses] = useState({});
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const isView = typeof isViewProp === 'boolean' ? isViewProp : mode === 'view';
-  const isPreview = survey?.id === 'ai-preview' || survey?.id === 'preview';
 
   // Handle input change
   const handleChange = (questionId, value, multiple = false) => {
@@ -79,9 +77,18 @@ const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) =
 
   // Render question
   const renderQuestion = (q) => {
+    // Debug: Log question data to see what we're getting
+    // console.log('Question data:', {
+    //   id: q.id,
+    //   type: q.type,
+    //   choice_type: q.choice_type,
+    //   options: q.options
+    // });
+
     switch (q.type) {
       case "multiple-choice-single":
-        return q.options.map((opt, i) => (
+        // Radio: chọn một
+        return (q.options || []).map((opt, i) => (
           <label key={i} className="option-label">
             <input
               type="radio"
@@ -95,7 +102,8 @@ const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) =
         ));
 
       case "multiple-choice-multiple":
-        return q.options.map((opt, i) => (
+        // Checkbox: chọn nhiều
+        return (q.options || []).map((opt, i) => (
           <label key={i} className="option-label">
             <input
               type="checkbox"
@@ -121,7 +129,7 @@ const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) =
       case "rating-scale":
         return (
           <div className="rating-scale">
-            {q.scale.map((num) => (
+            {(q.scale || []).map((num) => (
               <label key={num} className="rating-circle">
                 <input
                   type="radio"
@@ -137,46 +145,32 @@ const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) =
         );
 
       default:
-        return null;
+        console.log('Unknown question type:', q.type);
+        return <div>Unknown question type: {q.type}</div>;
     }
   };
 
+
   return (
     <MainLayout>
-      <div className="response-container">
+      <div className="response-container" style={{ background: "radial-gradient(130% 140% at 10% 10%, rgba(59, 130, 246, 0.32), transparent 55%), radial-gradient(120% 120% at 90% 20%, rgba(139, 92, 246, 0.35), transparent 45%), linear-gradient(135deg, #eef2ff 0%, #f8fafc 40%, #eef2ff 100%)" }}>
         <div className="survey-card">
           {!success ? (
             <form onSubmit={handleSubmit}>
               <div className="survey-header">
-                {isPreview && (
-                  <div className="preview-header">
-                    <button
-                      type="button"
-                      className="btn-close-preview"
-                      onClick={() => navigate('/create-ai')}
-                      title="Quay lại chỉnh sửa"
-                    >
-                      <i className="fa-solid fa-arrow-left"></i>
-                      Quay lại chỉnh sửa
-                    </button>
-                    <div className="preview-badge">
-                      <i className="fa-regular fa-eye"></i>
-                      Xem trước
-                    </div>
-                  </div>
-                )}
+              <img className="logo-smart-survey" src={logoSmartSurvey} alt="logoSmartSurvey" />
                 <h1>{survey.title}</h1>
                 <p>{survey.description}</p>
               </div>
 
-              {survey.questions.map((q, index) => (
+              {survey.questions.map((q) => (
                 <div
                   key={q.id}
                   className={`question-card ${errors[q.id] ? "error" : ""
                     }`}
                 >
                   <h3>
-                    <span className="question-number">Câu {index + 1}:</span> {q.text}{" "}
+                    {q.text}{" "}
                     {q.is_required && <span className="required">*</span>}
                   </h3>
                   {renderQuestion(q)}
