@@ -10,6 +10,8 @@ public class SurveyResponseDTO {
     private String description;
     private String status;
     private String aiPrompt;
+    private String targetAudience;
+    private Integer numberOfQuestions;
     private Long categoryId;
     private String categoryName;
     private Long userId;

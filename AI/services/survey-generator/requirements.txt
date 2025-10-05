@@ -1,0 +1,27 @@
+# FastAPI và dependencies chính
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.10.3
+
+# HTTP requests và API
+requests==2.31.0
+httpx==0.25.0
+
+# File handling và forms
+python-multipart==0.0.6
+
+# Environment configuration
+python-dotenv==1.0.0
+
+# Google AI SDK
+google-generativeai==0.3.2
+
+# Logging và development
+loguru==0.7.2
+
+# Testing (optional, cho development)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Security (nếu cần CORS)
+fastapi-cors==0.0.6

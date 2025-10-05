@@ -46,6 +46,8 @@ public class SurveyService {
         dto.setDescription(survey.getDescription());
         dto.setStatus(survey.getStatus() != null ? survey.getStatus().name() : null);
         dto.setAiPrompt(survey.getAiPrompt());
+        dto.setTargetAudience(survey.getTargetAudience());
+        dto.setNumberOfQuestions(survey.getNumberOfQuestions());
         if (survey.getCategory() != null) {
             dto.setCategoryId(survey.getCategory().getCategoryId());
             dto.setCategoryName(survey.getCategory().getCategoryName());
@@ -316,5 +318,80 @@ public class SurveyService {
             return 0;
         }
         return surveyRepository.countByUser(currentUser);
+    }
+
+    /**
+     * Lưu khảo sát được tạo từ AI vào database
+     */
+    @Transactional
+    public Survey saveAiGeneratedSurvey(User user, Category category,
+            vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationRequestDTO request,
+            vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationResponseDTO aiResponse) {
+
+        // 1. Tạo Survey entity
+        Survey survey = new Survey();
+        survey.setUser(user);
+        survey.setCategory(category);
+        survey.setTitle(aiResponse.getGeneratedSurvey().getTitle());
+        survey.setDescription(aiResponse.getGeneratedSurvey().getDescription());
+        survey.setAiPrompt(request.getAiPrompt());
+        survey.setTargetAudience(request.getTargetAudience()); // Thêm target audience
+        survey.setNumberOfQuestions(request.getNumberOfQuestions()); // Thêm số lượng câu hỏi
+        survey.setStatus(SurveyStatusEnum.draft); // Sử dụng lowercase
+
+        Survey savedSurvey = surveyRepository.save(survey);
+
+        // 2. Tạo Questions từ AI response
+        for (vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationResponseDTO.GeneratedQuestionDTO qDto : aiResponse
+                .getGeneratedSurvey().getQuestions()) {
+
+            Question question = new Question();
+            question.setSurvey(savedSurvey);
+            question.setQuestionText(qDto.getQuestionText());
+
+            // Map question type từ AI format sang enum format
+            vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum questionType;
+            switch (qDto.getQuestionType().toUpperCase()) {
+                case "SINGLE_CHOICE":
+                case "MULTIPLE_CHOICE":
+                    questionType = vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum.multiple_choice;
+                    break;
+                case "RATING":
+                    questionType = vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum.rating;
+                    break;
+                case "TEXT":
+                default:
+                    questionType = vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum.open_ended;
+                    break;
+            }
+            question.setQuestionType(questionType);
+
+            question.setIsRequired(qDto.isRequired());
+            question.setDisplayOrder(qDto.getDisplayOrder());
+
+            Question savedQuestion = questionRepository.save(question);
+
+            // 3. Tạo Options nếu có
+            if (qDto.getOptions() != null && !qDto.getOptions().isEmpty()) {
+                for (vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationResponseDTO.GeneratedOptionDTO oDto : qDto
+                        .getOptions()) {
+
+                    Option option = new Option();
+                    option.setQuestion(savedQuestion);
+                    option.setOptionText(oDto.getOptionText());
+                    // Option entity không có displayOrder field, chỉ lưu text
+                    optionRepository.save(option);
+                }
+            }
+        }
+
+        // 4. Log activity sử dụng existing method
+        activityLogService.log(
+                ActivityLog.ActionType.ai_generate,
+                savedSurvey.getSurveyId(),
+                "surveys",
+                "Tạo khảo sát từ AI: " + savedSurvey.getTitle());
+
+        return savedSurvey;
     }
 }

@@ -54,6 +54,13 @@ public class UserService {
     }
 
     /**
+     * Tìm user theo email (dùng cho JWT authentication)
+     */
+    public User findUserByEmail(String email) {
+        return userRepository.findByEmail(email).orElse(null);
+    }
+
+    /**
      * Cập nhật thông tin user hiện tại
      */
     @Transactional

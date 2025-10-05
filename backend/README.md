@@ -22,7 +22,7 @@
      ```zsh
      # macOS zsh - đặt trong ~/.zshrc hoặc chạy trước khi start app
      export DB_USERNAME="root"
-     export DB_PASSWORD="<your_mysql_password>"
+     export DB_PASSWORD="phuc290703"
      export MYSQL_HOST="localhost"
      
      ```
@@ -61,3 +61,7 @@
 
 - Nếu lỗi kết nối database, kiểm tra lại cấu hình MySQL và quyền user.
 - Đảm bảo các port không bị chiếm dụng.
+
+## build generation AI
+cd /Users/tt/Documents/SmartSurvey/AI/services/survey-generator/app && GEMINI_API_KEY=AIzaSyC2rBe8abS
+ir3_J_oG2mskGDj6zBR2uNU0 python3 -m uvicorn main:app --host 0.0.0.0 --port 8003 --reload

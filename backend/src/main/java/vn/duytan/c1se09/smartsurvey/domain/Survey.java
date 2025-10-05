@@ -39,6 +39,12 @@ public class Survey {
     @Column(name = "ai_prompt", columnDefinition = "LONGTEXT")
     private String aiPrompt;
 
+    @Column(name = "target_audience", length = 200)
+    private String targetAudience;
+
+    @Column(name = "number_of_questions", nullable = false)
+    private Integer numberOfQuestions = 5;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private SurveyStatusEnum status = SurveyStatusEnum.draft;

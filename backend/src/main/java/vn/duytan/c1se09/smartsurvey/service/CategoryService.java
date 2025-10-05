@@ -18,6 +18,13 @@ public class CategoryService {
         return categoryRepository.findAll();
     }
 
+    /**
+     * Tìm category theo ID (dùng cho AI survey generation)
+     */
+    public Category findCategoryById(Long id) {
+        return categoryRepository.findById(id).orElse(null);
+    }
+
     @Transactional
     public Category createCategory(String name) throws IdInvalidException {
         if (name == null || name.isEmpty()) {

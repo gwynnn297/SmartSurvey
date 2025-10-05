@@ -79,7 +79,7 @@ public class AuthController {
 
         // TODO: kiểm tra email có tồn tại không, nếu có thì tạo token reset, gửi mail
         // reset
-        // Tạm thời trả về message thành công để frontend test
+        // Hiện tại trả về message thành công
         return ResponseEntity.ok(Map.of(
                 "status", "success",
                 "message", "Đã gửi email khôi phục mật khẩu cho " + email));

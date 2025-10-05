@@ -24,7 +24,7 @@ public class DashboardController {
     @ApiMessage("Get dashboard overview")
     public ResponseEntity<?> getDashboardOverview() {
         try {
-            // Mock data - sau này sẽ thay bằng service thực
+            // TODO: Implement với service thực khi có database
             Map<String, Object> overview = new HashMap<>();
             overview.put("totalSurveys", 0);
             overview.put("totalResponses", 0);
@@ -40,10 +40,3 @@ public class DashboardController {
         }
     }
 }
-
-
-
-
-
-
-
