@@ -12,6 +12,7 @@ import ChangePassword from "./pages/ChangePassword/ChangePassword";
 // import './lib/fontawesome';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import DashboardReportPage from "./pages/report/DashboardReportPage";
+import SentimentPage from "./pages/report/SentimentPage";
 import ResponseFormPage from "./pages/Response/ResponseFormPage";
 
 function PrivateRoute({ children }) {
@@ -104,6 +105,14 @@ function App() {
           element={
             <PrivateRoute>
               <DashboardReportPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/report/sentiment"
+          element={
+            <PrivateRoute>
+              <SentimentPage />
             </PrivateRoute>
           }
         />

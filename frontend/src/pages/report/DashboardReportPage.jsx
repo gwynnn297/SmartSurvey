@@ -152,7 +152,7 @@ export default function DashboardReportPage() {
                         <span className="btn-icon" aria-hidden="true">🧠</span>
                         Phân tích phản hồi mở
                     </button>
-                    <button className="btn teal" onClick={() => navigate('/ai/sentiment')}>
+                    <button className="btn teal" onClick={() => navigate('/report/sentiment')}>
                         <span className="btn-icon" aria-hidden="true">😊</span>
                         Phân tích cảm xúc
                     </button>
