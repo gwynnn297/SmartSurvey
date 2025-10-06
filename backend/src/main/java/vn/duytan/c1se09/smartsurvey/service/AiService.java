@@ -16,6 +16,8 @@ import vn.duytan.c1se09.smartsurvey.domain.request.ai.SentimentAnalysisRequestDT
 import vn.duytan.c1se09.smartsurvey.domain.response.ai.SentimentAnalysisResponseDTO;
 import vn.duytan.c1se09.smartsurvey.repository.AiSentimentRepository;
 import vn.duytan.c1se09.smartsurvey.repository.SurveyRepository;
+import vn.duytan.c1se09.smartsurvey.service.ActivityLogService;
+import vn.duytan.c1se09.smartsurvey.domain.ActivityLog;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -33,6 +35,7 @@ public class AiService {
     private final RestTemplate restTemplate;
     private final AiSentimentRepository aiSentimentRepository;
     private final SurveyRepository surveyRepository;
+    private final ActivityLogService activityLogService;
 
     @Value("${ai.service.base-url:http://localhost:8000}")
     private String aiServiceBaseUrl;
@@ -64,10 +67,19 @@ public class AiService {
 
         if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
             Map<String, Object> body = response.getBody();
+            Long sentimentId = Long.valueOf(body.get("result").toString());
+            
+            // Ghi activity log
+            activityLogService.log(
+                ActivityLog.ActionType.ai_generate,
+                sentimentId,
+                "ai_sentiment",
+                "Phân tích sentiment cho survey: " + surveyId
+            );
             
             return SentimentAnalysisRequestDTO.TriggerResponse.builder()
                 .surveyId(surveyId)
-                .result(Long.valueOf(body.get("result").toString()))
+                .result(sentimentId)
                 .createdAt(body.get("created_at").toString())
                 .status("SUCCESS")
                 .message("Phân tích sentiment thành công")

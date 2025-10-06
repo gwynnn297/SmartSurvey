@@ -63,3 +63,4 @@ public class AiInferenceSummaryDTO {
         return new BigDecimal(needsReview * 100.0 / totalInferences).setScale(2, BigDecimal.ROUND_HALF_UP);
     }
 }
+
