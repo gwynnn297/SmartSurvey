@@ -73,4 +73,4 @@ scikit-learn==1.5.1
 transformers==4.43.3
 torch==2.3.1
 
-
+## link checkoint : https://drive.google.com/drive/folders/1MLBOE-Ps7-oYyWvMzOb3ahjhvORgna-r?usp=sharing
