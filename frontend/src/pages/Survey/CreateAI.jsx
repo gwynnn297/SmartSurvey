@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import { surveyService } from '../../services/surveyService';
 import { questionService, optionService } from '../../services/questionSurvey';
+import { aiSurveyService } from '../../services/aiSurveyService';
+import { categoryService } from '../../services/categoryService';
 import './CreateAI.css';
 import '../Survey/CreateSurvey.css';
 
@@ -146,18 +148,22 @@ export default function CreateAI() {
     const navigate = useNavigate();
     const [form, setForm] = useState({
         title: '',
-        category_id: '',
+        category_name: '', // Đổi từ category_id thành category_name để có thể nhập tự do
         description: '',
         ai_context: '',
-        question_count: 15
+        target_audience: '',
+        question_count: 5
     });
 
     const [errors, setErrors] = useState({});
     const [categories, setCategories] = useState([]);
+    const [filteredCategories, setFilteredCategories] = useState([]);
+    const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
     const [loading, setLoading] = useState(false);
     const [categoriesLoading, setCategoriesLoading] = useState(true);
     const [questions, setQuestions] = useState([]);
     const [activeQuestionIndex, setActiveQuestionIndex] = useState(null);
+    const [refreshingQuestions, setRefreshingQuestions] = useState(new Set());
     const [showProcessingModal, setShowProcessingModal] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
     const [progress, setProgress] = useState(0);
@@ -200,13 +206,85 @@ export default function CreateAI() {
 
     const loadCategories = async () => {
         try {
-            const response = await surveyService.getCategories();
-            setCategories(response.data || response || []);
+            console.log('🔄 Loading categories...');
+            const categoriesData = await categoryService.getAllCategories();
+            console.log('✅ Categories loaded:', categoriesData);
+            console.log('📊 Number of categories:', categoriesData?.length); // Debug log
+            console.log('🔍 Category structure sample:', categoriesData?.[0]); // Debug log
+
+            setCategories(categoriesData);
         } catch (error) {
-            console.error('Error loading categories:', error);
+            console.error('❌ Error loading categories:', error);
+            // Không cần thiết phải có categories từ DB vì user có thể nhập tự do
+            setCategories([]);
         } finally {
             setCategoriesLoading(false);
         }
+    };
+
+    // Handle category input change with auto-complete
+    const handleCategoryInputChange = async (value) => {
+        setForm(prev => ({ ...prev, category_name: value }));
+        clearError('category_name');
+
+        if (value.trim().length > 0) {
+            try {
+                console.log('🔍 Searching categories for:', value); // Debug log
+                console.log('📋 All categories available:', categories); // Debug log
+
+                // Search trong categories đã load - sử dụng đúng field name
+                const localFiltered = categories.filter(cat =>
+                    (cat.categoryName || cat.name || '').toLowerCase().includes(value.toLowerCase())
+                );
+
+                console.log('🎯 Local filtered results:', localFiltered); // Debug log
+
+                // Nếu có ít hơn 5 kết quả local, search thêm từ server
+                if (localFiltered.length < 5) {
+                    const serverResults = await categoryService.searchCategories(value);
+
+                    // Merge và remove duplicates - sử dụng đúng field name
+                    const merged = [...localFiltered];
+                    serverResults.forEach(serverCat => {
+                        const serverId = serverCat.categoryId || serverCat.id;
+                        if (!merged.find(localCat => (localCat.categoryId || localCat.id) === serverId)) {
+                            merged.push(serverCat);
+                        }
+                    });
+
+                    setFilteredCategories(merged.slice(0, 10)); // Giới hạn 10 kết quả
+                } else {
+                    setFilteredCategories(localFiltered.slice(0, 10));
+                }
+
+                setShowCategoryDropdown(true);
+            } catch (error) {
+                console.error('Error searching categories:', error);
+                // Fallback to local search only
+                const localFiltered = categories.filter(cat =>
+                    (cat.categoryName || cat.name || '').toLowerCase().includes(value.toLowerCase())
+                );
+                setFilteredCategories(localFiltered.slice(0, 10));
+                setShowCategoryDropdown(true);
+            }
+        } else {
+            setFilteredCategories([]);
+            setShowCategoryDropdown(false);
+        }
+    };
+
+    // Handle category selection from dropdown
+    const handleCategorySelect = (category) => {
+        // Sử dụng đúng field name
+        const categoryName = category.categoryName || category.name || '';
+        setForm(prev => ({ ...prev, category_name: categoryName }));
+        setShowCategoryDropdown(false);
+        clearError('category_name');
+    };
+
+    // Hide dropdown when clicking outside
+    const handleCategoryBlur = () => {
+        setTimeout(() => setShowCategoryDropdown(false), 200);
     };
 
     const stats = useMemo(() => {
@@ -261,12 +339,17 @@ export default function CreateAI() {
         if (!form.title.trim()) {
             newErrors.title = 'Tiêu đề khảo sát là bắt buộc';
         }
+        if (!form.category_name.trim()) {
+            newErrors.category_name = 'Vui lòng nhập hoặc chọn danh mục khảo sát';
+        }
         if (!form.ai_context.trim()) {
             newErrors.ai_context = 'Vui lòng nhập ngữ cảnh chi tiết';
+        } else if (form.ai_context.trim().length < 20) {
+            newErrors.ai_context = 'Ngữ cảnh quá ngắn. Vui lòng mô tả chi tiết hơn (ít nhất 20 ký tự)';
         }
         const questionCount = Number(form.question_count);
-        if (!questionCount || questionCount < 1 || questionCount > 30) {
-            newErrors.question_count = 'Vui lòng nhập số lượng câu hỏi từ 1 đến 30';
+        if (!questionCount || questionCount < 3 || questionCount > 20) {
+            newErrors.question_count = 'Vui lòng nhập số lượng câu hỏi từ 3 đến 20';
         }
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -298,109 +381,118 @@ export default function CreateAI() {
         return Object.keys(newErrors).length === 0;
     };
 
-    // Generate mock questions based on question count
-    const generateMockQuestions = (count) => {
-        const questionTypes = ['short_text', 'multiple_choice', 'rating', 'yes_no'];
-        const sampleTexts = [
-            'Bạn đánh giá chất lượng dịch vụ thế nào?',
-            'Bạn có hài lòng với sản phẩm không?',
-            'Bạn sẽ giới thiệu cho bạn bè không?',
-            'Điểm mạnh nhất của sản phẩm là gì?',
-            'Bạn gặp khó khăn gì khi sử dụng?',
-            'Tần suất bạn sử dụng sản phẩm?',
-            'Bạn sử dụng kênh nào để tìm hiểu?',
-            'Bạn có tham gia chương trình khách hàng thân thiết không?',
-            'Đánh giá tổng thể về trải nghiệm?',
-            'Bạn có kế hoạch tiếp tục sử dụng không?',
-            'Mức độ hài lòng của bạn với giá cả?',
-            'Bạn có gặp vấn đề gì khi mua hàng không?',
-            'Bạn thích tính năng nào nhất?',
-            'Bạn có muốn cải thiện điều gì không?',
-            'Bạn có sẵn sàng trả thêm phí cho tính năng mới không?'
-        ];
-
-        const questions = Array.from({ length: count }, (_, i) => {
-            const type = questionTypes[i % questionTypes.length];
-            const textIndex = i % sampleTexts.length;
-            const questionText = i < sampleTexts.length ? sampleTexts[i] : `Câu hỏi số ${i + 1} do AI sinh ra`;
-
-            const question = {
-                id: `temp_${Date.now()}_${i}`,
-                question_text: questionText,
-                question_type: type,
-                is_required: Math.random() > 0.3, // 70% required
-                options: []
-            };
-
-            // Add options for choice-based questions
-            if (type === 'multiple_choice') {
-                const optionTexts = [
-                    ['Rất tốt', 'Tốt', 'Bình thường', 'Kém'],
-                    ['Có', 'Không', 'Không chắc'],
-                    ['Hàng ngày', 'Vài lần/tuần', 'Hàng tuần', 'Hàng tháng'],
-                    ['Rất hài lòng', 'Hài lòng', 'Bình thường', 'Không hài lòng'],
-                    ['Chắc chắn có', 'Có thể có', 'Không chắc', 'Có thể không']
-                ];
-
-                const selectedOptions = optionTexts[i % optionTexts.length];
-                const optionCount = Math.random() > 0.5 ? 3 : 4;
-                question.options = selectedOptions.slice(0, optionCount).map((text, idx) =>
-                    createEmptyOption(text)
-                );
-                question.choice_type = 'single';
-            } else if (type === 'yes_no') {
-                question.options = createYesNoOptions();
-            } else if (type === 'rating') {
-                question.rating_scale = 5;
-            }
-
-            return question;
-        });
-
-        return questions;
-    };
-
-    // Simulate AI processing with animated steps
-    const simulateAIProcessing = async () => {
-        setCurrentStep(0);
-        setProgress(0);
-
-        const aiSteps = [
-            'Phân tích ngữ cảnh và mục tiêu khảo sát',
-            'Tạo bộ câu hỏi phù hợp',
-            'Tối ưu hóa thứ tự và logic câu hỏi',
-            'Hoàn thiện và chuẩn bị giao diện chỉnh sửa'
-        ];
-
-        for (let i = 0; i < aiSteps.length; i++) {
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second per step
-            setCurrentStep(i + 1);
-            setProgress(((i + 1) / aiSteps.length) * 100);
-        }
-    };
-
     const handleGenerateQuestions = async () => {
         if (!validateForm()) return;
 
-        setShowProcessingModal(true);
         setLoading(true);
+        setShowProcessingModal(true);
+        setCurrentStep(0);
+        setProgress(0);
 
         try {
-            // Mô phỏng AI processing
-            await simulateAIProcessing();
+            // Tối ưu progress animation - nhanh hơn
+            const progressInterval = setInterval(() => {
+                setProgress(prev => {
+                    const newProgress = prev + 15;
+                    if (newProgress >= 90) {
+                        clearInterval(progressInterval);
+                        return 90;
+                    }
+                    return newProgress;
+                });
+                setCurrentStep(prev => Math.min(prev + 1, 3));
+            }, 300); // Giảm từ 500ms xuống 300ms
 
-            console.log("🚀 Generating mock questions with", form.question_count, "questions");
+            // Tối ưu số lượng câu hỏi - giảm để tăng tốc
+            const requestedQuestions = parseInt(form.question_count);
+            const optimizedQuestions = Math.min(requestedQuestions, 8); // Tối đa 8 câu trong lần đầu
 
-            // Tạo dữ liệu mock câu hỏi theo số lượng người dùng nhập
-            const mockQuestions = generateMockQuestions(Number(form.question_count || 15));
+            // Gọi API backend thật
+            const requestData = {
+                title: form.title,
+                description: form.description,
+                categoryId: null, // Sẽ được backend xử lý
+                categoryName: form.category_name,
+                aiPrompt: form.ai_context,
+                targetAudience: form.target_audience || null,
+                numberOfQuestions: optimizedQuestions
+            };
 
-            setQuestions(mockQuestions);
-            setShowProcessingModal(false);
-            setShowForm(false);
+            console.log("🚀 Calling AI backend with:", requestData);
+
+            const aiResponse = await aiSurveyService.generateSurvey(requestData);
+
+            // Clear progress interval và set 100%
+            clearInterval(progressInterval);
+            setProgress(100);
+            setCurrentStep(4);
+
+            if (aiResponse.success && aiResponse.generated_survey) {
+                // Map response từ backend về format frontend
+                const mappedQuestions = aiResponse.generated_survey.questions.map((q, index) => ({
+                    id: `temp_${Date.now()}_${index}`,
+                    question_text: q.question_text || q.questionText,
+                    question_type: mapTypeFromBackend(q.question_type || q.questionType),
+                    is_required: q.is_required ?? q.isRequired ?? true,
+                    options: q.options ? q.options.map((opt, optIndex) => ({
+                        id: `temp_option_${Date.now()}_${optIndex}`,
+                        option_text: opt.option_text || opt.optionText
+                    })) : []
+                }));
+
+                setQuestions(mappedQuestions);
+                console.log("✅ AI generated questions:", mappedQuestions);
+
+                // Kiểm tra xem có cần tạo thêm câu hỏi không
+                const requestedQuestions = parseInt(form.question_count);
+                const currentQuestions = mappedQuestions.length;
+
+                if (requestedQuestions > currentQuestions) {
+                    console.log(`📝 Cần tạo thêm ${requestedQuestions - currentQuestions} câu hỏi`);
+
+                    // Hiển thị thông báo cho người dùng
+                    setTimeout(() => {
+                        alert(`✅ Đã tạo ${currentQuestions} câu hỏi ban đầu.\n\n💡 Bạn có thể sử dụng nút "Tạo lại" để tạo thêm câu hỏi hoặc chỉnh sửa từng câu theo ý muốn.`);
+                    }, 1500);
+                }
+
+                // Đợi một chút để user thấy 100% rồi mới chuyển
+                setTimeout(() => {
+                    setShowProcessingModal(false);
+                    setShowForm(false);
+                }, 1000);
+            } else {
+                throw new Error(aiResponse.message || 'Không thể tạo khảo sát từ AI');
+            }
 
         } catch (e) {
             console.error("❌ AI generation error:", e);
-            alert("Không thể tạo gợi ý. Vui lòng thử lại.");
+
+            // Xử lý các loại lỗi khác nhau
+            let errorMessage = "Không thể tạo khảo sát. Vui lòng thử lại.";
+
+            if (e.response?.status === 401) {
+                errorMessage = "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
+            } else if (e.response?.status === 500) {
+                errorMessage = "Lỗi server. Vui lòng thử lại sau.";
+            } else if (e.response?.data?.message) {
+                errorMessage = e.response.data.message;
+            } else if (e.message) {
+                errorMessage = e.message;
+            }
+
+            // Hiển thị gợi ý nếu prompt không rõ ràng
+            if (errorMessage.includes('Không thể tạo khảo sát') ||
+                errorMessage.includes('prompt khác') ||
+                errorMessage.includes('Vui lòng thử lại với prompt khác')) {
+                errorMessage += '\n\n💡 Gợi ý cải thiện prompt:\n' +
+                    '• Mô tả rõ mục đích khảo sát\n' +
+                    '• Xác định đối tượng khảo sát\n' +
+                    '• Nêu chi tiết nội dung cần khảo sát\n\n' +
+                    '📝 Ví dụ tốt: "Tạo khảo sát đánh giá mức độ hài lòng của nhân viên IT về môi trường làm việc, bao gồm không gian làm việc, chính sách phúc lợi và cơ hội phát triển nghề nghiệp"';
+            }
+
+            alert(errorMessage);
             setShowProcessingModal(false);
         } finally {
             setLoading(false);
@@ -463,6 +555,29 @@ export default function CreateAI() {
             const question = { ...next[questionIndex] };
             const options = [...(question.options || [])];
             options[optionIndex] = { ...options[optionIndex], option_text: value };
+            question.options = options;
+            next[questionIndex] = question;
+            return next;
+        });
+        clearError(`question_${questionIndex}_options`);
+    };
+
+    const handleDeleteOption = (questionIndex, optionIndex) => {
+        setQuestions(prev => {
+            const currentQuestion = prev[questionIndex];
+            if (!currentQuestion || currentQuestion.question_type !== 'multiple_choice') {
+                return prev;
+            }
+            const next = [...prev];
+            const question = { ...next[questionIndex] };
+            const currentOptions = [...(question.options || [])];
+            
+            // Không cho phép xóa nếu chỉ còn 2 option
+            if (currentOptions.length <= 2) {
+                return prev;
+            }
+            
+            const options = currentOptions.filter((_, idx) => idx !== optionIndex);
             question.options = options;
             next[questionIndex] = question;
             return next;
@@ -539,65 +654,163 @@ export default function CreateAI() {
 
     const handleRefreshQuestion = async (questionIndex) => {
         try {
-            // Generate a new question to replace the current one
-            const questionTypes = ['short_text', 'multiple_choice', 'rating', 'yes_no'];
-            const sampleTexts = [
-                'Bạn đánh giá chất lượng dịch vụ thế nào?',
-                'Bạn có hài lòng với sản phẩm không?',
-                'Bạn sẽ giới thiệu cho bạn bè không?',
-                'Điểm mạnh nhất của sản phẩm là gì?',
-                'Bạn gặp khó khăn gì khi sử dụng?',
-                'Tần suất bạn sử dụng sản phẩm?',
-                'Bạn sử dụng kênh nào để tìm hiểu?',
-                'Bạn có tham gia chương trình khách hàng thân thiết không?',
-                'Đánh giá tổng thể về trải nghiệm?',
-                'Bạn có kế hoạch tiếp tục sử dụng không?'
-            ];
+            // Thêm questionIndex vào set đang refresh
+            setRefreshingQuestions(prev => new Set([...prev, questionIndex]));
 
-            // Get random type and text
-            const randomType = questionTypes[Math.floor(Math.random() * questionTypes.length)];
-            const randomText = sampleTexts[Math.floor(Math.random() * sampleTexts.length)];
-
-            const newQuestion = {
-                id: `temp_${Date.now()}_${questionIndex}`,
-                question_text: randomText,
-                question_type: randomType,
-                is_required: Math.random() > 0.3,
-                options: []
+            // Tối ưu: Tạo 3 câu hỏi nhanh, lấy câu đầu (Gemini hoạt động ổn định với 3+ câu)
+            const requestData = {
+                title: `Câu hỏi thay thế`,
+                description: `Tạo lại câu hỏi về ${form.category_name || "chủ đề này"}`,
+                categoryName: form.category_name || "General",
+                aiPrompt: `Tạo khảo sát về ${form.ai_context}, tập trung vào ${form.category_name || "chủ đề này"} dành cho ${form.target_audience || "khách hàng"}, bao gồm câu hỏi đánh giá và ý kiến phản hồi`,
+                targetAudience: form.target_audience || "Khách hàng",
+                numberOfQuestions: 3 // Tạo 3 câu ổn định, lấy câu đầu để thay thế
             };
 
-            // Add options for choice-based questions
-            if (randomType === 'multiple_choice') {
-                const optionTexts = [
-                    ['Rất tốt', 'Tốt', 'Bình thường', 'Kém'],
-                    ['Có', 'Không', 'Không chắc'],
-                    ['Hàng ngày', 'Vài lần/tuần', 'Hàng tuần', 'Hàng tháng'],
-                    ['Rất hài lòng', 'Hài lòng', 'Bình thường', 'Không hài lòng'],
-                    ['Chắc chắn có', 'Có thể có', 'Không chắc', 'Có thể không']
-                ];
+            console.log("🔄 Regenerating question:", requestData);
 
-                const selectedOptions = optionTexts[Math.floor(Math.random() * optionTexts.length)];
-                const optionCount = Math.random() > 0.5 ? 3 : 4;
-                newQuestion.options = selectedOptions.slice(0, optionCount).map((text, idx) =>
-                    createEmptyOption(text)
-                );
-                newQuestion.choice_type = 'single';
-            } else if (randomType === 'yes_no') {
-                newQuestion.options = createYesNoOptions();
-            } else if (randomType === 'rating') {
-                newQuestion.rating_scale = 5;
+            const response = await aiSurveyService.generateSurvey(requestData);
+
+            if (response.success && response.generated_survey && response.generated_survey.questions && response.generated_survey.questions.length > 0) {
+                // Lấy câu hỏi đầu tiên từ response
+                const aiQuestion = response.generated_survey.questions[0];
+
+                // Map response về format frontend
+                const newQuestion = {
+                    id: `temp_${Date.now()}_${questionIndex}`,
+                    question_text: aiQuestion.question_text,
+                    question_type: mapTypeFromBackend(aiQuestion.question_type),
+                    is_required: aiQuestion.is_required ?? true,
+                    options: aiQuestion.options ? aiQuestion.options.map((opt, optIndex) => ({
+                        id: `temp_option_${Date.now()}_${optIndex}`,
+                        option_text: opt.option_text
+                    })) : []
+                };
+
+                // Add special handling for question types
+                if (newQuestion.question_type === 'multiple_choice') {
+                    newQuestion.choice_type = 'single';
+                } else if (newQuestion.question_type === 'yes_no' && newQuestion.options.length === 0) {
+                    newQuestion.options = createYesNoOptions();
+                } else if (newQuestion.question_type === 'rating') {
+                    newQuestion.rating_scale = 5;
+                }
+
+                // Update the question in the questions array
+                setQuestions(prev => {
+                    const next = [...prev];
+                    next[questionIndex] = newQuestion;
+                    return next;
+                });
+
+                console.log("✅ Question regenerated:", newQuestion);
+            } else {
+                throw new Error(response.message || 'Không thể tạo câu hỏi mới');
             }
 
-            // Update the question in the questions array
-            setQuestions(prev => {
-                const next = [...prev];
-                next[questionIndex] = newQuestion;
+        } catch (error) {
+            console.error('❌ Error refreshing question:', error);
+
+            let errorMessage = 'Không thể tạo câu hỏi mới. Vui lòng thử lại.';
+            if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            alert(errorMessage);
+        } finally {
+            // Xóa questionIndex khỏi set đang refresh
+            setRefreshingQuestions(prev => {
+                const next = new Set(prev);
+                next.delete(questionIndex);
                 return next;
             });
+        }
+    };
+
+    const handleSaveSurvey = async () => {
+        if (!validateQuestions()) return;
+
+        setLoading(true);
+
+        try {
+            // 1. Tạo survey trước
+            const surveyPayload = {
+                title: form.title,
+                description: form.description,
+                categoryId: 1, // Tạm thời dùng default category
+                aiPrompt: form.ai_context
+            };
+
+            console.log('🔄 Creating survey:', surveyPayload);
+            const savedSurvey = await surveyService.createSurvey(surveyPayload);
+
+            if (!savedSurvey || !savedSurvey.id) {
+                throw new Error('Không thể lưu khảo sát');
+            }
+
+            const surveyId = savedSurvey.id;
+            console.log('✅ Survey created with ID:', surveyId);
+
+            // 2. Tạo tất cả questions song song
+            const questionPromises = questions.map(question => {
+                const questionPayload = {
+                    surveyId: surveyId,
+                    questionText: question.question_text,
+                    questionType: mapTypeToBackend(question.question_type),
+                    isRequired: question.is_required || false
+                };
+                return questionService.createQuestion(questionPayload);
+            });
+
+            const savedQuestions = await Promise.all(questionPromises);
+            console.log('✅ Questions created:', savedQuestions.length);
+
+            // 3. Tạo tất cả options song song
+            const optionPromises = [];
+            savedQuestions.forEach((savedQuestion, index) => {
+                const originalQuestion = questions[index];
+                if (originalQuestion.options?.length > 0) {
+                    originalQuestion.options.forEach(option => {
+                        if (option.option_text.trim()) {
+                            optionPromises.push(
+                                optionService.createOption({
+                                    questionId: savedQuestion.id,
+                                    optionText: option.option_text
+                                })
+                            );
+                        }
+                    });
+                }
+            });
+
+            if (optionPromises.length > 0) {
+                await Promise.all(optionPromises);
+                console.log('✅ Options created:', optionPromises.length);
+            }
+
+            // 4. Cập nhật status nếu cần
+            const finalSurvey = await surveyService.updateSurvey(surveyId, { status: 'draft' });
+
+            alert('✅ Lưu khảo sát thành công!');
+
+            // Redirect về dashboard hoặc survey list
+            navigate('/dashboard');
 
         } catch (error) {
-            console.error('Error refreshing question:', error);
-            alert('Không thể tạo câu hỏi mới. Vui lòng thử lại.');
+            console.error('❌ Error saving survey:', error);
+
+            let errorMessage = 'Không thể lưu khảo sát. Vui lòng thử lại.';
+            if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            alert('❌ ' + errorMessage);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -678,6 +891,41 @@ export default function CreateAI() {
                             />
                             {errors.title && <div className="ai-error">{errors.title}</div>}
                         </div>
+
+                        <div className="ai-form-row category-form-row">
+                            <label>Danh mục khảo sát <span className="req">*</span></label>
+                            <div className="category-input-wrapper" style={{ position: 'relative' }}>
+                                <input
+                                    value={form.category_name}
+                                    onChange={(e) => handleCategoryInputChange(e.target.value)}
+                                    onBlur={handleCategoryBlur}
+                                    placeholder="Nhập hoặc chọn danh mục (VD: Khảo sát khách hàng)"
+                                    className={errors.category_name ? 'error' : ''}
+                                    autoComplete="off"
+                                />
+
+                                {/* Auto-complete dropdown */}
+                                {showCategoryDropdown && filteredCategories.length > 0 && (
+                                    <div className="category-dropdown">
+                                        {filteredCategories.map((cat, index) => (
+                                            <div
+                                                key={cat.categoryId || cat.id || index}
+                                                className="category-dropdown-item"
+                                                onClick={() => handleCategorySelect(cat)}
+                                            >
+                                                {cat.categoryName || cat.name || 'Không có tên'}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <small className="field-hint">
+                                    Bạn có thể nhập danh mục mới hoặc chọn từ danh sách gợi ý
+                                </small>
+                            </div>
+                            {errors.category_name && <div className="ai-error">{errors.category_name}</div>}
+                        </div>
+
                         <div className="ai-form-row">
                             <label>Mô tả khảo sát</label>
                             <textarea
@@ -687,26 +935,40 @@ export default function CreateAI() {
                                 rows={3}
                             />
                         </div>
-                        <div className="ai-form-row">
-                            <label>Số lượng câu hỏi cần tạo <span className="req">*</span></label>
-                            <input
-                                type="number"
-                                min="1"
-                                max="30"
-                                value={form.question_count || 15}
-                                onChange={(e) => handleFormChange('question_count', e.target.value)}
-                                placeholder="Nhập số lượng câu hỏi (VD: 15)"
-                                className={errors.question_count ? 'error' : ''}
-                            />
-                            {errors.question_count && <div className="ai-error">{errors.question_count}</div>}
+
+                        <div className="ai-form-row-group">
+                            <div className="ai-form-row ai-form-row--half">
+                                <label>Đối tượng mục tiêu</label>
+                                <input
+                                    value={form.target_audience}
+                                    onChange={(e) => handleFormChange('target_audience', e.target.value)}
+                                    placeholder="VD: Học sinh lớp 12, Nhân viên văn phòng..."
+                                />
+                                <small className="field-hint">Giúp AI tạo câu hỏi phù hợp với đối tượng</small>
+                            </div>
+
+                            <div className="ai-form-row ai-form-row--half">
+                                <label>Số lượng câu hỏi <span className="req">*</span></label>
+                                <input
+                                    type="number"
+                                    min="3"
+                                    max="20"
+                                    value={form.question_count || 5}
+                                    onChange={(e) => handleFormChange('question_count', e.target.value)}
+                                    placeholder="3-20"
+                                    className={errors.question_count ? 'error' : ''}
+                                />
+                                {errors.question_count && <div className="ai-error">{errors.question_count}</div>}
+                            </div>
                         </div>
+
                         <div className="ai-form-row">
                             <label>Ngữ cảnh chi tiết cho AI <span className="req">*</span></label>
                             <textarea
-                                rows={8}
+                                rows={6}
                                 value={form.ai_context}
                                 onChange={(e) => handleFormChange('ai_context', e.target.value)}
-                                placeholder={`Hãy mô tả chi tiết:\n- Mục tiêu khảo sát\n- Đối tượng tham gia\n- Thông tin cần thu thập\n- Bối cảnh cụ thể`}
+                                placeholder={`Ví dụ: "Tạo khảo sát đánh giá mức độ hài lòng của nhân viên IT về môi trường làm việc tại công ty công nghệ"`}
                                 className={errors.ai_context ? 'error' : ''}
                             />
                             {errors.ai_context && <div className="ai-error">{errors.ai_context}</div>}
@@ -745,7 +1007,7 @@ export default function CreateAI() {
                             <button
                                 className="btn-share"
                                 type="button"
-                                onClick={() => alert('Chức năng lưu sẽ được phát triển')}
+                                onClick={handleSaveSurvey}
                                 disabled={loading}
                             >
                                 <i className="fa-solid fa-share-nodes" aria-hidden="true"></i>
@@ -870,10 +1132,20 @@ export default function CreateAI() {
                                                     type="button"
                                                     className="question-action-btn"
                                                     onClick={() => handleRefreshQuestion(activeQuestionIndex)}
+                                                    disabled={refreshingQuestions.has(activeQuestionIndex)}
                                                     title="Tạo lại câu hỏi"
                                                 >
-                                                    <i className="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
-                                                    Tạo lại
+                                                    {refreshingQuestions.has(activeQuestionIndex) ? (
+                                                        <>
+                                                            <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                                                            Đang tạo lại...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <i className="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+                                                            Tạo lại
+                                                        </>
+                                                    )}
                                                 </button>
                                             </div>
                                         </div>
@@ -919,6 +1191,20 @@ export default function CreateAI() {
                                                                     onChange={(e) => handleOptionChange(activeQuestionIndex, oIdx, e.target.value)}
                                                                     placeholder={`Lựa chọn ${oIdx + 1}`}
                                                                 />
+                                                                <button
+                                                                    type="button"
+                                                                    className="remove-option"
+                                                                    onClick={() => {
+                                                                        if (activeQuestion.options.length <= 2) return;
+                                                                        if (window.confirm('Bạn có chắc muốn xóa lựa chọn này không?')) {
+                                                                            handleDeleteOption(activeQuestionIndex, oIdx);
+                                                                        }
+                                                                    }}
+                                                                    disabled={activeQuestion.options.length <= 2}
+                                                                    aria-label="Xóa lựa chọn"
+                                                                >
+                                                                    <i className="fa-solid fa-delete-left" aria-hidden="true"></i>
+                                                                </button>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -1149,21 +1435,8 @@ export default function CreateAI() {
                             </button>
                         </div>
 
-                        {/* Helpful tips */}
-                        <div className="ai-tips">
-                            <div className="ai-tips-header">
-                                <span className="ai-tips-icon">💡</span>
-                                <strong>Mẹo hữu ích</strong>
-                            </div>
-                            <p>Sau khi AI hoàn thành, bạn sẽ có thể:</p>
-                            <ul className="ai-tips-list">
-                                <li>Chỉnh sửa nội dung từng câu hỏi</li>
-                                <li>Thay đổi loại câu hỏi (trắc nghiệm, tự luận, v.v.)</li>
-                                <li>Thêm, xóa hoặc sắp xếp lại câu hỏi</li>
-                                <li>Tùy chỉnh các lựa chọn trả lời</li>
-                                <li>Sử dụng nút refresh để tạo lại câu hỏi</li>
-                            </ul>
-                        </div>
+                        <div className="ai-footer-note"></div>
+                        <em>Lưu ý: Quá trình này có thể mất vài phút tuỳ thuộc vào độ dài ngữ cảnh và số lượng câu hỏi.</em>
                     </div>
                 </div>
             )}

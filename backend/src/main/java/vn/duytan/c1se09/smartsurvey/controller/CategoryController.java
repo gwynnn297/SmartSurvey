@@ -24,6 +24,12 @@ public class CategoryController {
         return ResponseEntity.ok(categoryService.getAllCategories());
     }
 
+    @GetMapping("/search")
+    public ResponseEntity<List<Category>> searchCategories(@RequestParam("name") String name) {
+        List<Category> categories = categoryService.searchCategoriesByName(name);
+        return ResponseEntity.ok(categories);
+    }
+
     @PostMapping
     public ResponseEntity<Category> createCategory(@Valid @RequestBody CategoryRequestDTO request)
             throws IdInvalidException {

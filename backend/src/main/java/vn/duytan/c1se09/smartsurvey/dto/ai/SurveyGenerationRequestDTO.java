@@ -22,8 +22,10 @@ public class SurveyGenerationRequestDTO {
     @Size(max = 500, message = "Description must be less than 500 characters")
     private String description;
 
-    @NotNull(message = "Category ID is required")
-    private Long categoryId;
+    private Long categoryId; // Không bắt buộc nữa
+
+    @Size(max = 100, message = "Category name must be less than 100 characters")
+    private String categoryName;
 
     @NotBlank(message = "AI prompt is required")
     @Size(min = 10, max = 1000, message = "AI prompt must be between 10 and 1000 characters")
@@ -33,7 +35,7 @@ public class SurveyGenerationRequestDTO {
     private String targetAudience;
 
     @NotNull(message = "Số lượng câu hỏi không được để trống")
-    @Min(value = 3, message = "Số lượng câu hỏi tối thiểu là 3")
+    @Min(value = 2, message = "Số lượng câu hỏi tối thiểu là 2")
     @Max(value = 20, message = "Số lượng câu hỏi tối đa là 20")
     @JsonProperty("numberOfQuestions")
     private Integer numberOfQuestions;

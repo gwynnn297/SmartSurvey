@@ -9,13 +9,13 @@ import logging
 import os
 from typing import Dict, Any
 
-from models.survey_schemas import (
+from .models.survey_schemas import (
     SurveyGenerationRequest, 
     SurveyGenerationResponse,
     SurveyGenerationError,
     CATEGORY_MAPPING
 )
-from core.gemini_client import create_gemini_client, GeminiClient
+from .core.gemini_client import create_gemini_client, GeminiClient
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO)
@@ -92,8 +92,15 @@ async def generate_survey(
         logger.info(f"Đang tạo khảo sát cho prompt: {request.ai_prompt[:100]}...")
         
         # Xây dựng context từ request
+        # Xử lý category: ưu tiên category_id, fallback sang category_name
+        category_text = "General"
+        if request.category_id and request.category_id in CATEGORY_MAPPING:
+            category_text = CATEGORY_MAPPING[request.category_id]
+        elif request.category_name:
+            category_text = request.category_name
+        
         context = {
-            "category": CATEGORY_MAPPING.get(request.category_id, "General"),
+            "category": category_text,
             "target_audience": request.target_audience,
             "title_hint": request.title,
             "description_hint": request.description,

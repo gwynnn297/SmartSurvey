@@ -25,6 +25,26 @@ public class CategoryService {
         return categoryRepository.findById(id).orElse(null);
     }
 
+    /**
+     * Tìm category theo tên (case-insensitive)
+     */
+    public Category findCategoryByName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return null;
+        }
+        return categoryRepository.findByCategoryNameIgnoreCase(name.trim());
+    }
+
+    /**
+     * Tìm kiếm categories theo tên (có chứa từ khóa)
+     */
+    public List<Category> searchCategoriesByName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return getAllCategories(); // Trả về tất cả nếu không có từ khóa
+        }
+        return categoryRepository.findByCategoryNameContainingIgnoreCase(name.trim());
+    }
+
     @Transactional
     public Category createCategory(String name) throws IdInvalidException {
         if (name == null || name.isEmpty()) {

@@ -54,8 +54,8 @@ public class SurveyGeneratorService {
         // 1. Validate user exists
         User currentUser = validateUser(username);
 
-        // 2. Validate category exists (nếu có)
-        Category category = validateCategory(request.getCategoryId());
+        // 2. Validate và tìm/tạo category
+        Category category = validateOrCreateCategory(request);
 
         // 3. Kiểm tra AI service health
         validateAiServiceHealth();
@@ -80,6 +80,77 @@ public class SurveyGeneratorService {
     }
 
     /**
+     * Regenerate một câu hỏi đơn lẻ
+     */
+    public vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateResponseDTO regenerateQuestion(
+            vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateRequestDTO request, String username)
+            throws Exception {
+
+        log.info("Regenerating question for user: {} with context: {}", username,
+                request.getContextHint() != null
+                        ? request.getContextHint().substring(0, Math.min(50, request.getContextHint().length()))
+                        : "none");
+
+        // 1. Validate user exists
+        User currentUser = validateUser(username);
+
+        // 2. Kiểm tra AI service health
+        validateAiServiceHealth();
+
+        // 3. Tạo request đơn giản để generate 1 câu hỏi
+        vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationRequestDTO singleQuestionRequest = new vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationRequestDTO();
+
+        singleQuestionRequest.setTitle("Câu hỏi mới");
+        singleQuestionRequest.setDescription("Tạo câu hỏi mới");
+        singleQuestionRequest.setAiPrompt(request.getOriginalPrompt());
+        singleQuestionRequest.setTargetAudience(request.getTargetAudience());
+        singleQuestionRequest.setCategoryName(request.getCategoryName());
+        singleQuestionRequest.setNumberOfQuestions(1); // Chỉ tạo 1 câu hỏi
+
+        // 4. Gọi AI service
+        vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationResponseDTO aiResponse = callAiService(
+                singleQuestionRequest);
+
+        if (aiResponse == null || !aiResponse.isSuccess() ||
+                aiResponse.getGeneratedSurvey() == null ||
+                aiResponse.getGeneratedSurvey().getQuestions().isEmpty()) {
+            throw new Exception("Không thể tạo câu hỏi từ AI");
+        }
+
+        // 5. Lấy câu hỏi đầu tiên
+        var generatedQuestion = aiResponse.getGeneratedSurvey().getQuestions().get(0);
+
+        // 6. Map sang DTO response
+        var responseBuilder = vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateResponseDTO.builder()
+                .success(true)
+                .message("Tạo câu hỏi thành công");
+
+        var questionBuilder = vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateResponseDTO.GeneratedQuestionDTO
+                .builder()
+                .questionText(generatedQuestion.getQuestionText())
+                .questionType(generatedQuestion.getQuestionType())
+                .isRequired(generatedQuestion.isRequired());
+
+        // 7. Map options nếu có
+        if (generatedQuestion.getOptions() != null && !generatedQuestion.getOptions().isEmpty()) {
+            var optionDTOs = generatedQuestion.getOptions().stream()
+                    .map(opt -> vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateResponseDTO.GeneratedOptionDTO
+                            .builder()
+                            .optionText(opt.getOptionText())
+                            .displayOrder(opt.getDisplayOrder())
+                            .build())
+                    .toList();
+            questionBuilder.options(optionDTOs);
+        }
+
+        responseBuilder.question(questionBuilder.build());
+
+        log.info("Successfully regenerated question: {}", generatedQuestion.getQuestionText());
+
+        return responseBuilder.build();
+    }
+
+    /**
      * Validate user tồn tại
      */
     private User validateUser(String username) throws Exception {
@@ -92,8 +163,46 @@ public class SurveyGeneratorService {
     }
 
     /**
-     * Validate category tồn tại (nếu có)
+     * Validate và tìm/tạo category từ request
      */
+    private Category validateOrCreateCategory(SurveyGenerationRequestDTO request) throws Exception {
+        // Nếu có categoryId, tìm theo ID
+        if (request.getCategoryId() != null) {
+            Category category = categoryService.findCategoryById(request.getCategoryId());
+            if (category != null) {
+                return category;
+            }
+        }
+
+        // Nếu có categoryName, tìm theo tên hoặc tạo mới
+        if (request.getCategoryName() != null && !request.getCategoryName().trim().isEmpty()) {
+            String categoryName = request.getCategoryName().trim();
+
+            // Tìm category theo tên (case-insensitive)
+            Category existingCategory = categoryService.findCategoryByName(categoryName);
+            if (existingCategory != null) {
+                return existingCategory;
+            }
+
+            // Tạo category mới nếu không tìm thấy
+            log.info("Creating new category: {}", categoryName);
+            return categoryService.createCategory(categoryName);
+        }
+
+        // Nếu không có gì, sử dụng category mặc định (ID = 1)
+        Category defaultCategory = categoryService.findCategoryById(1L);
+        if (defaultCategory != null) {
+            return defaultCategory;
+        }
+
+        // Nếu không có category nào, tạo category mặc định
+        return categoryService.createCategory("Khảo sát tổng quát");
+    }
+
+    /**
+     * Validate category tồn tại (nếu có) - Legacy method
+     */
+    @Deprecated
     private Category validateCategory(Long categoryId) throws Exception {
         if (categoryId == null) {
             return null;
@@ -159,7 +268,21 @@ public class SurveyGeneratorService {
             Map<String, Object> aiRequest = new HashMap<>();
             aiRequest.put("title", request.getTitle());
             aiRequest.put("description", request.getDescription());
-            aiRequest.put("category_id", request.getCategoryId());
+
+            // Gửi cả category_id và category_name để AI service linh hoạt xử lý
+            if (request.getCategoryId() != null) {
+                aiRequest.put("category_id", request.getCategoryId().intValue());
+            }
+            if (request.getCategoryName() != null && !request.getCategoryName().trim().isEmpty()) {
+                aiRequest.put("category_name", request.getCategoryName());
+            }
+
+            // Fallback: nếu không có category nào, đặt default
+            if (request.getCategoryId() == null &&
+                    (request.getCategoryName() == null || request.getCategoryName().trim().isEmpty())) {
+                aiRequest.put("category_id", 1); // Default category
+            }
+
             aiRequest.put("ai_prompt", request.getAiPrompt());
             aiRequest.put("target_audience", request.getTargetAudience());
             aiRequest.put("number_of_questions", request.getNumberOfQuestions());

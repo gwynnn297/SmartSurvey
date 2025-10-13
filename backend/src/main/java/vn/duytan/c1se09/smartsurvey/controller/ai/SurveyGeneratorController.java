@@ -9,6 +9,8 @@ import vn.duytan.c1se09.smartsurvey.dto.ai.HealthCheckResponseDTO;
 import vn.duytan.c1se09.smartsurvey.dto.ai.PromptValidationResponseDTO;
 import vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationRequestDTO;
 import vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationResponseDTO;
+import vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateRequestDTO;
+import vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateResponseDTO;
 import vn.duytan.c1se09.smartsurvey.service.ai.SurveyGeneratorService;
 
 import jakarta.validation.Valid;
@@ -50,6 +52,34 @@ public class SurveyGeneratorController {
             log.error("Error generating survey: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(createErrorResponseDTO("Lỗi hệ thống khi tạo khảo sát: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Regenerate a single question
+     * 
+     * @param request   Question regeneration request
+     * @param principal User principal from JWT
+     * @return Newly generated question
+     */
+    @PostMapping("/regenerate-question")
+    public ResponseEntity<QuestionRegenerateResponseDTO> regenerateQuestion(
+            @Valid @RequestBody QuestionRegenerateRequestDTO request,
+            Principal principal) {
+        log.info("Regenerating question for user: {}", principal.getName());
+
+        try {
+            QuestionRegenerateResponseDTO response = surveyGeneratorService.regenerateQuestion(request,
+                    principal.getName());
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Error regenerating question: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(QuestionRegenerateResponseDTO.builder()
+                            .success(false)
+                            .message("Lỗi khi tạo câu hỏi mới: " + e.getMessage())
+                            .build());
         }
     }
 

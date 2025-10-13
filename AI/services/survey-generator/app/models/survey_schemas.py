@@ -17,16 +17,22 @@ class SurveyGenerationRequest(BaseModel):
     """Mô hình request cho tạo khảo sát"""
     title: str = Field(..., max_length=100, description="Tiêu đề khảo sát")
     description: str = Field(..., max_length=500, description="Mô tả khảo sát")
-    category_id: int = Field(..., description="ID danh mục từ database chính")
+    category_id: Optional[int] = Field(default=None, description="ID danh mục từ database chính")
+    category_name: Optional[str] = Field(default=None, max_length=100, description="Tên danh mục (text)")
     ai_prompt: str = Field(..., max_length=1000, description="AI prompt để tạo khảo sát")
     target_audience: Optional[str] = Field(None, max_length=200, description="Đối tượng mục tiêu")
-    number_of_questions: int = Field(..., ge=3, le=20, description="Số lượng câu hỏi cần tạo")
+    number_of_questions: int = Field(..., ge=2, le=20, description="Số lượng câu hỏi cần tạo")
     
     @validator('ai_prompt')
     def validate_prompt(cls, v):
         if not v or len(v.strip()) < 10:
             raise ValueError("AI prompt phải có ít nhất 10 ký tự")
         return v.strip()
+        
+    @validator('category_name')
+    def validate_category(cls, v, values):
+        # Có thể có hoặc không có category, nếu không có sẽ dùng default
+        return v
 
 class OptionSchema(BaseModel):
     """Schema cho các lựa chọn câu hỏi"""

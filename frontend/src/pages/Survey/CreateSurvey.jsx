@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import { surveyService } from '../../services/surveyService';
 import { questionService, optionService } from '../../services/questionSurvey';
+import { aiSurveyService } from '../../services/aiSurveyService';
 import './CreateSurvey.css';
 
 // 🧩 DND Kit
@@ -216,9 +217,11 @@ function SortableSidebarItem({ id, index, text, isActive, onSelect, onDuplicate,
                         e.stopPropagation();
                         onDuplicate?.();
                     }}
-                    aria-label="Nhân đôi câu hỏi"
+                    disabled={!onDuplicate}
+                    title={!onDuplicate ? "Cần có tiêu đề hoặc mô tả khảo sát để sử dụng AI" : "Tạo lại câu hỏi bằng AI"}
+                    aria-label="Tạo lại câu hỏi bằng AI"
                 >
-                    <i className="fa-regular fa-clone" aria-hidden="true"></i>
+                    <i className="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
                 </button>
                 <button
                     type="button"
@@ -246,6 +249,7 @@ const CreateSurvey = () => {
     const [isEditMode, setIsEditMode] = useState(false);
     const [editSurveyId, setEditSurveyId] = useState(null);
     const [activeQuestionIndex, setActiveQuestionIndex] = useState(null);
+    const [refreshingQuestions, setRefreshingQuestions] = useState(new Set());
 
     const [surveyData, setSurveyData] = useState({
         title: '',
@@ -327,6 +331,103 @@ const CreateSurvey = () => {
         setQuestions(next);
         setActiveQuestionIndex(index + 1);
         clearError('questions');
+    };
+
+    const handleRefreshQuestion = async (questionIndex) => {
+        try {
+            // Kiểm tra xem có đủ thông tin để tạo AI context không
+            const hasTitle = surveyData.title && surveyData.title.trim().length > 0;
+            const hasDescription = surveyData.description && surveyData.description.trim().length > 0;
+            
+            if (!hasTitle && !hasDescription) {
+                alert('⚠️ Không thể tạo lại câu hỏi!\n\nĐể sử dụng tính năng này, vui lòng:\n1. Thêm tiêu đề cho khảo sát\n2. Thêm mô tả cho khảo sát\n\nSau đó thử lại.');
+                return;
+            }
+
+            // Thêm questionIndex vào set đang refresh
+            setRefreshingQuestions(prev => new Set([...prev, questionIndex]));
+
+            const currentQuestion = questions[questionIndex];
+            if (!currentQuestion) return;
+
+            // Tạo AI context từ thông tin có sẵn
+            const surveyTitle = hasTitle ? surveyData.title : "Khảo sát";
+            const surveyDesc = hasDescription ? surveyData.description : "Khảo sát không có mô tả cụ thể";
+            const categoryName = categories.find(cat => cat.id === parseInt(surveyData.category_id))?.category_name || "General";
+
+            // Tạo prompt dựa trên thông tin survey và câu hỏi hiện tại
+            const requestData = {
+                title: `Câu hỏi thay thế`,
+                description: `Tạo lại câu hỏi cho khảo sát: ${surveyTitle}`,
+                categoryName: categoryName,
+                aiPrompt: `Tạo khảo sát về "${surveyTitle}". Mô tả: "${surveyDesc}". Tạo câu hỏi thay thế tương tự nhưng khác biệt cho câu hỏi hiện tại: "${currentQuestion.question_text}"`,
+                targetAudience: "Người tham gia khảo sát",
+                numberOfQuestions: 3 // Tạo 3 câu ổn định, lấy câu đầu để thay thế
+            };
+
+            console.log("🔄 Regenerating question in CreateSurvey:", requestData);
+
+            const response = await aiSurveyService.generateSurvey(requestData);
+
+            if (response.success && response.generated_survey && response.generated_survey.questions && response.generated_survey.questions.length > 0) {
+                // Lấy câu hỏi đầu tiên từ response
+                const aiQuestion = response.generated_survey.questions[0];
+
+                // Map response về format frontend tương tự như CreateAI
+                const newQuestion = {
+                    id: currentQuestion.id, // Giữ nguyên ID để không bị conflict
+                    question_text: aiQuestion.question_text,
+                    question_type: mapTypeFromBackend(aiQuestion.question_type),
+                    is_required: aiQuestion.is_required ?? true,
+                    options: aiQuestion.options ? aiQuestion.options.map((opt, optIndex) => ({
+                        id: `temp_option_${Date.now()}_${optIndex}`,
+                        option_text: opt.option_text
+                    })) : []
+                };
+
+                // Add special handling for question types
+                if (newQuestion.question_type === 'multiple_choice') {
+                    newQuestion.choice_type = 'single';
+                    if (newQuestion.options.length === 0) {
+                        newQuestion.options = createDefaultOptions();
+                    }
+                } else if (newQuestion.question_type === 'yes_no' && newQuestion.options.length === 0) {
+                    newQuestion.options = createYesNoOptions();
+                } else if (newQuestion.question_type === 'rating') {
+                    newQuestion.rating_scale = 5;
+                }
+
+                // Update the question in the questions array
+                setQuestions(prev => {
+                    const next = [...prev];
+                    next[questionIndex] = newQuestion;
+                    return next;
+                });
+
+                console.log("✅ Question regenerated in CreateSurvey:", newQuestion);
+            } else {
+                throw new Error(response.message || 'Không thể tạo câu hỏi mới');
+            }
+
+        } catch (error) {
+            console.error('❌ Error refreshing question in CreateSurvey:', error);
+
+            let errorMessage = 'Không thể tạo câu hỏi mới. Vui lòng thử lại.';
+            if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            alert(errorMessage);
+        } finally {
+            // Xóa questionIndex khỏi set đang refresh
+            setRefreshingQuestions(prev => {
+                const next = new Set(prev);
+                next.delete(questionIndex);
+                return next;
+            });
+        }
     };
 
     const handleQuestionTextChange = (index, value) => {
@@ -1029,7 +1130,9 @@ const CreateSurvey = () => {
                                             text={q.question_text}
                                             isActive={idx === activeQuestionIndex}
                                             onSelect={() => handleSelectQuestion(idx)}
-                                            onDuplicate={() => handleDuplicateQuestion(idx)}
+                                            onDuplicate={(!surveyData.title?.trim() && !surveyData.description?.trim()) 
+                                                ? null 
+                                                : () => handleRefreshQuestion(idx)}
                                             onDelete={() => {
                                                 if (window.confirm('Bạn có chắc muốn xóa câu hỏi này không?')) {
                                                     deleteQuestion(q.id, idx);
@@ -1080,10 +1183,24 @@ const CreateSurvey = () => {
                                             <button
                                                 type="button"
                                                 className="question-action-btn"
-                                                onClick={() => handleDuplicateQuestion(activeQuestionIndex)}
+                                                onClick={() => handleRefreshQuestion(activeQuestionIndex)}
+                                                disabled={refreshingQuestions.has(activeQuestionIndex) || 
+                                                         (!surveyData.title?.trim() && !surveyData.description?.trim())}
+                                                title={(!surveyData.title?.trim() && !surveyData.description?.trim()) 
+                                                    ? "Cần có tiêu đề hoặc mô tả khảo sát để sử dụng AI tạo lại câu hỏi" 
+                                                    : "Tạo lại câu hỏi bằng AI"}
                                             >
-                                                <i className="fa-regular fa-clone" aria-hidden="true"></i>
-                                                Nhân đôi
+                                                {refreshingQuestions.has(activeQuestionIndex) ? (
+                                                    <>
+                                                        <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                                                        Đang tạo lại...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <i className="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+                                                        Tạo lại
+                                                    </>
+                                                )}
                                             </button>
                                             <button
                                                 type="button"

@@ -8,7 +8,7 @@ import logging
 from typing import Dict, Any, Optional, List
 import requests
 from dataclasses import dataclass
-from models.survey_schemas import GeneratedSurveyResponse
+from ..models.survey_schemas import GeneratedSurveyResponse
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 class GeminiConfig:
     api_key: str
     base_url: str = "https://generativelanguage.googleapis.com/v1beta"
-    model: str = "gemini-2.5-flash"
+    model: str = "gemini-2.5-flash"  # Hoặc "gemini-2.5-pro" cho chất lượng cao hơn
     temperature: float = 0.7
-    max_tokens: int = 2048
+    max_tokens: int = 8192
 
 class GeminiClient:
     def __init__(self, config: GeminiConfig):
@@ -61,6 +61,31 @@ class GeminiClient:
         # Lấy số lượng câu hỏi từ context hoặc mặc định 5
         num_questions = context.get('number_of_questions', 5) if context else 5
         
+        # Tạo ví dụ câu hỏi dựa trên số lượng yêu cầu
+        example_questions = []
+        for i in range(min(num_questions, 2)):  # Tối đa 2 ví dụ
+            if i == 0:
+                example_questions.append(f'''        {{
+            "question_text": "Câu hỏi {i+1}",
+            "question_type": "multiple_choice",
+            "is_required": true,
+            "display_order": {i+1},
+            "options": [
+                {{"option_text": "Lựa chọn A", "display_order": 1}},
+                {{"option_text": "Lựa chọn B", "display_order": 2}}
+            ]
+        }}''')
+            else:
+                example_questions.append(f'''        {{
+            "question_text": "Câu hỏi {i+1}", 
+            "question_type": "open_ended",
+            "is_required": false,
+            "display_order": {i+1},
+            "options": []
+        }}''')
+        
+        questions_example = ",\n".join(example_questions)
+        
         base_prompt = f"""Bạn là chuyên gia thiết kế khảo sát. Tạo khảo sát cho: {user_prompt}
 
 QUAN TRỌNG: Chỉ trả về JSON hợp lệ, không có text thêm.
@@ -70,23 +95,7 @@ QUAN TRỌNG: Tạo CHÍNH XÁC {num_questions} câu hỏi, không hơn không k
     "title": "Tiêu đề khảo sát",
     "description": "Mô tả mục đích khảo sát", 
     "questions": [
-        {{
-            "question_text": "Câu hỏi 1",
-            "question_type": "multiple_choice",
-            "is_required": true,
-            "display_order": 1,
-            "options": [
-                {{"option_text": "Lựa chọn A", "display_order": 1}},
-                {{"option_text": "Lựa chọn B", "display_order": 2}}
-            ]
-        }},
-        {{
-            "question_text": "Câu hỏi 2", 
-            "question_type": "open_ended",
-            "is_required": false,
-            "display_order": 2,
-            "options": []
-        }}
+{questions_example}
     ]
 }}
 
@@ -94,6 +103,10 @@ Tạo CHÍNH XÁC {num_questions} câu hỏi. Dùng multiple_choice, open_ended,
 
         # Thêm context nếu được cung cấp
         if context:
+            if context.get('title_hint'):
+                base_prompt += f" Tiêu đề khảo sát: '{context['title_hint']}'."
+            if context.get('description_hint'):
+                base_prompt += f" Mô tả: '{context['description_hint']}'."
             if context.get('category'):
                 base_prompt += f" Lĩnh vực: {context['category']}."
             if context.get('target_audience'):
@@ -123,7 +136,7 @@ Tạo CHÍNH XÁC {num_questions} câu hỏi. Dùng multiple_choice, open_ended,
                 f"{url}?key={self.config.api_key}",
                 headers=self.headers,
                 json=payload,
-                timeout=30
+                timeout=60
             )
             
             if response.status_code == 200:
@@ -173,19 +186,45 @@ Tạo CHÍNH XÁC {num_questions} câu hỏi. Dùng multiple_choice, open_ended,
         json_pattern = r'```(?:json)?\s*(\{.*?\})\s*```'
         match = re.search(json_pattern, text, re.DOTALL)
         if match:
-            return match.group(1)
+            json_candidate = match.group(1)
+            return self._fix_incomplete_json(json_candidate)
         
         # Thử tìm JSON độc lập
         if text.startswith('{') and text.endswith('}'):
-            return text
+            return self._fix_incomplete_json(text)
             
         # Thử tìm JSON ở đâu đó trong văn bản
         start = text.find('{')
         end = text.rfind('}')
         if start != -1 and end != -1 and end > start:
-            return text[start:end+1]
+            json_candidate = text[start:end+1]
+            return self._fix_incomplete_json(json_candidate)
             
         return None
+
+    def _fix_incomplete_json(self, json_str: str) -> str:
+        """Cố gắng sửa JSON bị cắt bằng cách thêm dấu đóng ngoặc"""
+        if not json_str:
+            return json_str
+            
+        # Đếm số dấu mở và đóng
+        open_braces = json_str.count('{')
+        close_braces = json_str.count('}')
+        open_brackets = json_str.count('[')
+        close_brackets = json_str.count(']')
+        
+        # Thêm dấu đóng nếu thiếu
+        result = json_str
+        
+        # Thêm dấu đóng ngoặc vuông nếu thiếu
+        for _ in range(open_brackets - close_brackets):
+            result += ']'
+            
+        # Thêm dấu đóng ngoặc nhọn nếu thiếu
+        for _ in range(open_braces - close_braces):
+            result += '}'
+            
+        return result
 
     def _normalize_survey_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Chuẩn hóa phản hồi Gemini về định dạng mong đợi của chúng ta"""

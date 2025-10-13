@@ -83,21 +83,21 @@ export DEBUG="true"
 
 #### Cách 1: Sử dụng file `.env` (Khuyến nghị)
 ```bash
-cd app
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8002 --reload
+# Chạy từ thư mục survey-generator (không vào app/)
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
 ```
 
 #### Cách 2: Export environment variables trước khi chạy
 ```bash
-cd app
+# Chạy từ thư mục survey-generator
 export GEMINI_API_KEY="your-api-key"
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8002 --reload
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
 ```
 
 #### Cách 3: Inline environment variables (một lệnh)
 ```bash
-cd app
-GEMINI_API_KEY=your-api-key python3 -m uvicorn main:app --host 0.0.0.0 --port 8002 --reload
+# Chạy từ thư mục survey-generator
+GEMINI_API_KEY=AIzaSyDKxGOcah4pFyRkUnwX3aBzGAONBJOKLLs python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8002
 ```
 
 > **💡 Lưu ý**: 
