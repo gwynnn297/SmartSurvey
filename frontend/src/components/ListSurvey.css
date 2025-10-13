@@ -443,6 +443,46 @@
     border-radius: 8px;
 }
 
+/* Buttons xác nhận chia sẻ */
+.btn-yes {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #ffffff;
+    border: none;
+    padding: 0;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 13px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.25);
+    width: 140px;
+    height: 40px;
+}
+
+.btn-yes:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(16, 185, 129, 0.35);
+}
+
+.btn-no {
+    background: #ffffff;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+    padding: 0;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 13px;
+    transition: all 0.2s ease;
+    width: 140px;
+    height: 40px;
+}
+
+.btn-no:hover {
+    background: #f8fafc;
+    border-color: #cbd5e0;
+}
+
 /* === TRẠNG THÁI TRỐNG === */
 .empty {
     /* Chiếm toàn bộ chiều rộng grid */
@@ -581,6 +621,15 @@
     padding: 16px 24px 8px 24px;
     flex: 1;
     overflow-y: auto;
+}
+
+/* Hàng nút xác nhận trong modal chia sẻ */
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    align-items: center;
+    padding: 16px 24px 24px 24px;
 }
 
 /* Option tạo khảo sát */

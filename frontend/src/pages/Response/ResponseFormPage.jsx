@@ -150,7 +150,6 @@ const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) =
     }
   };
 
-
   return (
     <MainLayout>
       <div className="response-container" style={{ background: "radial-gradient(130% 140% at 10% 10%, rgba(59, 130, 246, 0.32), transparent 55%), radial-gradient(120% 120% at 90% 20%, rgba(139, 92, 246, 0.35), transparent 45%), linear-gradient(135deg, #eef2ff 0%, #f8fafc 40%, #eef2ff 100%)" }}>

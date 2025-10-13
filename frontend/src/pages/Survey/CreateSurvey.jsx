@@ -338,7 +338,7 @@ const CreateSurvey = () => {
             // Kiểm tra xem có đủ thông tin để tạo AI context không
             const hasTitle = surveyData.title && surveyData.title.trim().length > 0;
             const hasDescription = surveyData.description && surveyData.description.trim().length > 0;
-            
+
             if (!hasTitle && !hasDescription) {
                 alert('⚠️ Không thể tạo lại câu hỏi!\n\nĐể sử dụng tính năng này, vui lòng:\n1. Thêm tiêu đề cho khảo sát\n2. Thêm mô tả cho khảo sát\n\nSau đó thử lại.');
                 return;
@@ -927,8 +927,18 @@ const CreateSurvey = () => {
 
             alert(message);
 
-            // Chuyển về dashboard sau khi lưu/cập nhật thành công
-            navigate('/dashboard');
+            // Điều hướng sau khi lưu
+            if (isEditMode) {
+                // Khi cập nhật thì quay về dashboard
+                navigate('/dashboard');
+            } else {
+                // Khi xuất bản mới: nếu published thì sang trang chia sẻ, nếu draft thì về dashboard
+                if (status === 'published') {
+                    navigate('/share-survey', { state: { surveyId } });
+                } else {
+                    navigate('/dashboard');
+                }
+            }
         } catch (err) {
             console.error('Lỗi khi lưu khảo sát:', err);
 
@@ -1039,6 +1049,14 @@ const CreateSurvey = () => {
                             <i className="fa-regular fa-eye" aria-hidden="true"></i>
                             <span> Xem trước</span>
                         </button>
+                        <button class="btn-report"
+                            type="button"
+                            onClick={() => navigate('/report')}
+                            disabled={loading}
+                        >
+                            <i className="fa-solid fa-file-lines" aria-hidden="true"></i>
+                            <span> Báo cáo</span>
+                        </button>
                         <button
                             className="btn-share"
                             type="button"
@@ -1130,8 +1148,8 @@ const CreateSurvey = () => {
                                             text={q.question_text}
                                             isActive={idx === activeQuestionIndex}
                                             onSelect={() => handleSelectQuestion(idx)}
-                                            onDuplicate={(!surveyData.title?.trim() && !surveyData.description?.trim()) 
-                                                ? null 
+                                            onDuplicate={(!surveyData.title?.trim() && !surveyData.description?.trim())
+                                                ? null
                                                 : () => handleRefreshQuestion(idx)}
                                             onDelete={() => {
                                                 if (window.confirm('Bạn có chắc muốn xóa câu hỏi này không?')) {
@@ -1184,10 +1202,10 @@ const CreateSurvey = () => {
                                                 type="button"
                                                 className="question-action-btn"
                                                 onClick={() => handleRefreshQuestion(activeQuestionIndex)}
-                                                disabled={refreshingQuestions.has(activeQuestionIndex) || 
-                                                         (!surveyData.title?.trim() && !surveyData.description?.trim())}
-                                                title={(!surveyData.title?.trim() && !surveyData.description?.trim()) 
-                                                    ? "Cần có tiêu đề hoặc mô tả khảo sát để sử dụng AI tạo lại câu hỏi" 
+                                                disabled={refreshingQuestions.has(activeQuestionIndex) ||
+                                                    (!surveyData.title?.trim() && !surveyData.description?.trim())}
+                                                title={(!surveyData.title?.trim() && !surveyData.description?.trim())
+                                                    ? "Cần có tiêu đề hoặc mô tả khảo sát để sử dụng AI tạo lại câu hỏi"
                                                     : "Tạo lại câu hỏi bằng AI"}
                                             >
                                                 {refreshingQuestions.has(activeQuestionIndex) ? (
@@ -1345,7 +1363,7 @@ const CreateSurvey = () => {
                                         </div>
                                     </div>
 
-                                    {/* {isMultipleChoice && (
+                                    {isMultipleChoice && (
                                         <div className="panel-field">
                                             <label>Chế độ lựa chọn</label>
                                             <div className="choice-toggle">
@@ -1365,7 +1383,7 @@ const CreateSurvey = () => {
                                                 </button>
                                             </div>
                                         </div>
-                                    )} */}
+                                    )}
 
                                     {isRating && (
                                         <div className="panel-field">

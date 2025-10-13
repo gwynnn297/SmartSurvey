@@ -61,6 +61,8 @@ npm install @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities @dnd-kit/modifier
 # Cài đặt thư viện để hiển thi biểu đồ
 npm install recharts
 
+# Cài đặt thư viện mã QR 
+npm install qrcode.react    
 ```
 # Cài đặt thư viện icon
 npm i @fortawesome/fontawesome-free

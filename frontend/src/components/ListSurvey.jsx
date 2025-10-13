@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { surveyService } from '../services/surveyService';
+import ShareSurveyPage from "../pages/Survey/ShareSurveyPage";
 import './ListSurvey.css';
 
 const ListSurvey = () => {
@@ -8,6 +9,8 @@ const ListSurvey = () => {
     const [surveys, setSurveys] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [confirmShareModalOpen, setConfirmShareModalOpen] = useState(false);
+    const [surveyToShare, setSurveyToShare] = useState(null);
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(0);
@@ -180,7 +183,8 @@ const ListSurvey = () => {
                                     className="action-btn"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        alert('Chức năng chia sẻ sẽ được phát triển');
+                                        setSurveyToShare(s);
+                                        setConfirmShareModalOpen(true);
                                     }}
                                     title="Chia sẻ"
                                 >
@@ -295,6 +299,59 @@ const ListSurvey = () => {
                         </div>
                         <div className="modal-footer">
                             <p className="note">Lưu ý: Bạn có thể chỉnh sửa và tùy chỉnh khảo sát sau khi tạo bằng cả hai phương thức.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal xác nhận chia sẻ khảo sát */}
+            {confirmShareModalOpen && surveyToShare && (
+                <div className="modal-overlay" onClick={() => { setConfirmShareModalOpen(false); setSurveyToShare(null); }}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <button className="modal-close-btn" onClick={() => { setConfirmShareModalOpen(false); setSurveyToShare(null); }}>&times;</button>
+                        <div className="modal-header">
+                            <h3>Bạn muốn chia sẻ khảo sát?</h3>
+                            <p>Khi chia sẻ, trạng thái khảo sát sẽ chuyển sang "Đang mở" để bắt đầu nhận phản hồi.</p>
+                        </div>
+                        <div className="modal-actions">
+                            <button
+                                className="btn-yes"
+                                onClick={async () => {
+                                    try {
+                                        const id = surveyToShare.id;
+                                        await surveyService.updateSurvey(id, { status: 'published' });
+                                        // Cập nhật trạng thái trong danh sách hiện tại và localStorage (nếu có)
+                                        const updatedSurveys = surveys.map((item) =>
+                                            (item.id === id ? { ...item, status: 'published' } : item)
+                                        );
+                                        setSurveys(updatedSurveys);
+                                        const localSurveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
+                                        if (Array.isArray(localSurveys) && localSurveys.length > 0) {
+                                            const updatedLocal = localSurveys.map((item) =>
+                                                (item.id === id ? { ...item, status: 'published' } : item)
+                                            );
+                                            localStorage.setItem('userSurveys', JSON.stringify(updatedLocal));
+                                        }
+                                        setConfirmShareModalOpen(false);
+                                        const shareSurvey = updatedSurveys.find((it) => it.id === id) || surveyToShare;
+                                        navigate('/share-survey', { state: { surveyId: id, survey: shareSurvey } });
+                                    } catch (error) {
+                                        console.error('Lỗi khi cập nhật trạng thái khảo sát:', error);
+                                        alert('Không thể chia sẻ khảo sát. Vui lòng thử lại.');
+                                    }
+                                }}
+                            >
+                                Có
+                            </button>
+                            <button
+                                className="btn-no"
+                                onClick={() => {
+                                    setConfirmShareModalOpen(false);
+                                    setSurveyToShare(null);
+                                }}
+                            >
+                                Không
+                            </button>
                         </div>
                     </div>
                 </div>

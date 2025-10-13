@@ -381,6 +381,26 @@
   box-shadow: 0 34px 60px -26px rgba(79, 70, 229, 0.55);
 }
 
+.btn-report {
+  background: #00AA00;
+  font-weight: 700;
+  min-height: 40px;
+  font-size: 0.9rem;
+  color: #fff;
+  border: none;
+  padding: 12px 15px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.btn-report:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 34px 60px -26px rgba(79, 70, 229, 0.55);
+}
+.btn-report:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
 .btn-view {
   background: #6d7786;
   font-weight: 700;

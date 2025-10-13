@@ -1,0 +1,256 @@
+.share-survey-container {
+    padding: 32px 40px;
+    background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
+    min-height: 100vh;
+    animation: fadeIn 0.3s ease;
+}
+
+/* --- HEADER --- */
+.share-survey-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px 28px;
+    border: 1px solid #ded6d6;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+    margin-bottom: 28px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;  
+}
+.share-survey-header:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 40px rgba(2, 6, 23, 0.08);
+}
+
+.share-survey-header h1 {
+    margin-top: 0;
+    font-size: 24px;
+    margin-bottom: 4px;
+    font-weight: 700;
+}
+
+/* --- Title và trạng thái trên cùng hàng --- */
+.share-survey-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.share-survey-title-row h1 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.share-survey-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #22c55e;
+    font-weight: 600;
+    font-size: 14px;
+    background: #ecfdf5;
+    border-radius: 20px;
+    padding: 4px 10px;
+    margin: 0; /* tránh thụt dòng */
+}
+
+.share-status-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #22c55e;
+    border-radius: 50%;
+}
+
+
+.share-survey-header p {
+    color: #555;
+    margin-top: 0;
+}
+
+.share-survey-info {
+    color: #666;
+    font-size: 14px;
+    margin-top: 8px;
+}
+
+.share-survey-actions {
+    display: flex;
+    flex-direction: row; /* đổi từ column sang row */
+    align-items: center;
+    gap: 10px; /* khoảng cách giữa hai nút */
+}
+
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-outline:hover {
+    background: #f3f4f6;
+}
+
+/* --- SHARE SECTION --- */
+.share-section {
+    background: rgba(224,255,255);
+    border-radius: 12px;
+    padding: 24px 28px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    border: 1px solid #ded6d6;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;  
+}
+.share-section:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 40px rgba(2, 6, 23, 0.08);
+}
+
+.share-section h2 {
+    margin: 0 0 8px;
+    font-size: 20px;
+}
+
+.share-section p {
+    color: #555;
+    margin-bottom: 16px;
+}
+
+.share-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 40px;
+    margin-top: 8px;
+}
+
+.share-left {
+    flex: 1;
+}
+
+.link-box {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.survey-link {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    background: #f9fafb;
+}
+
+.btn-copy {
+    margin-left: 8px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.btn-copy:hover {
+    background: #2563eb;
+}
+
+.share-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.share-buttons button {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: white;
+    transition: background 0.2s;
+}
+
+.btn-email {
+    background: #6366f1;
+}
+
+.btn-email:hover {
+    background: #4f46e5;
+}
+
+.btn-social {
+    background: #3b82f6;
+}
+
+.btn-social:hover {
+    background: #2563eb;
+}
+
+.btn-embed {
+    background: #8b5cf6;
+}
+
+.btn-embed:hover {
+    background: #7c3aed;
+}
+
+/* --- QR CODE --- */
+.share-right {
+    width: 220px;
+    text-align: center;
+}
+
+.qr-box {
+    background: #f9fafb;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.qr-box p {
+    font-size: 12px;
+    color: #666;
+    margin-top: 8px;
+}
+
+/* --- AI NOTE --- */
+.ai-note {
+    text-align: right;
+    margin-top: 12px;
+}
+
+.ai-note a {
+    color: #3b82f6;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.ai-note a:hover {
+    text-decoration: underline;
+}
+
+/* --- ANIMATION --- */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

@@ -14,6 +14,7 @@ import '@fortawesome/fontawesome-free/css/all.min.css';
 import DashboardReportPage from "./pages/report/DashboardReportPage";
 import SentimentPage from "./pages/report/SentimentPage";
 import ResponseFormPage from "./pages/Response/ResponseFormPage";
+import ShareSurveyPage from "./pages/Survey/ShareSurveyPage";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -121,6 +122,14 @@ function App() {
           element={
             <PrivateRoute>
               <ResponsePreviewRoute />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/share-survey"
+          element={
+            <PrivateRoute>
+              <ShareSurveyPage />
             </PrivateRoute>
           }
         />
