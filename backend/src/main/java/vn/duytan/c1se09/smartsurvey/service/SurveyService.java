@@ -20,6 +20,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyFetchResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyPaginationDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyPublicResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyStatusResponseDTO;
 
 /**
  * Service xử lý logic business cho Survey
@@ -58,6 +60,11 @@ public class SurveyService {
         }
         dto.setCreatedAt(survey.getCreatedAt());
         dto.setUpdatedAt(survey.getUpdatedAt());
+        
+        // Tạo shareLink cho public domain
+        String shareLink = "https://smartsurvey.com/survey/" + survey.getSurveyId() + "/respond";
+        dto.setShareLink(shareLink);
+        
         return dto;
     }
 
@@ -146,6 +153,11 @@ public class SurveyService {
             }
             f.setCreatedAt(s.getCreatedAt());
             f.setUpdatedAt(s.getUpdatedAt());
+            
+            // Tạo shareLink cho public domain
+            String shareLink = "https://smartsurvey.com/survey/" + s.getSurveyId() + "/respond";
+            f.setShareLink(shareLink);
+            
             return f;
         }).toList());
         return dto;
@@ -393,5 +405,103 @@ public class SurveyService {
                 "Tạo khảo sát từ AI: " + savedSurvey.getTitle());
 
         return savedSurvey;
+    }
+
+    /**
+     * Lấy thông tin survey công khai để người dùng trả lời (không cần authentication)
+     * Chỉ trả về thông tin cần thiết, không có AI prompt hay thông tin user
+     */
+    public SurveyPublicResponseDTO getSurveyPublic(Long surveyId) throws IdInvalidException {
+        Survey survey = getSurveyEntityById(surveyId);
+        
+        // Kiểm tra survey có active không
+        if (survey.getStatus() != SurveyStatusEnum.published) {
+            throw new IdInvalidException("Khảo sát không khả dụng để trả lời");
+        }
+        
+        SurveyPublicResponseDTO dto = new SurveyPublicResponseDTO();
+        dto.setId(survey.getSurveyId());
+        dto.setTitle(survey.getTitle());
+        dto.setDescription(survey.getDescription());
+        dto.setStatus(survey.getStatus() != null ? survey.getStatus().name() : null);
+        dto.setCreatedAt(survey.getCreatedAt());
+        dto.setUpdatedAt(survey.getUpdatedAt());
+        
+        // Chỉ trả về category name, không có category ID
+        if (survey.getCategory() != null) {
+            dto.setCategoryName(survey.getCategory().getCategoryName());
+        }
+        
+        // Lấy danh sách questions với options (public version)
+        List<Question> questions = questionRepository.findBySurveyOrderByDisplayOrderAsc(survey);
+        List<SurveyPublicResponseDTO.QuestionPublicDTO> questionDTOs = questions.stream().map(question -> {
+            SurveyPublicResponseDTO.QuestionPublicDTO qDto = new SurveyPublicResponseDTO.QuestionPublicDTO();
+            qDto.setId(question.getQuestionId());
+            qDto.setText(question.getQuestionText());
+            qDto.setType(question.getQuestionType().name().toLowerCase());
+            qDto.setRequired(question.getIsRequired());
+            qDto.setOrder(question.getDisplayOrder());
+            
+            // Lấy options cho question này
+            List<Option> options = optionRepository.findByQuestion(question);
+            List<SurveyPublicResponseDTO.OptionPublicDTO> optionDTOs = options.stream().map(option -> {
+                SurveyPublicResponseDTO.OptionPublicDTO oDto = new SurveyPublicResponseDTO.OptionPublicDTO();
+                oDto.setId(option.getOptionId());
+                oDto.setText(option.getOptionText());
+                return oDto;
+            }).toList();
+            
+            qDto.setOptions(optionDTOs);
+            return qDto;
+        }).toList();
+        
+        dto.setQuestions(questionDTOs);
+        return dto;
+    }
+    
+    /**
+     * Kiểm tra trạng thái survey có thể trả lời không
+     */
+    public SurveyStatusResponseDTO checkSurveyStatus(Long surveyId) {
+        try {
+            Survey survey = getSurveyEntityById(surveyId);
+            
+            if (survey.getStatus() == SurveyStatusEnum.published) {
+                return SurveyStatusResponseDTO.builder()
+                    .status("active")
+                    .message("Khảo sát đang hoạt động và có thể trả lời")
+                    .surveyId(survey.getSurveyId())
+                    .title(survey.getTitle())
+                    .build();
+            } else if (survey.getStatus() == SurveyStatusEnum.draft) {
+                return SurveyStatusResponseDTO.builder()
+                    .status("closed")
+                    .message("Khảo sát đang ở trạng thái nháp, chưa được xuất bản")
+                    .surveyId(survey.getSurveyId())
+                    .title(survey.getTitle())
+                    .build();
+            } else if (survey.getStatus() == SurveyStatusEnum.archived) {
+                return SurveyStatusResponseDTO.builder()
+                    .status("closed")
+                    .message("Khảo sát đã được lưu trữ")
+                    .surveyId(survey.getSurveyId())
+                    .title(survey.getTitle())
+                    .build();
+            } else {
+                return SurveyStatusResponseDTO.builder()
+                    .status("closed")
+                    .message("Khảo sát không khả dụng")
+                    .surveyId(survey.getSurveyId())
+                    .title(survey.getTitle())
+                    .build();
+            }
+            
+        } catch (IdInvalidException e) {
+            return SurveyStatusResponseDTO.builder()
+                .status("not_found")
+                .message("Không tìm thấy khảo sát với ID: " + surveyId)
+                .surveyId(surveyId)
+                .build();
+        }
     }
 }

@@ -1,6 +1,7 @@
 package vn.duytan.c1se09.smartsurvey.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -10,6 +11,8 @@ import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyDetailResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyDeleteResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyPaginationDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyPublicResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyStatusResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.survey.SurveyCreateRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.survey.SurveyUpdateRequestDTO;
 import vn.duytan.c1se09.smartsurvey.service.SurveyService;
@@ -79,6 +82,48 @@ public class SurveyController {
         SurveyDeleteResponseDTO response = new SurveyDeleteResponseDTO(id, "Xóa khảo sát thành công");
         // Activity log đã được ghi trong SurveyService.deleteSurvey()
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * API 1: Get Survey Public - Lấy thông tin survey để người dùng trả lời (không cần authentication)
+     * Endpoint: GET /surveys/{id}/public
+     */
+    @GetMapping("/{id}/public")
+    @ApiMessage("Get survey public information for response")
+    public ResponseEntity<?> getSurveyPublic(@PathVariable("id") Long id) {
+        try {
+            SurveyPublicResponseDTO surveyPublic = surveyService.getSurveyPublic(id);
+            return ResponseEntity.ok(surveyPublic);
+        } catch (IdInvalidException e) {
+            SurveyStatusResponseDTO errorResponse = SurveyStatusResponseDTO.builder()
+                .surveyId(id)
+                .status("not_found")
+                .message("Survey not found or not available")
+                .build();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+        }
+    }
+    
+    /**
+     * API 2: Check Survey Status - Kiểm tra survey có active và có thể trả lời không
+     * Endpoint: GET /surveys/{id}/status
+     */
+    @GetMapping("/{id}/status")
+    @ApiMessage("Check survey status for response availability")
+    public ResponseEntity<SurveyStatusResponseDTO> checkSurveyStatus(@PathVariable("id") Long id) {
+        SurveyStatusResponseDTO statusResponse = surveyService.checkSurveyStatus(id);
+        
+        // Trả về HTTP status code phù hợp với status
+        switch (statusResponse.getStatus()) {
+            case "active":
+                return ResponseEntity.ok(statusResponse);
+            case "closed":
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(statusResponse);
+            case "not_found":
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(statusResponse);
+            default:
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(statusResponse);
+        }
     }
 
 }

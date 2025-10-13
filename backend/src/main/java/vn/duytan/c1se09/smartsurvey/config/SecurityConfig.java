@@ -85,6 +85,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/users").authenticated()
                         .requestMatchers("/users/profile").authenticated()
                         .requestMatchers("/dashboard/**").authenticated()
+                        .requestMatchers("/surveys/{id}/public", "/surveys/{id}/status").permitAll()
                         .requestMatchers("/surveys/**").authenticated()
                         .requestMatchers("/questions/**").authenticated()
                         .requestMatchers("/options/**").authenticated()
