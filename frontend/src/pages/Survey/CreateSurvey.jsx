@@ -73,7 +73,7 @@ const createEmptyQuestion = (type = 'short_text') => {
         question_text: '',
         question_type: type,
         options: [],
-        is_required: false
+        is_required: true
     };
 
     if (type === 'multiple_choice') {
@@ -142,7 +142,7 @@ const normalizeQuestionData = (rawQuestion) => {
         id: questionId,
         question_text: rawQuestion.question_text || rawQuestion.questionText || '',
         question_type: normalizedType,
-        is_required: rawQuestion.is_required ?? rawQuestion.isRequired ?? false,
+        is_required: rawQuestion.is_required ?? rawQuestion.isRequired ?? true,
         options: []
     };
 
@@ -378,7 +378,7 @@ const CreateSurvey = () => {
                     id: currentQuestion.id, // Giữ nguyên ID để không bị conflict
                     question_text: aiQuestion.question_text,
                     question_type: mapTypeFromBackend(aiQuestion.question_type),
-                    is_required: aiQuestion.is_required ?? true,
+                    is_required: true, // Mặc định bắt buộc
                     options: aiQuestion.options ? aiQuestion.options.map((opt, optIndex) => ({
                         id: `temp_option_${Date.now()}_${optIndex}`,
                         option_text: opt.option_text
@@ -621,7 +621,7 @@ const CreateSurvey = () => {
                     id: question.id,
                     question_text: question.questionText,
                     question_type: question.questionType,
-                    is_required: question.isRequired,
+                    is_required: question.isRequired ?? true,
                     options: options.map(opt => ({
                         id: opt.id,
                         option_text: opt.optionText
@@ -783,7 +783,7 @@ const CreateSurvey = () => {
                         surveyId: surveyId,
                         questionText: question.question_text,
                         questionType: backendType,
-                        isRequired: question.is_required || false
+                        isRequired: question.is_required ?? true
                     };
 
                     let savedQuestion;
@@ -795,7 +795,7 @@ const CreateSurvey = () => {
                         savedQuestion = await questionService.updateQuestion(question.id, {
                             questionText: question.question_text,
                             questionType: backendType,
-                            isRequired: question.is_required || false
+                            isRequired: question.is_required ?? true
                         });
                     } else {
                         // Nếu không có ID, tạo question mới
@@ -1363,7 +1363,7 @@ const CreateSurvey = () => {
                                         </div>
                                     </div>
 
-                                    {isMultipleChoice && (
+                                    {/* {isMultipleChoice && (
                                         <div className="panel-field">
                                             <label>Chế độ lựa chọn</label>
                                             <div className="choice-toggle">
@@ -1383,7 +1383,7 @@ const CreateSurvey = () => {
                                                 </button>
                                             </div>
                                         </div>
-                                    )}
+                                    )} */}
 
                                     {isRating && (
                                         <div className="panel-field">

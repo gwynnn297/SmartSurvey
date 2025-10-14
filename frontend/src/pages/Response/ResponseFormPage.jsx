@@ -1,15 +1,89 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useParams, useLocation } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import "./ResponseFormPage.css";
 import { responseService } from '../../services/responseService';
+import { surveyService } from '../../services/surveyService';
+import { questionService, optionService } from '../../services/questionSurvey';
 import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
 
-const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) => {
+const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isViewProp }) => {
+  const params = useParams();
+  const location = useLocation();
   const [responses, setResponses] = useState({});
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [loadingSurvey, setLoadingSurvey] = useState(false);
+  const [loadedSurvey, setLoadedSurvey] = useState(null);
   const isView = typeof isViewProp === 'boolean' ? isViewProp : mode === 'view';
+
+  const activeSurvey = useMemo(() => surveyProp || loadedSurvey, [surveyProp, loadedSurvey]);
+
+  useEffect(() => {
+    if (surveyProp) return; // Provided by parent, skip fetching
+    const idFromParams = params?.id || params?.surveyId;
+    // Fallback: try to parse /response/<id> from pathname if router param name differs
+    const idFromPath = !idFromParams ? (location.pathname.split('/').filter(Boolean).pop()) : null;
+    const surveyId = idFromParams || idFromPath;
+    if (!surveyId) return;
+
+    const loadSurvey = async () => {
+      try {
+        setLoadingSurvey(true);
+        const detail = await surveyService.getSurveyById(surveyId);
+        const questions = await questionService.getQuestionsBySurvey(surveyId);
+        const mappedQuestions = [];
+        for (const q of questions) {
+          let type = 'open-text';
+          const backendType = q.questionType || q.question_type;
+          if (backendType === 'multiple_choice') {
+            type = (q.choiceType === 'multiple') ? 'multiple-choice-multiple' : 'multiple-choice-single';
+          } else if (backendType === 'boolean' || backendType === 'boolean_' || backendType === 'yes_no') {
+            type = 'multiple-choice-single';
+          } else if (backendType === 'rating') {
+            type = 'rating-scale';
+          }
+
+          let options = [];
+          if (type.startsWith('multiple-choice')) {
+            try {
+              const opts = await optionService.getOptionsByQuestion(q.id);
+              options = (opts || []).map(o => o.optionText || o.option_text);
+            } catch (_) {
+              options = q.options?.map(o => o.optionText || o.option_text) || [];
+            }
+            if (options.length === 0 && (backendType === 'boolean' || backendType === 'boolean_' || backendType === 'yes_no')) {
+              options = ['Có', 'Không'];
+            }
+          }
+
+          const scale = type === 'rating-scale' ? [1, 2, 3, 4, 5] : undefined;
+
+          mappedQuestions.push({
+            id: q.id,
+            text: q.questionText || q.question_text,
+            type,
+            options,
+            scale,
+            is_required: q.isRequired ?? q.is_required ?? false
+          });
+        }
+
+        setLoadedSurvey({
+          id: detail.id,
+          title: detail.title || 'Khảo sát',
+          description: detail.description || '',
+          questions: mappedQuestions
+        });
+      } catch (err) {
+        console.error('Error loading public survey:', err);
+      } finally {
+        setLoadingSurvey(false);
+      }
+    };
+    loadSurvey();
+  }, [surveyProp, params, location.pathname]);
 
   // Handle input change
   const handleChange = (questionId, value, multiple = false) => {
@@ -30,7 +104,8 @@ const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) =
   // Validate required questions
   const validateForm = () => {
     const newErrors = {};
-    survey.questions.forEach((q) => {
+    if (!activeSurvey) return false;
+    activeSurvey.questions.forEach((q) => {
       if (q.is_required) {
         if (
           !responses[q.id] ||
@@ -61,9 +136,9 @@ const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) =
       } else {
         // 👉 Người tham gia thực sự: gọi API thật
         const apiResult = await responseService.submitResponses(
-          survey.id,
+          activeSurvey.id,
           responses,
-          survey
+          activeSurvey
         );
         console.log("Submitting response result:", apiResult);
         setSuccess(true);
@@ -154,15 +229,19 @@ const ResponseFormPage = ({ survey, mode = 'respondent', isView: isViewProp }) =
     <MainLayout>
       <div className="response-container" style={{ background: "radial-gradient(130% 140% at 10% 10%, rgba(59, 130, 246, 0.32), transparent 55%), radial-gradient(120% 120% at 90% 20%, rgba(139, 92, 246, 0.35), transparent 45%), linear-gradient(135deg, #eef2ff 0%, #f8fafc 40%, #eef2ff 100%)" }}>
         <div className="survey-card">
-          {!success ? (
+          {loadingSurvey ? (
+            <div style={{ padding: 24, textAlign: 'center' }}>Đang tải khảo sát...</div>
+          ) : !activeSurvey ? (
+            <div style={{ padding: 24, textAlign: 'center' }}>Không tìm thấy khảo sát.</div>
+          ) : !success ? (
             <form onSubmit={handleSubmit}>
               <div className="survey-header">
-              <img className="logo-smart-survey" src={logoSmartSurvey} alt="logoSmartSurvey" />
-                <h1>{survey.title}</h1>
-                <p>{survey.description}</p>
+                <img className="logo-smart-survey" src={logoSmartSurvey} alt="logoSmartSurvey" />
+                <h1>{activeSurvey.title}</h1>
+                <p>{activeSurvey.description}</p>
               </div>
 
-              {survey.questions.map((q) => (
+              {activeSurvey.questions.map((q) => (
                 <div
                   key={q.id}
                   className={`question-card ${errors[q.id] ? "error" : ""

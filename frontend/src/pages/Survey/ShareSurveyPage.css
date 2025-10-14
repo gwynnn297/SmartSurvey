@@ -16,8 +16,9 @@
     border: 1px solid #ded6d6;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
     margin-bottom: 28px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;  
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
+
 .share-survey-header:hover {
     transform: translateY(-2px);
     box-shadow: 0 14px 40px rgba(2, 6, 23, 0.08);
@@ -54,7 +55,8 @@
     background: #ecfdf5;
     border-radius: 20px;
     padding: 4px 10px;
-    margin: 0; /* tránh thụt dòng */
+    margin: 0;
+    /* tránh thụt dòng */
 }
 
 .share-status-dot {
@@ -78,9 +80,11 @@
 
 .share-survey-actions {
     display: flex;
-    flex-direction: row; /* đổi từ column sang row */
+    flex-direction: row;
+    /* đổi từ column sang row */
     align-items: center;
-    gap: 10px; /* khoảng cách giữa hai nút */
+    gap: 10px;
+    /* khoảng cách giữa hai nút */
 }
 
 
@@ -100,13 +104,14 @@
 
 /* --- SHARE SECTION --- */
 .share-section {
-    background: rgba(224,255,255);
+    background: rgba(224, 255, 255);
     border-radius: 12px;
     padding: 24px 28px;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
     border: 1px solid #ded6d6;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;  
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
+
 .share-section:hover {
     transform: translateY(-2px);
     box-shadow: 0 14px 40px rgba(2, 6, 23, 0.08);

@@ -13,6 +13,7 @@
 ### 📊 Dashboard thông minh
 - Tổng quan thống kê khảo sát (KPI cards)
 - Danh sách khảo sát với trạng thái real-time
+- Hiển thị số phản hồi thực tế từ database
 - Quản lý khảo sát (xem, chỉnh sửa, xóa)
 - Tạo khảo sát mới với 2 phương thức
 
@@ -20,18 +21,34 @@
 - Gợi ý câu hỏi thông minh dựa trên ngữ cảnh
 - Tối ưu hóa mục tiêu khảo sát
 - Tiết kiệm thời gian tạo khảo sát
+- Tạo lại câu hỏi bằng AI cho câu hỏi đã tạo
 
 ### ✍️ Tạo khảo sát thủ công
 - Giao diện drag-and-drop để sắp xếp câu hỏi
-- Hỗ trợ nhiều loại câu hỏi (trắc nghiệm, tự luận)
+- Hỗ trợ nhiều loại câu hỏi (trắc nghiệm, tự luận, yes/no, rating)
 - Quản lý tùy chọn câu trả lời
+- Tất cả câu hỏi mặc định bắt buộc
 - Lưu bản nháp và xuất bản
+- Xem trước khảo sát trước khi chia sẻ
+
+### 🔗 Chia sẻ khảo sát
+- Tạo link chia sẻ với token unique
+- Mỗi lần chia sẻ tạo token mới để phân biệt lượt khảo sát
+- QR Code để chia sẻ dễ dàng
+- Kiểm tra trạng thái token đã sử dụng
+
+### 📝 Tham gia khảo sát
+- Giao diện thân thiện cho người tham gia
+- Validation form real-time
+- Hiển thị thông báo khi đã hoàn thành khảo sát
+- Bảo mật token và tránh duplicate responses
 
 ### 🎨 Giao diện hiện đại
 - Responsive design với Tailwind CSS
 - Drag-and-drop interface với @dnd-kit
 - Animations và transitions mượt mà
 - Dark/Light mode support
+- Loading states và error handling
 
 ## 🛠️ Công nghệ sử dụng
 
@@ -85,6 +102,13 @@ $env:DB_USERNAME = "root"
 $env:DB_PASSWORD = password
 $env:MYSQL_HOST  = "localhost"
 
+python -m venv .venv
+$env:GEMINI_API_KEY = 'AIzaSyC2rBe8abSir3_J_oG2mskGDj6zBR2uNU0'
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+
+
+test QR thì vào 
+https://zxing.org/w/decode.jspx
 ## 🏗️ Cấu trúc dự án
 
 ```
@@ -95,9 +119,12 @@ frontend/
 │   ├── api/
 │   │   └── aiSurveyApi.js          # API cho AI survey generation
 │   ├── assets/
+│   │   ├── logoSmartSurvey.png     # Logo ứng dụng
 │   │   └── react.svg
 │   ├── components/
 │   │   ├── HeaderComponent.jsx     # Header component
+│   │   ├── ListSurvey.jsx          # Component danh sách khảo sát
+│   │   ├── Sidebar.jsx             # Sidebar navigation
 │   │   └── Survey/
 │   │       ├── SurveyTaker.jsx     # Component tham gia khảo sát
 │   │       └── SurveyViewer.jsx    # Component xem khảo sát
@@ -111,18 +138,28 @@ frontend/
 │   │   ├── login/                  # Đăng nhập
 │   │   ├── Profile/                # Quản lý profile
 │   │   ├── register/               # Đăng ký
+│   │   ├── report/                 # Báo cáo và thống kê
+│   │   ├── Response/               # Tham gia khảo sát
+│   │   │   ├── PublicResponsePage.jsx  # Trang tham gia khảo sát public
+│   │   │   └── ResponseFormPage.jsx    # Form trả lời khảo sát
 │   │   └── Survey/
 │   │       ├── CreateAI.jsx        # Tạo khảo sát bằng AI
-│   │       └── CreateSurvey.jsx    # Tạo khảo sát thủ công
+│   │       ├── CreateSurvey.jsx    # Tạo khảo sát thủ công
+│   │       └── ShareSurveyPage.jsx # Chia sẻ khảo sát
 │   ├── redux/                      # State management (nếu cần)
 │   ├── services/
+│   │   ├── aiSurveyService.js      # AI survey generation service
 │   │   ├── authService.js          # Authentication service
 │   │   ├── changePasswordService.js
 │   │   ├── profileService.js
-│   │   ├── questionSurvey.js
+│   │   ├── questionSurvey.js       # Question và option management
+│   │   ├── responseService.js      # Response submission service
+│   │   ├── SentimentAI.js          # Sentiment analysis service
 │   │   ├── surveyService.js        # Survey management service
 │   │   └── userService.js
-│   ├── utils/                      # Utility functions
+│   ├── utils/
+│   │   ├── tokenGenerator.js       # Token generation utilities
+│   │   └── README_TOKEN_SYSTEM.md  # Documentation cho token system
 │   ├── App.jsx                     # Main App component
 │   ├── main.jsx                    # Entry point
 │   ├── App.css
@@ -156,13 +193,30 @@ File `vite.config.js` đã được cấu hình cơ bản với React plugin.
 
 ### Survey Management
 - **Get Surveys**: `GET /surveys?page=1&limit=10`
+- **Get Survey Detail**: `GET /surveys/:id`
 - **Create Survey**: `POST /surveys`
 - **Update Survey**: `PUT /surveys/:id`
 - **Delete Survey**: `DELETE /surveys/:id`
 - **Get Categories**: `GET /categories`
 
+### Question & Option Management
+- **Get Questions**: `GET /questions/survey/:surveyId`
+- **Create Question**: `POST /questions`
+- **Update Question**: `PUT /questions/:id`
+- **Delete Question**: `DELETE /questions/:id`
+- **Get Options**: `GET /options/question/:questionId`
+- **Create Option**: `POST /options`
+- **Update Option**: `PUT /options/:id`
+- **Delete Option**: `DELETE /options/:id`
+
+### Response Management
+- **Submit Response**: `POST /responses`
+- **Get Responses**: `GET /responses/:surveyId`
+- **Check Token Used**: `GET /api/public/responses/check-token/:token`
+
 ### AI Features
 - **Generate Survey**: `POST /ai/surveys/generate`
+- **Sentiment Analysis**: `POST /ai/sentiment/analyze`
 
 ## 🎯 Cách sử dụng
 
@@ -191,7 +245,25 @@ File `vite.config.js` đã được cấu hình cơ bản với React plugin.
 - Xem danh sách khảo sát trên Dashboard
 - Click vào khảo sát để chỉnh sửa
 - Xóa khảo sát không cần thiết
-- Xem báo cáo (sắp có)
+- Xem báo cáo và thống kê
+
+### 4. Chia sẻ khảo sát
+1. Vào Dashboard → Click "Chia sẻ" trên khảo sát
+2. Xác nhận chuyển trạng thái sang "Đang mở"
+3. Sao chép link chia sẻ hoặc sử dụng QR Code
+4. Mỗi lần chia sẻ tạo token unique mới
+
+### 5. Tham gia khảo sát
+1. Truy cập link chia sẻ từ người tạo khảo sát
+2. Điền thông tin và trả lời các câu hỏi
+3. Submit để gửi phản hồi
+4. Nhận thông báo xác nhận hoàn thành
+
+### 6. Tính năng đặc biệt
+- **Token System**: Mỗi link chia sẻ có token unique
+- **Duplicate Prevention**: Tránh gửi phản hồi trùng lặp
+- **Real-time Validation**: Kiểm tra form real-time
+- **Response Tracking**: Theo dõi số phản hồi thực tế
 
 ## 🐛 Debug và Troubleshooting
 
@@ -207,6 +279,15 @@ Nếu gặp lỗi 401 Unauthorized, tham khảo file `DEBUG_TOKEN_ISSUE.md` đ�
 - **CORS Error**: Đảm bảo backend đã cấu hình CORS
 - **Token Expired**: Đăng nhập lại
 - **API Connection**: Kiểm tra VITE_API_BASE_URL
+- **Survey Not Found**: Kiểm tra survey ID và quyền truy cập
+- **Response Submission Failed**: Kiểm tra network và token validation
+- **AI Generation Error**: Kiểm tra API key và network connection
+
+### Performance Tips
+- Sử dụng browser caching cho static assets
+- Enable gzip compression trên server
+- Optimize images và assets
+- Sử dụng React.memo cho components không thay đổi thường xuyên
 
 ## 🚀 Deployment
 
@@ -243,6 +324,58 @@ npm run build
 ## 📝 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
+
+## 🔧 Development
+
+### Thêm tính năng mới
+1. Tạo branch mới từ `main`
+2. Implement tính năng với tests
+3. Update documentation nếu cần
+4. Tạo Pull Request
+
+### Code Style
+- Sử dụng ESLint configuration có sẵn
+- Follow React best practices
+- Comment code phức tạp
+- Sử dụng meaningful variable names
+
+### Testing
+```bash
+# Chạy tests
+npm test
+
+# Chạy tests với coverage
+npm run test:coverage
+
+# Lint code
+npm run lint
+
+# Fix linting issues
+npm run lint:fix
+```
+
+## 📚 Documentation
+
+- **Token System**: Xem `src/utils/README_TOKEN_SYSTEM.md`
+- **API Documentation**: Xem backend documentation
+- **Component Documentation**: Inline comments trong code
+
+## 🚀 Roadmap
+
+### Sắp tới
+- [ ] Real-time notifications
+- [ ] Advanced analytics dashboard
+- [ ] Export responses to Excel/PDF
+- [ ] Multi-language support
+- [ ] Mobile app (React Native)
+
+### Đã hoàn thành ✅
+- [x] Token unique system
+- [x] Response tracking
+- [x] AI question regeneration
+- [x] Duplicate prevention
+- [x] Real-time form validation
+- [x] QR Code sharing
 
 ## 📞 Support
 

@@ -5,6 +5,7 @@ import "./ShareSurveyPage.css";
 import { QRCodeCanvas } from "qrcode.react";
 import { surveyService } from "../../services/surveyService";
 import { questionService } from "../../services/questionSurvey";
+import { generateUniqueToken } from "../../utils/tokenGenerator";
 
 const ShareSurveyPage = () => {
     const location = useLocation();
@@ -39,37 +40,40 @@ const ShareSurveyPage = () => {
         const load = async () => {
             const id = passedSurveyId;
             if (!id) {
-                // Không có id -> quay lại dashboard
                 navigate("/dashboard");
                 return;
             }
             try {
                 setLoading(true);
-                // Lấy chi tiết khảo sát
                 const detail = await surveyService.getSurveyById(id);
-
-                const createdAt = new Date(
-                    detail.createdAt || detail.created_at || Date.now()
-                );
+                const createdAt = new Date(detail.createdAt || detail.created_at || Date.now());
                 const startDate = createdAt.toLocaleDateString("vi-VN");
                 const startTime = createdAt.toLocaleTimeString("vi-VN", {
                     hour: "2-digit",
                     minute: "2-digit",
                 });
 
-                // Lấy số câu hỏi
                 let totalQuestions = survey.totalQuestions;
                 try {
                     const questions = await questionService.getQuestionsBySurvey(id);
-                    totalQuestions = Array.isArray(questions) ? questions.length : (questions?.length ?? 0);
-                } catch (_) {
-                    // fallback giữ nguyên nếu API lỗi
-                }
+                    totalQuestions = Array.isArray(questions)
+                        ? questions.length
+                        : questions?.length ?? 0;
+                } catch (_) {}
 
+                const token = generateUniqueToken();
+
+                // ✅ Đổi từ "k" sang "respondentToken"
                 const shareLink =
                     detail.shareLink ||
                     survey.link ||
-                    `${window.location.origin}/response/${id}`;
+                    `${window.location.origin}/response/${id}?respondentToken=${token}`;
+
+                try {
+                    if (!detail.shareLink) {
+                        await surveyService.updateSurvey(id, { shareLink });
+                    }
+                } catch (_) {}
 
                 setSurvey({
                     id,
@@ -90,12 +94,40 @@ const ShareSurveyPage = () => {
             }
         };
         load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleCopy = () => {
         navigator.clipboard.writeText(survey.link);
         alert("Đã sao chép liên kết khảo sát!");
+    };
+
+    const handleGenerateNewLink = async () => {
+        try {
+            setLoading(true);
+            const id = survey.id;
+            const newToken = generateUniqueToken();
+
+            // ✅ Đổi URL chứa respondentToken
+            const newShareLink = `${window.location.origin}/response/${id}?respondentToken=${newToken}`;
+
+            setSurvey((prev) => ({
+                ...prev,
+                link: newShareLink,
+            }));
+
+            try {
+                await surveyService.updateSurvey(id, { shareLink: newShareLink });
+            } catch (error) {
+                console.warn("Could not update shareLink on backend:", error);
+            }
+
+            alert("Đã tạo liên kết mới với token khác!");
+        } catch (error) {
+            console.error("Error generating new link:", error);
+            alert("Có lỗi khi tạo liên kết mới!");
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -125,15 +157,15 @@ const ShareSurveyPage = () => {
                         <button
                             className="btn-outline"
                             onClick={() =>
-                                navigate('/create-survey', {
+                                navigate("/create-survey", {
                                     state: {
                                         editSurvey: {
                                             id: survey.id,
                                             title: survey.title,
                                             description: survey.description,
-                                            status: survey.status
-                                        }
-                                    }
+                                            status: survey.status,
+                                        },
+                                    },
                                 })
                             }
                         >
@@ -169,7 +201,6 @@ const ShareSurveyPage = () => {
                             </div>
                         </div>
 
-                        {/* Tạm thời ẩn QR code để tránh phụ thuộc thư viện */}
                         <div className="share-right">
                             <label>Mã QR</label>
                             <div className="qr-box">

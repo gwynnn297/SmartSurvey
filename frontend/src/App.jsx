@@ -14,6 +14,7 @@ import '@fortawesome/fontawesome-free/css/all.min.css';
 import DashboardReportPage from "./pages/report/DashboardReportPage";
 import SentimentPage from "./pages/report/SentimentPage";
 import ResponseFormPage from "./pages/Response/ResponseFormPage";
+import PublicResponsePage from "./pages/Response/PublicResponsePage";
 import ShareSurveyPage from "./pages/Survey/ShareSurveyPage";
 
 function PrivateRoute({ children }) {
@@ -133,6 +134,9 @@ function App() {
             </PrivateRoute>
           }
         />
+        {/* Public response routes for participants */}
+        <Route path="/response/:id" element={<PublicResponsePage />} />
+        <Route path="/response/:surveyId" element={<PublicResponsePage />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
