@@ -16,5 +16,5 @@ public class SurveyFetchResponseDTO {
     private String userName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private String shareLink;
+   
 }

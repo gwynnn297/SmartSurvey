@@ -18,3 +18,4 @@ public class SurveyStatusResponseDTO {
     private Long surveyId;
     private String title;
 }
+

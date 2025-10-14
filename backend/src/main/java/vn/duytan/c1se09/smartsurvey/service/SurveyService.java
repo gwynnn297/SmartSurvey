@@ -61,10 +61,6 @@ public class SurveyService {
         dto.setCreatedAt(survey.getCreatedAt());
         dto.setUpdatedAt(survey.getUpdatedAt());
         
-        // Tạo shareLink cho public domain
-        String shareLink = "https://smartsurvey.com/survey/" + survey.getSurveyId() + "/respond";
-        dto.setShareLink(shareLink);
-        
         return dto;
     }
 
@@ -154,9 +150,7 @@ public class SurveyService {
             f.setCreatedAt(s.getCreatedAt());
             f.setUpdatedAt(s.getUpdatedAt());
             
-            // Tạo shareLink cho public domain
-            String shareLink = "https://smartsurvey.com/survey/" + s.getSurveyId() + "/respond";
-            f.setShareLink(shareLink);
+            
             
             return f;
         }).toList());

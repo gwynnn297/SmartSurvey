@@ -36,3 +36,4 @@ public class SurveyPublicResponseDTO {
         private String text;
     }
 }
+

@@ -10,7 +10,19 @@ CREATE TABLE IF NOT EXISTS ai_analysis (
     INDEX idx_ai_analysis_survey_created (survey_id, created_at),
     FOREIGN KEY (survey_id) REFERENCES surveys(survey_id)
 );
-
+CREATE TABLE IF NOT EXISTS ai_sentiment (
+    sentiment_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    survey_id BIGINT NOT NULL,
+    total_responses INT NOT NULL DEFAULT 0,
+    positive_percent DECIMAL(5,2) DEFAULT 0.0,
+    neutral_percent DECIMAL(5,2) DEFAULT 0.0,
+    negative_percent DECIMAL(5,2) DEFAULT 0.0,
+    details JSON,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_survey_sentiment (survey_id),
+    FOREIGN KEY (survey_id) REFERENCES surveys(survey_id)
+);
 
 CREATE TABLE IF NOT EXISTS ai_chat_logs (
     chat_id BIGINT PRIMARY KEY AUTO_INCREMENT,

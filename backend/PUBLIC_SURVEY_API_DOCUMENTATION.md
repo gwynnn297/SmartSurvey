@@ -161,3 +161,4 @@ Các unit tests được viết trong `SurveyControllerPublicTest.java` với co
 - API này được thiết kế để frontend có thể gọi mà không cần JWT token
 - Phù hợp cho việc embed survey vào các trang web khác
 - Có thể được sử dụng bởi mobile app hoặc third-party applications
+
