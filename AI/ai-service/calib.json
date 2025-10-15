@@ -1,0 +1,1518 @@
+{
+    "items": [
+      {
+        "text": "tôi mệt",
+        "label": 0
+      },
+      {
+        "text": "tôi đau đầu",
+        "label": 0
+      },
+      {
+        "text": "rất tiêu cực",
+        "label": 0
+      },
+      {
+        "text": "tôi khỏe",
+        "label": 2
+      },
+      {
+        "text": "tôi thấy tràn đầy năng lượng",
+        "label": 2
+      },
+      {
+        "text": "Hôm nay thức dậy tôi cảm thấy có rất nhiều năng lượng, và tôi cần làm gì đó",
+        "label": 2
+      },
+      {
+        "text": "hôm nay là thứ tư",
+        "label": 1
+      },
+      {
+        "text": "đã nhận được email",
+        "label": 1
+      },
+      {
+        "text": "đang chờ xác nhận",
+        "label": 1
+      },
+      {
+        "text": "tôi không khỏe",
+        "label": 0
+      },
+      {
+        "text": "tôi thấy kiệt sức",
+        "label": 0
+      },
+      {
+        "text": "dịch vụ kém",
+        "label": 0
+      },
+      {
+        "text": "nhân viên thân thiện",
+        "label": 2
+      },
+      {
+        "text": "tôi vui và hài lòng",
+        "label": 2
+      },
+      {
+        "text": "không có ý kiến",
+        "label": 1
+      },
+      {
+        "text": "tôi khỏe , nhưng rất tiêu cực",
+        "label": 0
+      },
+      {
+        "text": "trải nghiệm rất tệ",
+        "label": 0
+      },
+      {
+        "text": "mọi người hợp tác rất tốt",
+        "label": 2
+      },
+      {
+        "text": "tôi ngủ ngon và tỉnh táo",
+        "label": 2
+      },
+      {
+        "text": "thời tiết có mưa nhẹ",
+        "label": 1
+      },
+      {
+        "text": "khi kết thúc đề thi đau đầu",
+        "label": 0
+      },
+      {
+        "text": "ngoài giờ giảng viên tiêu cực",
+        "label": 0
+      },
+      {
+        "text": "hôm nay đề thi rất tệ",
+        "label": 0
+      },
+      {
+        "text": "tiết học thân thiện, nhưng tiết học bực bội",
+        "label": 0
+      },
+      {
+        "text": "chiều nay cả lớp khó chịu",
+        "label": 0
+      },
+      {
+        "text": "không khí ổn định, nhưng không khí bẩn",
+        "label": 0
+      },
+      {
+        "text": "phần mềm đắt đỏ vì mạng chập chờn",
+        "label": 0
+      },
+      {
+        "text": "quán cà phê mệt vì mạng chập chờn",
+        "label": 0
+      },
+      {
+        "text": "ngoài giờ nhân viên xuống tinh thần",
+        "label": 0
+      },
+      {
+        "text": "hệ thống khó hiểu vì chờ đợi quá lâu",
+        "label": 0
+      },
+      {
+        "text": "mình quá tải vì giá quá cao",
+        "label": 0
+      },
+      {
+        "text": "cửa hàng mệt vì rụng kết nối",
+        "label": 0
+      },
+      {
+        "text": "tụi mình không ổn vì nhiều lỗi phát sinh",
+        "label": 0
+      },
+      {
+        "text": "tụi mình đau đầu vì mạng chập chờn",
+        "label": 0
+      },
+      {
+        "text": "thời tiết thiếu chuyên nghiệp vì mạng chập chờn",
+        "label": 0
+      },
+      {
+        "text": "dịch vụ đáng giá, song dịch vụ đắt đỏ",
+        "label": 0
+      },
+      {
+        "text": "ngoài giờ chúng tôi khó dùng",
+        "label": 0
+      },
+      {
+        "text": "phòng khám hài lòng, song phòng khám không đúng kỳ vọng",
+        "label": 0
+      },
+      {
+        "text": "trải nghiệm bực bội vì thái độ không tốt",
+        "label": 0
+      },
+      {
+        "text": "bài tập đắt đỏ vì giá quá cao",
+        "label": 0
+      },
+      {
+        "text": "không khí mệt vì giá quá cao",
+        "label": 0
+      },
+      {
+        "text": "buổi học không thân thiện vì thái độ không tốt",
+        "label": 0
+      },
+      {
+        "text": "mọi người không thân thiện vì hướng dẫn không rõ ràng",
+        "label": 0
+      },
+      {
+        "text": "sau khi cập nhật tụi mình không ổn",
+        "label": 0
+      },
+      {
+        "text": "chúng tôi nhiệt tình, tuy nhiên chúng tôi vô tổ chức",
+        "label": 0
+      },
+      {
+        "text": "ứng dụng đúng kỳ vọng, mặc dù vậy ứng dụng kém",
+        "label": 0
+      },
+      {
+        "text": "cửa hàng mệt vì thái độ không tốt",
+        "label": 0
+      },
+      {
+        "text": "đề thi không thân thiện vì chờ đợi quá lâu",
+        "label": 0
+      },
+      {
+        "text": "dịch vụ xuống tinh thần vì thái độ không tốt",
+        "label": 0
+      },
+      {
+        "text": "chúng tôi hài lòng, tuy nhiên chúng tôi lỗi liên tục",
+        "label": 0
+      },
+      {
+        "text": "sáng nay cửa hàng quá tải",
+        "label": 0
+      },
+      {
+        "text": "tiết học không đúng kỳ vọng vì hướng dẫn không rõ ràng",
+        "label": 0
+      },
+      {
+        "text": "sản phẩm vui, song sản phẩm khó chịu",
+        "label": 0
+      },
+      {
+        "text": "đề thi đáng giá, nhưng đề thi không đúng kỳ vọng",
+        "label": 0
+      },
+      {
+        "text": "phòng lab lạc quan, nhưng phòng lab không thân thiện",
+        "label": 0
+      },
+      {
+        "text": "cả lớp chuẩn chỉnh, mặc dù vậy cả lớp khó chịu",
+        "label": 0
+      },
+      {
+        "text": "máy tính thiếu chuyên nghiệp vì chờ đợi quá lâu",
+        "label": 0
+      },
+      {
+        "text": "cả lớp mượt mà, song cả lớp đau đầu",
+        "label": 0
+      },
+      {
+        "text": "tụi mình đáng tiền, nhưng tụi mình đau đầu",
+        "label": 0
+      },
+      {
+        "text": "tụi mình hài lòng, song tụi mình vô tổ chức",
+        "label": 0
+      },
+      {
+        "text": "kết quả đắt đỏ vì nhiều lỗi phát sinh",
+        "label": 0
+      },
+      {
+        "text": "tiết học thân thiện, nhưng tiết học khó hiểu",
+        "label": 0
+      },
+      {
+        "text": "chiều nay dự án kém",
+        "label": 0
+      },
+      {
+        "text": "ngoài giờ sản phẩm xuống tinh thần",
+        "label": 0
+      },
+      {
+        "text": "tụi mình khó chịu vì giá quá cao",
+        "label": 0
+      },
+      {
+        "text": "phần mềm xuống tinh thần vì giá quá cao",
+        "label": 0
+      },
+      {
+        "text": "giảng viên ổn định, mặc dù vậy giảng viên chán nản",
+        "label": 0
+      },
+      {
+        "text": "kết quả mệt vì rụng kết nối",
+        "label": 0
+      },
+      {
+        "text": "hệ thống không thân thiện vì chờ đợi quá lâu",
+        "label": 0
+      },
+      {
+        "text": "nhân viên tuyệt vời, nhưng nhân viên ồn ào",
+        "label": 0
+      },
+      {
+        "text": "chiều nay đội ngũ khó hiểu",
+        "label": 0
+      },
+      {
+        "text": "sản phẩm khó chịu vì thái độ không tốt",
+        "label": 0
+      },
+      {
+        "text": "chúng tôi rất tệ vì giá quá cao",
+        "label": 0
+      },
+      {
+        "text": "cả lớp đau đầu vì mạng chập chờn",
+        "label": 0
+      },
+      {
+        "text": "thời tiết đúng kỳ vọng, mặc dù vậy thời tiết bực bội",
+        "label": 0
+      },
+      {
+        "text": "tụi mình tuyệt vời, song tụi mình ồn ào",
+        "label": 0
+      },
+      {
+        "text": "sau buổi học tôi đắt đỏ",
+        "label": 0
+      },
+      {
+        "text": "quán cà phê chu đáo, song quán cà phê bẩn",
+        "label": 0
+      },
+      {
+        "text": "dịch vụ mệt vì chờ đợi quá lâu",
+        "label": 0
+      },
+      {
+        "text": "buổi học rõ ràng, mặc dù vậy buổi học tiêu cực",
+        "label": 0
+      },
+      {
+        "text": "tuần này tụi mình bẩn",
+        "label": 0
+      },
+      {
+        "text": "kết quả lỗi liên tục vì mạng chập chờn",
+        "label": 0
+      },
+      {
+        "text": "tụi mình ồn ào vì thái độ không tốt",
+        "label": 0
+      },
+      {
+        "text": "sáng nay nhân viên thiếu chuyên nghiệp",
+        "label": 0
+      },
+      {
+        "text": "khi kết thúc hệ thống kiệt sức",
+        "label": 0
+      },
+      {
+        "text": "hệ thống chán nản vì thái độ không tốt",
+        "label": 0
+      },
+      {
+        "text": "tuần này không khí kiệt sức",
+        "label": 0
+      },
+      {
+        "text": "chúng tôi đau đầu vì bài giảng khó theo kịp",
+        "label": 0
+      },
+      {
+        "text": "ngoài giờ cả lớp xuống tinh thần",
+        "label": 0
+      },
+      {
+        "text": "tụi mình dễ hiểu, song tụi mình tiêu cực",
+        "label": 0
+      },
+      {
+        "text": "sản phẩm rõ ràng, mặc dù vậy sản phẩm lỗi liên tục",
+        "label": 0
+      },
+      {
+        "text": "đề thi kiệt sức vì nhiều lỗi phát sinh",
+        "label": 0
+      },
+      {
+        "text": "trải nghiệm không ổn vì rụng kết nối",
+        "label": 0
+      },
+      {
+        "text": "phòng khám khó hiểu vì chờ đợi quá lâu",
+        "label": 0
+      },
+      {
+        "text": "dạo gần đây tiết học không đáng tiền",
+        "label": 0
+      },
+      {
+        "text": "hôm nay trải nghiệm đắt đỏ",
+        "label": 0
+      },
+      {
+        "text": "ngoài giờ tiết học khó hiểu",
+        "label": 0
+      },
+      {
+        "text": "đề thi đáng giá, song đề thi không ổn",
+        "label": 0
+      },
+      {
+        "text": "trải nghiệm gọn gàng, nhưng trải nghiệm lỗi liên tục",
+        "label": 0
+      },
+      {
+        "text": "trải nghiệm hài lòng, mặc dù vậy trải nghiệm lỗi liên tục",
+        "label": 0
+      },
+      {
+        "text": "phòng lab khỏe, nhưng phòng lab quá tải",
+        "label": 0
+      },
+      {
+        "text": "trải nghiệm mệt vì hướng dẫn không rõ ràng",
+        "label": 0
+      },
+      {
+        "text": "hôm nay hệ thống kiệt sức",
+        "label": 0
+      },
+      {
+        "text": "nhân viên khó dùng vì rụng kết nối",
+        "label": 0
+      },
+      {
+        "text": "hệ thống tích cực, mặc dù vậy hệ thống không đáng tiền",
+        "label": 0
+      },
+      {
+        "text": "tiết học khó hiểu vì giá quá cao",
+        "label": 0
+      },
+      {
+        "text": "sản phẩm đáng giá, nhưng sản phẩm thiếu chuyên nghiệp",
+        "label": 0
+      },
+      {
+        "text": "món ăn thân thiện, nhưng món ăn kiệt sức",
+        "label": 0
+      },
+      {
+        "text": "buổi học mượt mà, song buổi học mệt",
+        "label": 0
+      },
+      {
+        "text": "dịch vụ mượt mà, tuy nhiên dịch vụ khó chịu",
+        "label": 0
+      },
+      {
+        "text": "buổi học mượt mà, tuy nhiên buổi học không ổn",
+        "label": 0
+      },
+      {
+        "text": "máy tính chậm chạp vì giá quá cao",
+        "label": 0
+      },
+      {
+        "text": "mọi người ổn, mặc dù vậy mọi người xuống tinh thần",
+        "label": 0
+      },
+      {
+        "text": "ứng dụng thân thiện, tuy nhiên ứng dụng ồn ào",
+        "label": 0
+      },
+      {
+        "text": "cửa hàng mượt mà, nhưng cửa hàng khó dùng",
+        "label": 0
+      },
+      {
+        "text": "phòng khám không thân thiện vì mạng chập chờn",
+        "label": 0
+      },
+      {
+        "text": "tiết học rất tệ vì thiếu thiết bị",
+        "label": 0
+      },
+      {
+        "text": "cả lớp chán nản vì rụng kết nối",
+        "label": 0
+      },
+      {
+        "text": "chiều nay đội ngũ bực bội",
+        "label": 0
+      },
+      {
+        "text": "khi kết thúc tụi mình khó hiểu",
+        "label": 0
+      },
+      {
+        "text": "máy tính đã gửi",
+        "label": 1
+      },
+      {
+        "text": "theo thông báo buổi học có 30 người tham gia",
+        "label": 1
+      },
+      {
+        "text": "đề thi đã đăng, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "mọi người đang hoạt động",
+        "label": 1
+      },
+      {
+        "text": "ứng dụng đã lưu, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "không khí có 30 người tham gia",
+        "label": 1
+      },
+      {
+        "text": "mọi người đã gửi",
+        "label": 1
+      },
+      {
+        "text": "nhân viên đóng cửa lúc 21 giờ, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "bài tập đã đăng",
+        "label": 1
+      },
+      {
+        "text": "ứng dụng thay đổi lịch",
+        "label": 1
+      },
+      {
+        "text": "sản phẩm đã xác nhận, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "phòng khám đã xác nhận",
+        "label": 1
+      },
+      {
+        "text": "chiều nay cả lớp mở cửa lúc 8 giờ",
+        "label": 1
+      },
+      {
+        "text": "không khí đã gửi email",
+        "label": 1
+      },
+      {
+        "text": "cả lớp đã gửi email, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "sáng nay mình cần thêm thông tin",
+        "label": 1
+      },
+      {
+        "text": "tháng này bài tập đang bảo trì",
+        "label": 1
+      },
+      {
+        "text": "chiều nay mọi người đã đăng",
+        "label": 1
+      },
+      {
+        "text": "tôi đã gửi, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "theo thông báo trải nghiệm mở cửa lúc 8 giờ",
+        "label": 1
+      },
+      {
+        "text": "phòng khám đã kiểm tra",
+        "label": 1
+      },
+      {
+        "text": "hôm nay cửa hàng đã xác nhận",
+        "label": 1
+      },
+      {
+        "text": "ứng dụng đã gửi email",
+        "label": 1
+      },
+      {
+        "text": "tôi đang hoạt động, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "không khí đang chờ, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "dịch vụ đang hoạt động, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "sáng nay bài tập có 30 người tham gia",
+        "label": 1
+      },
+      {
+        "text": "máy tính đang diễn ra, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "theo thông báo mọi người đã đăng",
+        "label": 1
+      },
+      {
+        "text": "hệ thống đang chờ",
+        "label": 1
+      },
+      {
+        "text": "trong tuần giảng viên đóng cửa lúc 21 giờ",
+        "label": 1
+      },
+      {
+        "text": "bài giảng nhiệt độ 26°C, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "nhân viên đã đăng",
+        "label": 1
+      },
+      {
+        "text": "cửa hàng đã hoàn thành, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "tháng này đề thi đang bảo trì",
+        "label": 1
+      },
+      {
+        "text": "bài giảng đóng cửa lúc 21 giờ, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "phần mềm đang bảo trì, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "theo lịch tôi đã nhận",
+        "label": 1
+      },
+      {
+        "text": "đề thi có 30 người tham gia, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "món ăn thay đổi lịch, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "đề thi đang diễn ra, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "tuần này máy tính đang bảo trì",
+        "label": 1
+      },
+      {
+        "text": "dự án đã lưu",
+        "label": 1
+      },
+      {
+        "text": "dạo gần đây giảng viên đang bảo trì",
+        "label": 1
+      },
+      {
+        "text": "dự án đã gửi email, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "trong tuần cửa hàng đang bảo trì",
+        "label": 1
+      },
+      {
+        "text": "tôi đã gửi, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "dạo gần đây mọi người đóng cửa lúc 21 giờ",
+        "label": 1
+      },
+      {
+        "text": "theo thông báo cả lớp đã lưu",
+        "label": 1
+      },
+      {
+        "text": "bài tập đóng cửa lúc 21 giờ, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "dự án đã gửi email",
+        "label": 1
+      },
+      {
+        "text": "bài giảng đang cập nhật, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "không khí đã hoàn thành, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "sáng nay không khí mở cửa lúc 8 giờ",
+        "label": 1
+      },
+      {
+        "text": "trong tuần kết quả đã đăng",
+        "label": 1
+      },
+      {
+        "text": "phòng lab đã kiểm tra, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "dạo gần đây bài giảng thay đổi lịch",
+        "label": 1
+      },
+      {
+        "text": "món ăn nhiệt độ 26°C",
+        "label": 1
+      },
+      {
+        "text": "nhân viên mở cửa lúc 8 giờ, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "theo thông báo bài giảng có 30 người tham gia",
+        "label": 1
+      },
+      {
+        "text": "theo thông báo cửa hàng đóng cửa lúc 21 giờ",
+        "label": 1
+      },
+      {
+        "text": "dịch vụ đã đăng, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "tụi mình đã hoàn thành",
+        "label": 1
+      },
+      {
+        "text": "mọi người đóng cửa lúc 21 giờ, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "món ăn đang cập nhật, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "bài giảng thay đổi lịch",
+        "label": 1
+      },
+      {
+        "text": "dạo gần đây chúng tôi đã hoàn thành",
+        "label": 1
+      },
+      {
+        "text": "trải nghiệm mở cửa lúc 8 giờ",
+        "label": 1
+      },
+      {
+        "text": "chiều nay chúng tôi đang cập nhật",
+        "label": 1
+      },
+      {
+        "text": "kết quả nhiệt độ 26°C, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "ứng dụng cần thêm thông tin",
+        "label": 1
+      },
+      {
+        "text": "trong tuần chúng tôi đang hoạt động",
+        "label": 1
+      },
+      {
+        "text": "ứng dụng đã hoàn thành, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "phòng lab thay đổi lịch",
+        "label": 1
+      },
+      {
+        "text": "tôi đúng lịch",
+        "label": 1
+      },
+      {
+        "text": "bài giảng đã hoàn thành, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "theo thông báo dự án đã gửi email",
+        "label": 1
+      },
+      {
+        "text": "hệ thống đã nhận, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "dạo gần đây bài giảng đã nhận",
+        "label": 1
+      },
+      {
+        "text": "dịch vụ đang chờ",
+        "label": 1
+      },
+      {
+        "text": "tháng này mọi người đã hoàn thành",
+        "label": 1
+      },
+      {
+        "text": "giảng viên có 30 người tham gia",
+        "label": 1
+      },
+      {
+        "text": "phần mềm đã hoàn thành",
+        "label": 1
+      },
+      {
+        "text": "giảng viên đã đăng, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "phòng khám đã xác nhận, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "phòng lab đã gửi",
+        "label": 1
+      },
+      {
+        "text": "chúng tôi đang cập nhật",
+        "label": 1
+      },
+      {
+        "text": "tôi đóng cửa lúc 21 giờ",
+        "label": 1
+      },
+      {
+        "text": "bài tập đã kiểm tra",
+        "label": 1
+      },
+      {
+        "text": "món ăn thay đổi lịch",
+        "label": 1
+      },
+      {
+        "text": "buổi học có 30 người tham gia, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "phòng lab đang cập nhật",
+        "label": 1
+      },
+      {
+        "text": "buổi học đã kiểm tra, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "đội ngũ đã xác nhận",
+        "label": 1
+      },
+      {
+        "text": "cả lớp đóng cửa lúc 21 giờ",
+        "label": 1
+      },
+      {
+        "text": "dịch vụ đã xác nhận, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "món ăn đã đăng",
+        "label": 1
+      },
+      {
+        "text": "bài giảng đang chờ",
+        "label": 1
+      },
+      {
+        "text": "tiết học đang diễn ra, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "đội ngũ đã lưu, và thông tin đã được ghi nhận",
+        "label": 1
+      },
+      {
+        "text": "dạo gần đây phòng khám ổn định",
+        "label": 2
+      },
+      {
+        "text": "sáng nay nhân viên vui",
+        "label": 2
+      },
+      {
+        "text": "cửa hàng không ổn, song cửa hàng gọn gàng",
+        "label": 2
+      },
+      {
+        "text": "tuần này mình rất tốt",
+        "label": 2
+      },
+      {
+        "text": "nhân viên rất tệ, tuy nhiên nhân viên dễ sử dụng",
+        "label": 2
+      },
+      {
+        "text": "thời tiết không đúng kỳ vọng, song thời tiết đáng tiền",
+        "label": 2
+      },
+      {
+        "text": "nhân viên khó chịu, nhưng nhân viên rõ ràng",
+        "label": 2
+      },
+      {
+        "text": "sản phẩm bẩn, mặc dù vậy sản phẩm tích cực",
+        "label": 2
+      },
+      {
+        "text": "sau buổi học giảng viên khỏe",
+        "label": 2
+      },
+      {
+        "text": "chúng tôi ổn vì giải quyết vấn đề nhanh",
+        "label": 2
+      },
+      {
+        "text": "tiết học khó chịu, nhưng tiết học nhiệt tình",
+        "label": 2
+      },
+      {
+        "text": "không khí mệt, song không khí rõ ràng",
+        "label": 2
+      },
+      {
+        "text": "tụi mình đúng kỳ vọng vì dịch vụ thân thiện",
+        "label": 2
+      },
+      {
+        "text": "quán cà phê không ổn, nhưng quán cà phê hài lòng",
+        "label": 2
+      },
+      {
+        "text": "cửa hàng vui vì giải quyết vấn đề nhanh",
+        "label": 2
+      },
+      {
+        "text": "sau khi cập nhật đề thi vui",
+        "label": 2
+      },
+      {
+        "text": "giảng viên chậm chạp, tuy nhiên giảng viên rõ ràng",
+        "label": 2
+      },
+      {
+        "text": "ngoài giờ tiết học nhiệt tình",
+        "label": 2
+      },
+      {
+        "text": "giảng viên kiệt sức, nhưng giảng viên sạch sẽ",
+        "label": 2
+      },
+      {
+        "text": "khi kết thúc phòng lab đáng tiền",
+        "label": 2
+      },
+      {
+        "text": "khi bắt đầu không khí vui",
+        "label": 2
+      },
+      {
+        "text": "bài giảng khó dùng, tuy nhiên bài giảng lạc quan",
+        "label": 2
+      },
+      {
+        "text": "tuần này cửa hàng thân thiện",
+        "label": 2
+      },
+      {
+        "text": "bài tập tuyệt vời vì phòng ốc sạch sẽ",
+        "label": 2
+      },
+      {
+        "text": "trong giờ giảng viên ổn",
+        "label": 2
+      },
+      {
+        "text": "dự án sạch sẽ vì bài giảng dễ hiểu",
+        "label": 2
+      },
+      {
+        "text": "phòng khám dễ hiểu vì kết quả đúng mong đợi",
+        "label": 2
+      },
+      {
+        "text": "tuần này mọi người lạc quan",
+        "label": 2
+      },
+      {
+        "text": "không khí khó chịu, song không khí đúng kỳ vọng",
+        "label": 2
+      },
+      {
+        "text": "dự án tràn đầy năng lượng vì dịch vụ thân thiện",
+        "label": 2
+      },
+      {
+        "text": "nhân viên quá tải, nhưng nhân viên khỏe",
+        "label": 2
+      },
+      {
+        "text": "chiều nay sản phẩm tuyệt vời",
+        "label": 2
+      },
+      {
+        "text": "phòng khám bẩn, nhưng phòng khám tích cực",
+        "label": 2
+      },
+      {
+        "text": "bài giảng đắt đỏ, mặc dù vậy bài giảng chu đáo",
+        "label": 2
+      },
+      {
+        "text": "ứng dụng vô tổ chức, nhưng ứng dụng rất tốt",
+        "label": 2
+      },
+      {
+        "text": "cửa hàng đúng kỳ vọng vì dịch vụ thân thiện",
+        "label": 2
+      },
+      {
+        "text": "chúng tôi hiệu quả vì hỗ trợ kịp thời",
+        "label": 2
+      },
+      {
+        "text": "trải nghiệm vô tổ chức, mặc dù vậy trải nghiệm rất tốt",
+        "label": 2
+      },
+      {
+        "text": "khi kết thúc hệ thống chuẩn chỉnh",
+        "label": 2
+      },
+      {
+        "text": "máy tính khó hiểu, tuy nhiên máy tính ổn định",
+        "label": 2
+      },
+      {
+        "text": "khi kết thúc mọi người nhiệt tình",
+        "label": 2
+      },
+      {
+        "text": "trong giờ sản phẩm dễ sử dụng",
+        "label": 2
+      },
+      {
+        "text": "sáng nay buổi học dễ hiểu",
+        "label": 2
+      },
+      {
+        "text": "máy tính nhiệt tình vì bài giảng dễ hiểu",
+        "label": 2
+      },
+      {
+        "text": "mình không ổn, nhưng mình vui",
+        "label": 2
+      },
+      {
+        "text": "khi kết thúc không khí dễ hiểu",
+        "label": 2
+      },
+      {
+        "text": "ngoài giờ sản phẩm khỏe",
+        "label": 2
+      },
+      {
+        "text": "dạo gần đây phần mềm đúng kỳ vọng",
+        "label": 2
+      },
+      {
+        "text": "hệ thống đáng giá vì bài giảng dễ hiểu",
+        "label": 2
+      },
+      {
+        "text": "máy tính khó dùng, tuy nhiên máy tính đúng kỳ vọng",
+        "label": 2
+      },
+      {
+        "text": "thời tiết hiệu quả vì dịch vụ thân thiện",
+        "label": 2
+      },
+      {
+        "text": "trải nghiệm dễ sử dụng vì giải quyết vấn đề nhanh",
+        "label": 2
+      },
+      {
+        "text": "sau buổi học nhân viên vui",
+        "label": 2
+      },
+      {
+        "text": "tôi bực bội, tuy nhiên tôi tràn đầy năng lượng",
+        "label": 2
+      },
+      {
+        "text": "tôi kiệt sức, nhưng tôi ổn",
+        "label": 2
+      },
+      {
+        "text": "sau buổi học nhân viên ổn",
+        "label": 2
+      },
+      {
+        "text": "dạo gần đây tụi mình dễ sử dụng",
+        "label": 2
+      },
+      {
+        "text": "khi kết thúc cửa hàng dễ hiểu",
+        "label": 2
+      },
+      {
+        "text": "mọi người lỗi liên tục, song mọi người gọn gàng",
+        "label": 2
+      },
+      {
+        "text": "nhân viên dễ hiểu vì bài giảng dễ hiểu",
+        "label": 2
+      },
+      {
+        "text": "chúng tôi bẩn, mặc dù vậy chúng tôi ổn định",
+        "label": 2
+      },
+      {
+        "text": "kết quả đáng khen vì mọi thứ diễn ra suôn sẻ",
+        "label": 2
+      },
+      {
+        "text": "cửa hàng mệt, nhưng cửa hàng đáng tiền",
+        "label": 2
+      },
+      {
+        "text": "bài giảng gọn gàng vì giải quyết vấn đề nhanh",
+        "label": 2
+      },
+      {
+        "text": "khi kết thúc nhân viên hài lòng",
+        "label": 2
+      },
+      {
+        "text": "trải nghiệm khỏe vì hỗ trợ kịp thời",
+        "label": 2
+      },
+      {
+        "text": "sáng nay giảng viên rõ ràng",
+        "label": 2
+      },
+      {
+        "text": "hôm nay trải nghiệm đúng kỳ vọng",
+        "label": 2
+      },
+      {
+        "text": "sáng nay phòng khám đúng kỳ vọng",
+        "label": 2
+      },
+      {
+        "text": "chiều nay máy tính chuẩn chỉnh",
+        "label": 2
+      },
+      {
+        "text": "kết quả dễ hiểu vì bài giảng dễ hiểu",
+        "label": 2
+      },
+      {
+        "text": "chiều nay đề thi chu đáo",
+        "label": 2
+      },
+      {
+        "text": "bài giảng rất tốt vì đội ngũ làm việc hiệu quả",
+        "label": 2
+      },
+      {
+        "text": "máy tính rõ ràng vì phòng ốc sạch sẽ",
+        "label": 2
+      },
+      {
+        "text": "thời tiết không thân thiện, song thời tiết gọn gàng",
+        "label": 2
+      },
+      {
+        "text": "mọi người hài lòng vì bài giảng dễ hiểu",
+        "label": 2
+      },
+      {
+        "text": "mình không đúng kỳ vọng, nhưng mình tràn đầy năng lượng",
+        "label": 2
+      },
+      {
+        "text": "hôm nay không khí thân thiện",
+        "label": 2
+      },
+      {
+        "text": "quán cà phê không đáng tiền, tuy nhiên quán cà phê dễ hiểu",
+        "label": 2
+      },
+      {
+        "text": "chiều nay mình dễ sử dụng",
+        "label": 2
+      },
+      {
+        "text": "ngoài giờ tụi mình đáng giá",
+        "label": 2
+      },
+      {
+        "text": "đề thi vui vì giải quyết vấn đề nhanh",
+        "label": 2
+      },
+      {
+        "text": "trong giờ dự án tràn đầy năng lượng",
+        "label": 2
+      },
+      {
+        "text": "phòng lab không ổn, song phòng lab tuyệt vời",
+        "label": 2
+      },
+      {
+        "text": "cửa hàng không đáng tiền, mặc dù vậy cửa hàng tràn đầy năng lượng",
+        "label": 2
+      },
+      {
+        "text": "ngoài giờ máy tính lạc quan",
+        "label": 2
+      },
+      {
+        "text": "dạo gần đây thời tiết thân thiện",
+        "label": 2
+      },
+      {
+        "text": "bài giảng kiệt sức, mặc dù vậy bài giảng khỏe",
+        "label": 2
+      },
+      {
+        "text": "hôm nay trải nghiệm thân thiện",
+        "label": 2
+      },
+      {
+        "text": "trải nghiệm mệt, nhưng trải nghiệm đáng giá",
+        "label": 2
+      },
+      {
+        "text": "ứng dụng khó chịu, tuy nhiên ứng dụng hài lòng",
+        "label": 2
+      },
+      {
+        "text": "tuần này máy tính nhiệt tình",
+        "label": 2
+      },
+      {
+        "text": "khi bắt đầu tiết học hiệu quả",
+        "label": 2
+      },
+      {
+        "text": "bài tập khó hiểu, nhưng bài tập đúng kỳ vọng",
+        "label": 2
+      },
+      {
+        "text": "cửa hàng đúng kỳ vọng vì giải quyết vấn đề nhanh",
+        "label": 2
+      },
+      {
+        "text": "dự án khỏe vì giải quyết vấn đề nhanh",
+        "label": 2
+      },
+      {
+        "text": "dự án không đúng kỳ vọng, tuy nhiên dự án ổn định",
+        "label": 2
+      },
+      {
+        "text": "giảng viên chán nản, mặc dù vậy giảng viên hiệu quả",
+        "label": 2
+      },
+      {
+        "text": "đội ngũ khó chịu, song đội ngũ mượt mà",
+        "label": 2
+      },
+      {
+        "text": "ngoài giờ giảng viên tuyệt vời",
+        "label": 2
+      },
+      { "text": "Bài giảng dài nhưng cũng tùy buổi.", "label": 1 },
+      { "text": "Khá ổn nhưng khó nói chắc.", "label": 1 },
+      { "text": "Có điểm mạnh nhưng cần thời gian đánh giá.", "label": 1 },
+      { "text": "Cảm nhận chung là tạm ổn, chưa rõ rệt.", "label": 1 },
+      { "text": "Trải nghiệm cũng được, còn vài chỗ lăn tăn.", "label": 1 },
+      { "text": "Kết quả nhìn chung ổn nhưng chưa thật sự thuyết phục.", "label": 1 },
+      { "text": "Hài lòng ở mức tương đối.", "label": 1 },
+      { "text": "Chưa thể kết luận, cần thêm dữ liệu.", "label": 1 },
+      { "text": "Tương đối tốt nhưng phụ thuộc ngữ cảnh.", "label": 1 },
+      { "text": "Chưa thấy vấn đề lớn, nhưng cũng không nổi bật.", "label": 1 },
+  
+      { "text": "Được phần nào, phần nào chưa.", "label": 1 },
+      { "text": "Mọi thứ tạm ổn theo kỳ vọng.", "label": 1 },
+      { "text": "Nhìn chung chấp nhận được.", "label": 1 },
+      { "text": "Khó đánh giá ngay, cần theo dõi thêm.", "label": 1 },
+      { "text": "Không tệ nhưng chưa chắc đã tốt.", "label": 1 },
+      { "text": "Tạm gọi là ổn định.", "label": 1 },
+      { "text": "Kết quả còn phụ thuộc cách triển khai.", "label": 1 },
+      { "text": "Có lúc tốt, có lúc bình thường.", "label": 1 },
+      { "text": "Khá đồng đều, không có gì quá nổi trội.", "label": 1 },
+      { "text": "Hợp lý trong một số trường hợp.", "label": 1 },
+  
+      { "text": "Có cải thiện nhưng chưa nhiều.", "label": 1 },
+      { "text": "Đáp ứng tối thiểu yêu cầu.", "label": 1 },
+      { "text": "Ổn định ở mức cơ bản.", "label": 1 },
+      { "text": "Cũng được, chưa ấn tượng.", "label": 1 },
+      { "text": "Chưa rõ tác động dài hạn.", "label": 1 },
+      { "text": "Tạm thời chưa thấy vấn đề.", "label": 1 },
+      { "text": "Hiệu quả phụ thuộc từng nhóm.", "label": 1 },
+      { "text": "Khó nói là tốt hay chưa tốt.", "label": 1 },
+      { "text": "Cần thêm thời gian để kiểm chứng.", "label": 1 },
+      { "text": "Nhìn qua thì ổn.", "label": 1 },
+      {
+        "text": "Giá cả chấp nhận được trên ở phiên bản mới nhưng còn sớm để kết luận.",
+        "label": 1
+      },
+      {
+        "text": "Xét tổng thể Slide ổn tuy nhiên phụ thuộc kỳ vọng mỗi người.",
+        "label": 1
+      },
+      {
+        "text": "Trợ giảng tương đối ổn nhưng còn phụ thuộc ngữ cảnh.",
+        "label": 1
+      },
+      {
+        "text": "Môn học không có gì nổi trội dù vậy phụ thuộc kỳ vọng mỗi người.",
+        "label": 1
+      },
+      {
+        "text": "Đề thi cũng bình thường tuy nhiên còn sớm để kết luận.",
+        "label": 1
+      },
+      {
+        "text": "Xét tổng thể Phản hồi ổn tuy nhiên khó nói chắc phải theo dõi thêm.",
+        "label": 1
+      },
+      {
+        "text": "Nhìn chung Âm thanh tạm ổn trên trên web tuy nhiên còn sớm để kết luận.",
+        "label": 1
+      },
+      {
+        "text": "Trợ giảng tương đối ổn dù vậy cũng hên xui tuỳ buổi.",
+        "label": 1
+      },
+      {
+        "text": "Nhìn chung Trải nghiệm tạm ổn tuy vậy cần thêm dữ liệu đánh giá.",
+        "label": 1
+      },
+      {
+        "text": "Hình ảnh tạm đạt yêu cầu ở ở phòng lab tuy nhiên cũng hên xui tuỳ buổi.",
+        "label": 1
+      },
+      {
+        "text": "Xét tổng thể Trải nghiệm ổn ở trong lớp tuy vậy còn phụ thuộc ngữ cảnh.",
+        "label": 1
+      },
+      {
+        "text": "Sản phẩm không có gì nổi trội trên khi tải nặng nhưng cũng hên xui tuỳ buổi.",
+        "label": 1
+      },
+      {
+        "text": "Quy trình không có gì nổi trội ở ở phòng lab song còn sớm để kết luận.",
+        "label": 1
+      },
+      {
+        "text": "Chính sách cân bằng giữa ưu và nhược mặc dù tùy cách triển khai.",
+        "label": 1
+      },
+      {
+        "text": "Giao diện tạm đạt yêu cầu ở trên di động nhưng cần thêm dữ liệu đánh giá.",
+        "label": 1
+      },
+      {
+        "text": "Sản phẩm không có gì nổi trội song còn phụ thuộc ngữ cảnh.",
+        "label": 1
+      },
+      {
+        "text": "Laptop tương đối ổn tuy nhiên còn phụ thuộc ngữ cảnh.",
+        "label": 1
+      },
+      {
+        "text": "Đường truyền tương đối ổn trên ở phiên bản mới song còn phụ thuộc ngữ cảnh.",
+        "label": 1
+      },
+      {
+        "text": "Điện thoại cân bằng giữa ưu và nhược nhưng khó nói chắc phải theo dõi thêm.",
+        "label": 1
+      },
+      {
+        "text": "Bài giảng cũng bình thường trên khi tải nặng tuy vậy phụ thuộc kỳ vọng mỗi người.",
+        "label": 1
+      },
+      {
+        "text": "Bài giảng cũng bình thường nhưng còn sớm để kết luận.",
+        "label": 1
+      },
+      {
+        "text": "Đường truyền không có gì nổi trội tuy vậy phụ thuộc kỳ vọng mỗi người.",
+        "label": 1
+      },
+      {
+        "text": "Giá cả cân bằng giữa ưu và nhược song khó nói chắc phải theo dõi thêm.",
+        "label": 1
+      },
+      {
+        "text": "Nhìn chung Giá cả tạm ổn tuy nhiên phụ thuộc kỳ vọng mỗi người.",
+        "label": 1
+      },
+      {
+        "text": "Điểm số cân bằng giữa ưu và nhược nhưng tùy cách triển khai.",
+        "label": 1
+      },
+      {
+        "text": "Nội dung chấp nhận được tuy vậy cần thêm dữ liệu đánh giá.",
+        "label": 1
+      },
+      {
+        "text": "Chính sách tạm đạt yêu cầu ở ở phòng lab mặc dù cần thêm dữ liệu đánh giá.",
+        "label": 1
+      },
+      {
+        "text": "Môn học không có gì nổi trội nhưng còn phụ thuộc ngữ cảnh.",
+        "label": 1
+      },
+      {
+        "text": "Buổi học tạm đạt yêu cầu tuy vậy cần thêm dữ liệu đánh giá.",
+        "label": 1
+      },
+      {
+        "text": "Nội dung cân bằng giữa ưu và nhược tuy vậy còn sớm để kết luận.",
+        "label": 1
+      },
+      {
+        "text": "Phản hồi cũng bình thường trên khi tải nặng tuy vậy cần thêm dữ liệu đánh giá.",
+        "label": 1
+      },
+      {
+        "text": "Nhìn chung Đội ngũ hỗ trợ tạm ổn trên với nhóm đông nhưng tùy từng đợt.",
+        "label": 1
+      },
+      {
+        "text": "Hệ thống không có gì nổi trội tuy nhiên phụ thuộc kỳ vọng mỗi người.",
+        "label": 1
+      },
+      {
+        "text": "Server cân bằng giữa ưu và nhược tuy vậy còn phụ thuộc ngữ cảnh.",
+        "label": 1
+      },
+      {
+        "text": "Server chấp nhận được mặc dù khó nói chắc phải theo dõi thêm.",
+        "label": 1
+      },
+      {
+        "text": "Dịch vụ tương đối ổn song còn sớm để kết luận.",
+        "label": 1
+      },
+      {
+        "text": "Khóa học chấp nhận được ở ở phiên bản mới tuy vậy tùy cách triển khai.",
+        "label": 1
+      },
+      {
+        "text": "Giá cả cũng bình thường trên ở phòng lab dù vậy khó nói chắc phải theo dõi thêm.",
+        "label": 1
+      },
+      {
+        "text": "Xét tổng thể Hệ thống ổn dù vậy còn phụ thuộc ngữ cảnh.",
+        "label": 1
+      },
+      {
+        "text": "Chính sách cân bằng giữa ưu và nhược ở ở phiên bản mới nhưng còn sớm để kết luận.",
+        "label": 1
+      },
+      {
+        "text": "Buổi học tạm đạt yêu cầu dù vậy còn sớm để kết luận.",
+        "label": 1
+      },
+      {
+        "text": "Xét tổng thể Tính năng ổn trên trên di động mặc dù còn phụ thuộc ngữ cảnh.",
+        "label": 1
+      },
+      {
+        "text": "Slide tạm đạt yêu cầu ở trên web tuy nhiên khó nói chắc phải theo dõi thêm.",
+        "label": 1
+      },
+      {
+        "text": "Giao diện tương đối ổn dù vậy tùy cách triển khai.",
+        "label": 1
+      },
+      {
+        "text": "Âm thanh cân bằng giữa ưu và nhược ở với nhóm đông nhưng tùy cách triển khai.",
+        "label": 1
+      },
+      {
+        "text": "Laptop không có gì nổi trội ở trong lớp song khó nói chắc phải theo dõi thêm.",
+        "label": 1
+      },
+      {
+        "text": "Thời lượng tương đối ổn dù vậy tùy từng đợt.",
+        "label": 1
+      },
+      {
+        "text": "Giao diện cũng bình thường ở ở ca tối song tùy từng đợt.",
+        "label": 1
+      },
+      {
+        "text": "Buổi học chấp nhận được nhưng cần thêm dữ liệu đánh giá.",
+        "label": 1
+      },
+      {
+        "text": "Bài giảng không có gì nổi trội dù vậy phụ thuộc kỳ vọng mỗi người.",
+        "label": 1
+      }
+  
+  
+    ]
+  }
