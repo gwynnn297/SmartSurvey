@@ -10,7 +10,9 @@ import vn.duytan.c1se09.smartsurvey.service.ResponseService;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
@@ -29,5 +31,26 @@ public class ResponseController {
 	public ResponseEntity<List<ResponseWithAnswersDTO>> getResponsesBySurvey(@PathVariable("surveyId") Long surveyId)
 			throws IdInvalidException {
 		return ResponseEntity.ok(responseService.getResponsesBySurvey(surveyId));
+	}
+
+	@GetMapping("/responses/{surveyId}/count")
+	@ApiMessage("Get response count by survey")
+	public ResponseEntity<Map<String, Object>> getResponseCount(@PathVariable("surveyId") Long surveyId)
+			throws IdInvalidException {
+		long count = responseService.getResponseCountBySurvey(surveyId);
+		Map<String, Object> response = new HashMap<>();
+		response.put("surveyId", surveyId);
+		response.put("totalResponses", count);
+		return ResponseEntity.ok(response);
+	}
+
+	@GetMapping("/responses/total-count")
+	@ApiMessage("Get total response count for all surveys")
+	public ResponseEntity<Map<String, Object>> getTotalResponseCount() {
+		long totalCount = responseService.getTotalResponseCount();
+		Map<String, Object> response = new HashMap<>();
+		response.put("totalResponses", totalCount);
+		response.put("message", "Tổng số responses của tất cả survey");
+		return ResponseEntity.ok(response);
 	}
 }

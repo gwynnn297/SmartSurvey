@@ -17,6 +17,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.http.HttpMethod;
 import vn.duytan.c1se09.smartsurvey.security.AuthEntryPointJwt;
 import vn.duytan.c1se09.smartsurvey.security.AuthTokenFilter;
 import vn.duytan.c1se09.smartsurvey.service.UserDetailsServiceImpl;
@@ -86,10 +87,12 @@ public class SecurityConfig {
                         .requestMatchers("/users/profile").authenticated()
                         .requestMatchers("/dashboard/**").authenticated()
                         .requestMatchers("/surveys/{id}/public", "/surveys/{id}/status").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/responses").permitAll()
                         .requestMatchers("/surveys/**").authenticated()
                         .requestMatchers("/questions/**").authenticated()
                         .requestMatchers("/options/**").authenticated()
                         .requestMatchers("/categories/**").authenticated()
+                        .requestMatchers("/ai/**").authenticated()
                         .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .anyRequest().authenticated());

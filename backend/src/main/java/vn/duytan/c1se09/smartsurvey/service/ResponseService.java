@@ -10,6 +10,7 @@ import vn.duytan.c1se09.smartsurvey.domain.response.response.AnswerDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.response.ResponseWithAnswersDTO;
 import vn.duytan.c1se09.smartsurvey.repository.*;
 import vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum;
+import vn.duytan.c1se09.smartsurvey.util.constant.SurveyStatusEnum;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 
 import java.util.*;
@@ -31,6 +32,12 @@ public class ResponseService {
 	public ResponseWithAnswersDTO submitResponse(ResponseSubmitRequestDTO request) throws IdInvalidException {
 		Survey survey = surveyRepository.findById(request.getSurveyId())
 				.orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
+
+		// Kiểm tra survey có published không
+		if (survey.getStatus() != SurveyStatusEnum.published) {
+			throw new IdInvalidException("Khảo sát không khả dụng để trả lời. Trạng thái hiện tại: " + 
+					(survey.getStatus() != null ? survey.getStatus().name() : "null"));
+		}
 
 		List<Question> questions = questionRepository.findBySurvey(survey);
 		if (questions.isEmpty()) {
@@ -201,6 +208,24 @@ public class ResponseService {
 			default:
 				throw new IdInvalidException("Loại câu hỏi không hỗ trợ");
 		}
+	}
+
+	/**
+	 * Đếm số lượng responses của một survey
+	 */
+	@Transactional(readOnly = true)
+	public long getResponseCountBySurvey(Long surveyId) throws IdInvalidException {
+		Survey survey = surveyRepository.findById(surveyId)
+				.orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
+		return responseRepository.countBySurvey(survey);
+	}
+
+	/**
+	 * Đếm tổng số lượng responses của tất cả survey
+	 */
+	@Transactional(readOnly = true)
+	public long getTotalResponseCount() {
+		return responseRepository.count();
 	}
 
 	private User tryGetCurrentUserOrNull() {

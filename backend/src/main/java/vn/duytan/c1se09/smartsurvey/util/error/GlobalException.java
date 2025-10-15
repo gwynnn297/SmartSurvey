@@ -37,7 +37,7 @@ public class GlobalException {
     }
 
     @ExceptionHandler(value = {
-            NoResourceFoundException.class,
+            NoResourceFoundException.class
     })
     public ResponseEntity<ErrorDTO> handleNotFoundException(Exception ex, HttpServletRequest request) {
         ErrorDTO body = ErrorDTO.builder()
