@@ -13,9 +13,12 @@ import ChangePassword from "./pages/ChangePassword/ChangePassword";
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import DashboardReportPage from "./pages/report/DashboardReportPage";
 import SentimentPage from "./pages/report/SentimentPage";
+import ExportReportPage from "./pages/report/ExportReportPage";
+import DetailsStatisticPage from "./pages/report/DetailsStatisticPage";
 import ResponseFormPage from "./pages/Response/ResponseFormPage";
 import PublicResponsePage from "./pages/Response/PublicResponsePage";
 import ShareSurveyPage from "./pages/Survey/ShareSurveyPage";
+import OpenFeedbackPage from "./pages/report/OpenFeedbackPage";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -103,10 +106,18 @@ function App() {
           }
         />
         <Route
-          path="/report"
+          path="/report/export"
           element={
             <PrivateRoute>
-              <DashboardReportPage />
+              <ExportReportPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/report/details-statistic"
+          element={
+            <PrivateRoute>
+              <DetailsStatisticPage />
             </PrivateRoute>
           }
         />
@@ -115,6 +126,23 @@ function App() {
           element={
             <PrivateRoute>
               <SentimentPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/report/open-feedback"
+          element={
+            <PrivateRoute>
+              <OpenFeedbackPage />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/report"
+          element={
+            <PrivateRoute>
+              <DashboardReportPage />
             </PrivateRoute>
           }
         />

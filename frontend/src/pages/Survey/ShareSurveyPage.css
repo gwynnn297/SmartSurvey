@@ -104,7 +104,7 @@
 
 /* --- SHARE SECTION --- */
 .share-section {
-    background: rgba(224, 255, 255);
+    background: #E0FFFF;
     border-radius: 12px;
     padding: 24px 28px;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
@@ -142,6 +142,7 @@
 .link-box {
     display: flex;
     align-items: center;
+    margin-top: 16px;
     margin-bottom: 16px;
 }
 
@@ -181,12 +182,13 @@
     cursor: pointer;
     font-size: 14px;
     font-weight: 500;
-    color: white;
+    color: black;
     transition: background 0.2s;
 }
 
 .btn-email {
-    background: #6366f1;
+    border: 1px solid #ded6d6 !important;
+    background: #fff;
 }
 
 .btn-email:hover {
@@ -194,7 +196,7 @@
 }
 
 .btn-social {
-    background: #3b82f6;
+    border: 1px solid #ded6d6 !important;
 }
 
 .btn-social:hover {
@@ -202,7 +204,7 @@
 }
 
 .btn-embed {
-    background: #8b5cf6;
+    border: 1px solid #ded6d6 !important;
 }
 
 .btn-embed:hover {

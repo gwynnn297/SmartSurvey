@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { surveyService } from '../services/surveyService';
+import { responseService } from '../services/responseService';
 import ShareSurveyPage from "../pages/Survey/ShareSurveyPage";
 import './ListSurvey.css';
 
@@ -11,12 +12,47 @@ const ListSurvey = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [confirmShareModalOpen, setConfirmShareModalOpen] = useState(false);
     const [surveyToShare, setSurveyToShare] = useState(null);
+    const [responseCounts, setResponseCounts] = useState({});
+    const [loadingResponseCounts, setLoadingResponseCounts] = useState(false);
 
     // Pagination state
     const [currentPage, setCurrentPage] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
     const [totalElements, setTotalElements] = useState(0);
     const [pageSize] = useState(12);
+
+    // Function to fetch response counts for surveys
+    const fetchResponseCounts = async (surveyList) => {
+        if (!surveyList || surveyList.length === 0) return;
+
+        setLoadingResponseCounts(true);
+        try {
+            const surveyIds = surveyList
+                .filter(s => s.id || s._id)
+                .map(s => s.id || s._id);
+
+            if (surveyIds.length === 0) {
+                setLoadingResponseCounts(false);
+                return;
+            }
+
+            console.log('ListSurvey: Fetching response counts for surveys:', surveyIds);
+            const counts = await responseService.getMultipleResponseCounts(surveyIds);
+            console.log('ListSurvey: Received response counts:', counts);
+            setResponseCounts(counts);
+        } catch (error) {
+            console.error('ListSurvey: Error fetching response counts:', error);
+            // Set fallback counts to 0
+            const fallbackCounts = {};
+            surveyList.forEach(survey => {
+                const id = survey.id || survey._id;
+                fallbackCounts[id] = 0;
+            });
+            setResponseCounts(fallbackCounts);
+        } finally {
+            setLoadingResponseCounts(false);
+        }
+    };
 
     useEffect(() => {
         const loadData = async () => {
@@ -59,6 +95,9 @@ const ListSurvey = () => {
                 }
 
                 setSurveys(surveysList);
+
+                // Fetch response counts for the surveys
+                fetchResponseCounts(surveysList);
             } catch (error) {
                 console.error('ListSurvey: Error loading data:', error);
                 console.error('ListSurvey: Error details:', error.response?.data);
@@ -155,7 +194,11 @@ const ListSurvey = () => {
                                 <div className="survey-meta">
                                     <span className="meta-item">
                                         <i className="fa-regular fa-user" title="Phản hồi"></i>
-                                        {s.responses ?? s.responseCount ?? 0} phản hồi
+                                        {loadingResponseCounts ? (
+                                            <span style={{ color: '#666' }}>...</span>
+                                        ) : (
+                                            responseCounts[s.id || s._id] ?? s.responses ?? s.responseCount ?? 0
+                                        )} phản hồi
                                     </span>
                                     <span>•</span>
                                     <span className="meta-item">
@@ -201,6 +244,12 @@ const ListSurvey = () => {
                                                 const updatedSurveys = surveys.filter(survey => survey.id !== s.id);
                                                 localStorage.setItem('userSurveys', JSON.stringify(updatedSurveys));
                                                 setSurveys(updatedSurveys);
+
+                                                // Update response counts by removing deleted survey
+                                                const updatedCounts = { ...responseCounts };
+                                                delete updatedCounts[surveyId];
+                                                setResponseCounts(updatedCounts);
+
                                                 if (updatedSurveys.length === 0 && currentPage > 0) {
                                                     setCurrentPage(0);
                                                 }
@@ -332,6 +381,9 @@ const ListSurvey = () => {
                                             );
                                             localStorage.setItem('userSurveys', JSON.stringify(updatedLocal));
                                         }
+
+                                        // Refresh response counts after sharing survey
+                                        fetchResponseCounts(updatedSurveys);
                                         setConfirmShareModalOpen(false);
                                         const shareSurvey = updatedSurveys.find((it) => it.id === id) || surveyToShare;
                                         navigate('/share-survey', { state: { surveyId: id, survey: shareSurvey } });

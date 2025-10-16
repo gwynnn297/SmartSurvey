@@ -4,6 +4,7 @@ import HeaderComponent from "../../components/HeaderComponent";
 import Sidebar from "../../components/Sidebar";
 import MainLayout from "../../layouts/MainLayout";
 import { surveyService } from "../../services/surveyService";
+import { responseService } from "../../services/responseService";
 import "./DashboardPage.css";
 
 const METRIC_CARDS = [
@@ -76,11 +77,27 @@ const CHART_PLACEHOLDERS = [
 
 const DEFAULT_PAGE_SIZE = 10;
 
-const calculateRealStats = (surveysData, metaData = null) => {
+const calculateRealStats = async (surveysData, metaData = null, responseCounts = {}) => {
   const totalSurveys = metaData?.total ?? surveysData.length;
-  const totalResponses = surveysData.reduce((sum, survey) => sum + (survey.responses || survey.responseCount || 0), 0);
+
+  // Tính tổng phản hồi từ API response counts thay vì từ dữ liệu local
+  const totalResponses = surveysData.reduce((sum, survey) => {
+    const surveyId = survey.id || survey._id;
+    const apiCount = responseCounts[surveyId] || 0;
+    const fallbackCount = survey.responses || survey.responseCount || 0;
+    return sum + apiCount + fallbackCount;
+  }, 0);
+
   const activeSurveys = surveysData.filter((survey) => survey.status === "published").length;
-  const surveysWithResponses = surveysData.filter((survey) => (survey.responses || survey.responseCount || 0) > 0);
+
+  // Tính completion rate dựa trên API response counts
+  const surveysWithResponses = surveysData.filter((survey) => {
+    const surveyId = survey.id || survey._id;
+    const apiCount = responseCounts[surveyId] || 0;
+    const fallbackCount = survey.responses || survey.responseCount || 0;
+    return (apiCount + fallbackCount) > 0;
+  });
+
   const completionRate = totalSurveys > 0 ? Math.round((surveysWithResponses.length / totalSurveys) * 100) : 0;
 
   return {
@@ -119,11 +136,11 @@ const ChartCard = ({ title, type, description, icon }) => (
   </article>
 );
 
-const RecentSurveyItem = ({ survey, index, onOpen }) => {
+const RecentSurveyItem = ({ survey, index, onOpen, responseCounts, loadingResponseCounts }) => {
   const statusLabel = survey.status === "published" ? "Đã xuất bản" : survey.status === "archived" ? "Đã lưu trữ" : "Bản nháp";
   const statusClass = survey.status || "draft";
   const createdDate = new Date(survey.createdAt || survey.created_at || Date.now()).toLocaleDateString("vi-VN");
-  const totalResponses = survey.responses ?? survey.responseCount ?? 0;
+  const totalResponses = responseCounts[survey.id || survey._id] ?? survey.responses ?? survey.responseCount ?? 0;
 
   return (
     <article className="dash-recent__item" key={survey.id || survey._id || index}>
@@ -133,7 +150,13 @@ const RecentSurveyItem = ({ survey, index, onOpen }) => {
         <div className="dash-recent__meta">
           <span className={`status-badge ${statusClass}`}>{statusLabel}</span>
           <span className="dash-recent__date">{createdDate}</span>
-          <span className="dash-recent__responses">{totalResponses} phản hồi</span>
+          <span className="dash-recent__responses">
+            {loadingResponseCounts ? (
+              <span style={{ color: '#666' }}>...</span>
+            ) : (
+              totalResponses
+            )} phản hồi
+          </span>
         </div>
       </div>
       <button type="button" className="dash-recent__action" onClick={() => onOpen(survey)}>
@@ -170,6 +193,8 @@ export default function DashboardPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [pageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [responseCounts, setResponseCounts] = useState({});
+  const [loadingResponseCounts, setLoadingResponseCounts] = useState(false);
 
   const displayName = user?.name || user?.username || user?.fullName || "User";
 
@@ -179,6 +204,52 @@ export default function DashboardPage() {
     (survey) => navigate("/create-survey", { state: { editSurvey: survey } }),
     [navigate]
   );
+
+  // Function to fetch response counts for surveys
+  const fetchResponseCounts = useCallback(async (surveyList) => {
+    if (!surveyList || surveyList.length === 0) return;
+
+    setLoadingResponseCounts(true);
+    try {
+      const surveyIds = surveyList
+        .filter(s => s.id || s._id)
+        .map(s => s.id || s._id);
+
+      if (surveyIds.length === 0) {
+        setLoadingResponseCounts(false);
+        return;
+      }
+
+      console.log('Dashboard: Fetching response counts for surveys:', surveyIds);
+      const counts = await responseService.getMultipleResponseCounts(surveyIds);
+      console.log('Dashboard: Received response counts:', counts);
+      setResponseCounts(counts);
+    } catch (error) {
+      console.error('Dashboard: Error fetching response counts:', error);
+      // Set fallback counts to 0
+      const fallbackCounts = {};
+      surveyList.forEach(survey => {
+        const id = survey.id || survey._id;
+        fallbackCounts[id] = 0;
+      });
+      setResponseCounts(fallbackCounts);
+    } finally {
+      setLoadingResponseCounts(false);
+    }
+  }, []);
+
+  // Function to fetch total response count from API
+  const fetchTotalResponseCount = useCallback(async () => {
+    try {
+      console.log('Dashboard: Fetching total response count from API');
+      const totalCount = await responseService.getTotalResponseCount();
+      console.log('Dashboard: Received total response count:', totalCount);
+      return totalCount;
+    } catch (error) {
+      console.error('Dashboard: Error fetching total response count:', error);
+      return 0;
+    }
+  }, []);
 
   const fetchDashboardData = useCallback(async () => {
     setLoading(true);
@@ -238,6 +309,12 @@ export default function DashboardPage() {
       setTotalPages(paginationMeta.pages);
       setTotalElements(paginationMeta.total);
 
+      // Fetch response counts for the surveys
+      fetchResponseCounts(surveysForDisplay);
+
+      // Fetch total response count from API
+      const apiTotalResponses = await fetchTotalResponseCount();
+
       let surveysForStatistics = surveysForDisplay;
       if (pageResponse?.meta) {
         try {
@@ -257,7 +334,14 @@ export default function DashboardPage() {
         surveysForStatistics = localSurveys;
       }
 
-      const stats = calculateRealStats(surveysForStatistics, pageResponse?.meta || paginationMeta);
+      // Calculate stats with API total response count
+      const stats = await calculateRealStats(surveysForStatistics, pageResponse?.meta || paginationMeta, responseCounts);
+
+      // Override totalResponses with API value if available
+      if (apiTotalResponses > 0) {
+        stats.totalResponses = apiTotalResponses;
+      }
+
       setOverview(stats);
     } catch (error) {
       console.error("Dashboard: Error loading data", error);
@@ -265,7 +349,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, pageSize, navigate]);
+  }, [currentPage, pageSize, navigate, fetchResponseCounts, fetchTotalResponseCount]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -362,7 +446,14 @@ export default function DashboardPage() {
               </div>
             ) : (
               recentSurveys.map((survey, index) => (
-                <RecentSurveyItem key={survey.id || survey._id || index} survey={survey} index={index} onOpen={openSurveyForEditing} />
+                <RecentSurveyItem
+                  key={survey.id || survey._id || index}
+                  survey={survey}
+                  index={index}
+                  onOpen={openSurveyForEditing}
+                  responseCounts={responseCounts}
+                  loadingResponseCounts={loadingResponseCounts}
+                />
               ))
             )}
           </div>

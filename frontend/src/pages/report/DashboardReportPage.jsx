@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
+
 import './DashboardReportPage.css';
 
 const MetricCard = ({ bgClass, icon, title, value }) => (
@@ -48,14 +49,7 @@ export default function DashboardReportPage() {
     ), []);
 
     const handleExport = () => {
-        const content = 'Survey Overview Report\nTổng phản hồi: 128\nHoàn thành: 95%\nThời gian TB: 3.2m\nĐánh giá TB: 4.2/5';
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'survey_overview_report.txt';
-        link.click();
-        URL.revokeObjectURL(url);
+        navigate('/report/export');
     };
 
     return (
@@ -135,20 +129,20 @@ export default function DashboardReportPage() {
                     <div className="panel right">
                         <h3>Thống kê nhanh</h3>
                         <div className="quick-stats">
-                            <ProgressItem label="Câu hỏi đóng" valueLabel="8 câu" percent={100} colorClass="indigo" />
-                            <ProgressItem label="Câu hỏi mở" valueLabel="2 câu" percent={40} colorClass="indigo" />
+                            <ProgressItem label="Câu hỏi trắc nghiệm" valueLabel="8 câu" percent={100} colorClass="indigo" />
+                            <ProgressItem label="Trả lời ngắn" valueLabel="2 câu" percent={40} colorClass="indigo" />
                             <ProgressItem label="Tỷ lệ hài lòng" valueLabel="87%" percent={87} colorClass="green" />
-                            <ProgressItem label="NPS Score" valueLabel={"+42"} percent={70} colorClass="blue" />
+                            <ProgressItem label="Xếp hạng" valueLabel={"+42"} percent={70} colorClass="blue" />
                         </div>
                     </div>
                 </section>
 
                 <section className="report-actions">
-                    <button className="btn blue" onClick={() => navigate('/report/details')}>
+                    <button className="btn blue" onClick={() => navigate('/report/details-statistic')}>
                         <span className="btn-icon" aria-hidden="true">📊</span>
                         Xem thống kê chi tiết
                     </button>
-                    <button className="btn green" onClick={() => navigate('/ai/open-feedback')}>
+                    <button className="btn green" onClick={() => navigate('/report/open-feedback')}>
                         <span className="btn-icon" aria-hidden="true">🧠</span>
                         Phân tích phản hồi mở
                     </button>

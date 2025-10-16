@@ -420,6 +420,9 @@
 
 /* === BUTTON PRIMARY === */
 .btn-primary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: linear-gradient(135deg, #3b82f6, #1d4ed8);
     color: white;
     border: none;

@@ -1,0 +1,151 @@
+.details-container {
+    padding: 40px 64px;
+    background: #f9fafb;
+    min-height: 100vh;
+  }
+  
+  .page-title {
+    font-size: 26px;
+    font-weight: 700;
+    text-align: center;
+    color: #111827;
+  }
+  
+  .page-subtitle {
+    text-align: center;
+    color: #6b7280;
+    margin-bottom: 24px;
+  }
+  
+  .stat-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px 32px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    margin-bottom: 24px;
+  }
+  
+  .stat-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #111827;
+  }
+  
+  /* Bar and value display */
+  .bar-box {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .bar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  
+  .dot.green { background: #22c55e; }
+  .dot.red { background: #ef4444; }
+  .dot.blue { background: #3b82f6; }
+  .dot.pink { background: #f472b6; }
+  
+  .label {
+    width: 100px;
+    font-size: 14px;
+    color: #374151;
+  }
+  
+  .bar-line {
+    flex: 1;
+    background: #e5e7eb;
+    border-radius: 8px;
+    height: 10px;
+    overflow: hidden;
+  }
+  
+  .bar-fill {
+    height: 100%;
+    border-radius: 8px;
+  }
+  
+  .bar-fill.green { background: #22c55e; }
+  .bar-fill.red { background: #ef4444; }
+  .bar-fill.blue { background: #3b82f6; }
+  .bar-fill.pink { background: #f472b6; }
+  
+  .percent {
+    font-weight: 600;
+    color: #111827;
+    width: 50px;
+    text-align: right;
+  }
+  
+  /* Rating */
+  .rating-box {
+    display: flex;
+    justify-content: space-around;
+    text-align: center;
+  }
+  
+  .star-label {
+    font-size: 14px;
+    color: #374151;
+  }
+  
+  .rating-percent {
+    font-weight: 600;
+    color: #6366f1;
+  }
+  
+  /* Age Group */
+  .age-row {
+    display: flex;
+    justify-content: space-around;
+    text-align: center;
+  }
+  
+  .age-box {
+    background: #f3f4f6;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-weight: 600;
+  }
+  
+  .age-box span {
+    display: block;
+    color: #6b7280;
+    font-weight: 400;
+    font-size: 13px;
+  }
+  
+  /* NPS */
+  .nps-box {
+    text-align: center;
+    background: #f9fafb;
+    padding: 24px;
+    border-radius: 12px;
+  }
+  
+  .nps-score {
+    font-size: 36px;
+    font-weight: 700;
+    color: #22c55e;
+  }
+  
+  .nps-label {
+    color: #6b7280;
+    margin-bottom: 10px;
+  }
+  
+  .nps-stats {
+    color: #374151;
+    font-size: 14px;
+  }
+  

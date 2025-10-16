@@ -1,0 +1,260 @@
+.export-container {
+    padding: 40px 64px;
+    background: #f9fafb;
+    min-height: 100vh;
+  }
+  
+  .export-header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  
+  .export-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #111827;
+  }
+  
+  .export-header p {
+    color: #6b7280;
+    font-size: 15px;
+    margin-top: 4px;
+  }
+  
+  .section-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 16px;
+  }
+  
+  /* Format chọn định dạng */
+  .format-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 20px;
+    margin-bottom: 36px;
+  }
+  
+  .format-card {
+    border-radius: 16px;
+    padding: 24px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.25s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+  
+  .format-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  }
+  
+  .format-card.selected {
+    border-color: #6366f1;
+    background: #eef2ff !important;
+  }
+  
+  .format-card h3 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #111827;
+    margin: 8px 0;
+  }
+  
+  .format-card p {
+    color: #374151;
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  
+  .format-card ul {
+    list-style: none;
+    padding-left: 0;
+  }
+  
+  .format-card li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #374151;
+    font-size: 14px;
+    margin-bottom: 4px;
+  }
+  
+  /* Khối xem trước & lịch sử */
+  .report-section {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 24px;
+    margin-bottom: 48px;
+  }
+  
+  .preview-card,
+  .history-card {
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    padding: 24px 28px;
+  }
+  
+  .preview-card h3,
+  .history-card h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+  
+  /* Xem trước báo cáo */
+  .preview-content {
+    border-top: 1px solid #e5e7eb;
+    padding-top: 16px;
+  }
+  
+  .preview-stats h4 {
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  
+  .preview-stats .date {
+    color: #9ca3af;
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  
+  .summary {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 12px;
+  }
+  
+  .summary .count {
+    font-size: 28px;
+    font-weight: 700;
+    color: #111827;
+  }
+  
+  .summary .label {
+    color: #6b7280;
+    font-size: 14px;
+  }
+  
+  .chart-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+  }
+  
+  .chart-circle {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: conic-gradient(#16a34a 0% 65%, #facc15 65% 85%, #dc2626 85% 100%);
+  }
+  
+  .chart-text p {
+    margin: 2px 0;
+    font-size: 14px;
+  }
+  
+  .chart-text .positive { color: #16a34a; }
+  .chart-text .neutral { color: #facc15; }
+  .chart-text .negative { color: #dc2626; }
+  
+  .preview-options {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .preview-options label {
+    font-size: 14px;
+    color: #374151;
+  }
+  
+  /* Lịch sử xuất */
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .history-item {
+    display: flex;
+    justify-content: space-between;
+    background: #f9fafb;
+    border-radius: 10px;
+    padding: 12px 16px;
+    border: 1px solid #e5e7eb;
+  }
+  
+  .history-item b {
+    font-size: 14.5px;
+    color: #111827;
+  }
+  
+  .history-item p {
+    font-size: 13px;
+    color: #6b7280;
+    margin-top: 2px;
+  }
+  
+  .download-link {
+    color: #4f46e5;
+    font-weight: 500;
+    text-decoration: none;
+    font-size: 14px;
+  }
+  
+  .note {
+    margin-top: 10px;
+    color: #6b7280;
+    font-size: 13px;
+    font-style: italic;
+  }
+  
+  /* Footer */
+  .export-footer {
+    text-align: center;
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px 32px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+  
+  .export-footer h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 6px;
+  }
+  
+  .export-footer p {
+    color: #6b7280;
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+  
+  .btn-download {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: white;
+    border: none;
+    padding: 12px 32px;
+    border-radius: 999px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  
+  .btn-download:hover {
+    background: #4338ca;
+  }
+  
+  .btn-download:disabled {
+    background: #cbd5e1;
+    cursor: not-allowed;
+  }
+  

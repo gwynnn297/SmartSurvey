@@ -189,15 +189,15 @@ const ShareSurveyPage = () => {
                                     className="survey-link"
                                 />
                                 <button className="btn-copy" onClick={handleCopy}>
-                                    📋
+                                <i className="fa-regular fa-copy" title="Sao chép liên kết"></i>
                                 </button>
                             </div>
 
                             <p>Chia sẻ nhanh</p>
                             <div className="share-buttons">
-                                <button className="btn-email">📧 Email</button>
-                                <button className="btn-social">🌐 Mạng xã hội</button>
-                                <button className="btn-embed">💻 Nhúng</button>
+                                <button className="btn-email"><i className="fa-solid fa-envelope" title="Email"></i> Email</button>
+                                <button className="btn-social"><i className="fa-solid fa-globe" title="Mạng xã hội"></i> Mạng xã hội</button>
+                                <button className="btn-embed"><i className="fa-solid fa-desktop" title="Nhúng"></i> Nhúng</button>
                             </div>
                         </div>
 
