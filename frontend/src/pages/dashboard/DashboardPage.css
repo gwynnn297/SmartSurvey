@@ -171,8 +171,12 @@
     gap: 14px;
     align-items: center;
     overflow: hidden;
+    transition: transform 0.35s var(--dash-transition), box-shadow 0.35s var(--dash-transition);
 }
-
+.dash-kpi:hover {
+    transform: translateY(-4px) scale(1.05);
+    box-shadow: 0 24px 48px rgba(59, 130, 246, 0.45);
+}
 .dash-kpi::before {
     content: "";
     position: absolute;
@@ -225,6 +229,7 @@
     background: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.35), transparent 60%),
         radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.3), transparent 55%);
 }
+
 
 .dash-kpi:hover .dash-kpi__icon {
     transform: translateY(-4px) scale(1.05);
@@ -310,6 +315,11 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    transition: transform 0.35s var(--dash-transition), box-shadow 0.35s var(--dash-transition);
+}
+.dash-chart:hover {
+    transform: translateY(-4px) scale(1.05);
+    box-shadow: 0 24px 48px rgba(59, 130, 246, 0.45);
 }
 
 .dash-chart__header {

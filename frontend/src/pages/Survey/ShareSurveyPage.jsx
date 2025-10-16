@@ -67,7 +67,7 @@ const ShareSurveyPage = () => {
                 const shareLink =
                     detail.shareLink ||
                     survey.link ||
-                    `${window.location.origin}/response/${id}?respondentToken=${token}`;
+                    `${window.location.origin}/response/${id}#${token}`;
 
                 try {
                     if (!detail.shareLink) {
