@@ -18,6 +18,7 @@ import DetailsStatisticPage from "./pages/report/DetailsStatisticPage";
 import ResponseFormPage from "./pages/Response/ResponseFormPage";
 import PublicResponsePage from "./pages/Response/PublicResponsePage";
 import ShareSurveyPage from "./pages/Survey/ShareSurveyPage";
+import ViewLinkSharePage from "./pages/Response/ViewLinkSharePage";
 import OpenFeedbackPage from "./pages/report/OpenFeedbackPage";
 
 function PrivateRoute({ children }) {
@@ -159,6 +160,14 @@ function App() {
           element={
             <PrivateRoute>
               <ShareSurveyPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/view-link-share/:surveyId"
+          element={
+            <PrivateRoute>
+              <ViewLinkSharePage />
             </PrivateRoute>
           }
         />

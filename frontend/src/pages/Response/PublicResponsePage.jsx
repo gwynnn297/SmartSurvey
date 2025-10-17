@@ -23,15 +23,20 @@ const PublicResponsePage = () => {
 
     useEffect(() => {
         const respondentTokenFromLink = new URLSearchParams(location.search).get("respondentToken");
+        console.log('🔍 URL search params:', location.search);
+        console.log('🎫 Token from URL:', respondentTokenFromLink);
+
         if (respondentTokenFromLink) {
             if (isValidTokenFormat(respondentTokenFromLink)) {
                 try {
                     localStorage.setItem("respondent_request_token", respondentTokenFromLink);
-                    console.log("Valid token received:", respondentTokenFromLink);
-                } catch (_) {}
+                    console.log("✅ Valid token received and saved:", respondentTokenFromLink);
+                } catch (_) { }
             } else {
-                console.warn("Invalid token format received:", respondentTokenFromLink);
+                console.warn("❌ Invalid token format received:", respondentTokenFromLink);
             }
+        } else {
+            console.log("ℹ️ No token found in URL");
         }
 
         const idFromParams = params?.id || params?.surveyId;
@@ -173,16 +178,24 @@ const PublicResponsePage = () => {
         e.preventDefault();
         if (!validateForm()) return;
         setLoading(true);
+
+        // Debug: Kiểm tra token trước khi submit
+        const currentToken = localStorage.getItem("respondent_request_token");
+        console.log('🔍 Current token in localStorage:', currentToken);
+        console.log('📝 Responses to submit:', responses);
+        console.log('📊 Survey data:', activeSurvey);
+
         try {
             const apiResult = await responseService.submitResponses(
                 activeSurvey.id,
                 responses,
                 activeSurvey
             );
-            console.log("Submitting response result:", apiResult);
+            console.log("✅ Submit response result:", apiResult);
             setSuccess(true);
         } catch (err) {
-            console.error("Submit failed:", err);
+            console.error("❌ Submit failed:", err);
+            console.error("❌ Error details:", err.response?.data);
         } finally {
             setLoading(false);
         }

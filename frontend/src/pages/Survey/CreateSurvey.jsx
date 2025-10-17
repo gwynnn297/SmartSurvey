@@ -928,16 +928,18 @@ const CreateSurvey = () => {
             alert(message);
 
             // Điều hướng sau khi lưu
-            if (isEditMode) {
-                // Khi cập nhật thì quay về dashboard
-                navigate('/dashboard');
-            } else {
-                // Khi xuất bản mới: nếu published thì sang trang chia sẻ, nếu draft thì về dashboard
-                if (status === 'published') {
-                    navigate('/share-survey', { state: { surveyId } });
-                } else {
+            if (status === 'published') {
+                // Chỉ chuyển hướng khi publish
+                if (isEditMode) {
+                    // Khi cập nhật và publish thì quay về dashboard
                     navigate('/dashboard');
+                } else {
+                    // Khi xuất bản mới thì sang trang chia sẻ
+                    navigate('/share-survey', { state: { surveyId } });
                 }
+            } else {
+                // Khi lưu draft thì ở lại trang hiện tại, không chuyển hướng
+                console.log('✅ Survey saved as draft, staying on current page');
             }
         } catch (err) {
             console.error('Lỗi khi lưu khảo sát:', err);
@@ -1016,6 +1018,94 @@ const CreateSurvey = () => {
         navigate('/response-preview', { state: { survey: preview } });
     };
 
+    const handleShareSurvey = async () => {
+        if (!validateForm()) {
+            alert('Vui lòng hoàn thành tất cả thông tin bắt buộc trước khi chia sẻ khảo sát.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            // Lưu survey trước (nếu chưa có)
+            let surveyId = editSurveyId;
+            if (!surveyId || surveyId.toString().startsWith('temp_')) {
+                // Tạo survey mới với status published
+                const payload = {
+                    title: surveyData.title,
+                    description: surveyData.description,
+                    categoryId: surveyData.category_id ? parseInt(surveyData.category_id) : null,
+                    aiPrompt: null
+                };
+
+                const savedSurvey = await surveyService.createSurvey(payload);
+                if (!savedSurvey || !savedSurvey.id) {
+                    throw new Error('Không thể tạo khảo sát. Vui lòng thử lại.');
+                }
+
+                surveyId = savedSurvey.id;
+
+                // Cập nhật status thành published
+                await surveyService.updateSurvey(surveyId, { status: 'published' });
+
+                // Lưu questions và options
+                await saveQuestionsAndOptions(surveyId);
+            } else {
+                // Cập nhật survey hiện có thành published
+                await surveyService.updateSurvey(surveyId, { status: 'published' });
+            }
+
+            // Chuyển đến trang ViewLinkSharePage để hiển thị link chia sẻ
+            navigate(`/view-link-share/${surveyId}`);
+
+        } catch (error) {
+            console.error('Lỗi khi chia sẻ khảo sát:', error);
+            let errorMessage = 'Có lỗi xảy ra khi chia sẻ khảo sát. Vui lòng thử lại.';
+
+            if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            alert(errorMessage);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const saveQuestionsAndOptions = async (surveyId) => {
+        if (questions.length === 0) return;
+
+        for (const question of questions) {
+            const backendType = mapTypeToBackend(question.question_type);
+            const questionPayload = {
+                surveyId: surveyId,
+                questionText: question.question_text,
+                questionType: backendType,
+                isRequired: question.is_required ?? true
+            };
+
+            const savedQuestion = await questionService.createQuestion(questionPayload);
+            if (!savedQuestion || !savedQuestion.id) {
+                throw new Error(`Không thể lưu câu hỏi: ${question.question_text}`);
+            }
+
+            // Tạo options cho multiple choice questions
+            if (question.question_type === 'multiple_choice' && question.options?.length > 0) {
+                for (const option of question.options) {
+                    if (option.option_text.trim()) {
+                        const optionPayload = {
+                            questionId: savedQuestion.id,
+                            optionText: option.option_text
+                        };
+
+                        await optionService.createOption(optionPayload);
+                    }
+                }
+            }
+        }
+    };
+
     return (
         <MainLayout>
             <div className="create-survey-wrapper">
@@ -1058,19 +1148,28 @@ const CreateSurvey = () => {
                             <span> Báo cáo</span>
                         </button>
                         <button
-                            className="btn-share"
+                            className="btn-save"
                             type="button"
-                            onClick={() => saveSurvey('published')}
+                            onClick={() => saveSurvey('draft')}
                             disabled={loading}
                         >
                             {loading ? (
                                 'Đang xử lý…'
                             ) : (
                                 <>
-                                    <i className="fa-solid fa-share-nodes" aria-hidden="true"></i>
-                                    <span>{isEditMode ? 'Cập nhật' : 'Xuất bản'}</span>
+                                    <i className="fa-solid fa-save" aria-hidden="true"></i>
+                                    <span>{isEditMode ? 'Cập nhật' : 'Lưu'}</span>
                                 </>
                             )}
+                        </button>
+                        <button
+                            className="btn-share"
+                            type="button"
+                            onClick={handleShareSurvey}
+                            disabled={loading}
+                        >
+                            <i className="fa-solid fa-share-nodes" aria-hidden="true"></i>
+                            <span> Chia sẻ</span>
                         </button>
                     </div>
                 </div>

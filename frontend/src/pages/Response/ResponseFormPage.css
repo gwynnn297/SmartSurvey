@@ -195,3 +195,341 @@ textarea {
   color: #555;
   margin-bottom: 20px;
 }
+
+/* --- SHARE SECTION STYLES (from ShareSurveyPage.css) --- */
+.share-section {
+  background: #E0FFFF;
+  border-radius: 12px;
+  padding: 24px 28px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border: 1px solid #ded6d6;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  margin-top: 20px;
+  margin-bottom: 32px;
+}
+
+.share-section:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 40px rgba(2, 6, 23, 0.08);
+}
+
+.share-section h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  color: #1e293b;
+}
+
+.share-section p {
+  color: #555;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.share-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 40px;
+  margin-top: 8px;
+}
+
+.share-left {
+  flex: 1;
+}
+
+.share-left label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.link-box {
+  display: flex;
+  align-items: center;
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+
+.survey-link {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #f9fafb;
+  color: #374151;
+}
+
+.btn-copy {
+  margin-left: 8px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.2s;
+}
+
+.btn-copy:hover {
+  background: #2563eb;
+}
+
+.share-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.share-buttons button {
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: black;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-email {
+  border: 1px solid #ded6d6 !important;
+  background: #fff;
+}
+
+.btn-email:hover {
+  background: #4f46e5;
+  color: white;
+}
+
+.btn-social {
+  border: 1px solid #ded6d6 !important;
+  background: #fff;
+}
+
+.btn-social:hover {
+  background: #2563eb;
+  color: white;
+}
+
+.btn-embed {
+  border: 1px solid #ded6d6 !important;
+  background: #fff;
+}
+
+.btn-embed:hover {
+  background: #7c3aed;
+  color: white;
+}
+
+/* --- AI NOTE --- */
+.ai-note {
+  text-align: right;
+  margin-top: 12px;
+}
+
+.ai-note a {
+  color: #3b82f6;
+  font-weight: 500;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.ai-note a:hover {
+  text-decoration: underline;
+}
+
+/* --- SHARE LINK OVERLAY (above survey card) --- */
+.share-link-overlay {
+  margin-bottom: 20px;
+  animation: fadeIn 0.3s ease;
+}
+
+.share-link-box {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.share-link-box label {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 16px;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.share-link-box .link-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.share-link-box .survey-link {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #f9fafb;
+  color: #374151;
+  font-family: monospace;
+}
+
+.share-link-box .btn-copy {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+}
+
+.share-link-box .btn-copy:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.share-link-box .btn-copy:active {
+  transform: translateY(0);
+}
+
+/* Questions Preview Styles ở trang ViewLinkSharePage */
+.questions-preview {
+  margin-top: 32px;
+  padding: 24px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.questions-preview h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #2d3748;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+.questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.question-preview-item {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.question-preview-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-color: #cbd5e0;
+}
+
+.question-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.question-number {
+  background: #3b82f6;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.question-type-badge {
+  background: #e0f2fe;
+  color: #0369a1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.required-badge {
+  background: #fef3c7;
+  color: #d97706;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.question-preview-text {
+  margin: 8px 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #374151;
+}
+
+.question-preview-options {
+  margin-top: 8px;
+  padding-left: 16px;
+}
+
+.option-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.option-bullet {
+  color: #9ca3af;
+  font-weight: bold;
+}
+
+.rating-preview {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rating-label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.rating-stars {
+  display: flex;
+  gap: 2px;
+}
+
+.rating-star {
+  color: #fbbf24;
+  font-size: 14px;
+}
