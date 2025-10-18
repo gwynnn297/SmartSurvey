@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import "./ResponseFormPage.css";
+import "./ViewLinkSharePage.css";
 import { surveyService } from "../../services/surveyService";
 import { questionService, optionService } from "../../services/questionSurvey";
 import { generateUniqueToken, isValidTokenFormat } from "../../utils/tokenGenerator";
@@ -15,6 +15,9 @@ const ViewLinkSharePage = () => {
     const [questions, setQuestions] = useState([]);
     const [shareUrl, setShareUrl] = useState('');
     const [copied, setCopied] = useState(false);
+    const [responses, setResponses] = useState({});
+    const [errors, setErrors] = useState({});
+    const [success, setSuccess] = useState(false);
 
     const surveyId = params.surveyId;
 
@@ -167,6 +170,125 @@ const ViewLinkSharePage = () => {
         }
     };
 
+    // Handle input change
+    const handleChange = (questionId, value, multiple = false) => {
+        setResponses((prev) => {
+            if (multiple) {
+                const current = prev[questionId] || [];
+                return {
+                    ...prev,
+                    [questionId]: current.includes(value)
+                        ? current.filter((v) => v !== value)
+                        : [...current, value],
+                };
+            }
+            return { ...prev, [questionId]: value };
+        });
+    };
+
+    // Validate required questions
+    const validateForm = () => {
+        const newErrors = {};
+        if (!loadedSurvey) return false;
+        questions.forEach((q) => {
+            if (q.is_required) {
+                if (
+                    !responses[q.id] ||
+                    (Array.isArray(responses[q.id]) && responses[q.id].length === 0) ||
+                    (typeof responses[q.id] === "string" && responses[q.id].trim() === "")
+                ) {
+                    newErrors[q.id] = "Câu hỏi này là bắt buộc";
+                }
+            }
+        });
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    // Handle submit (không gửi lên server)
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!validateForm()) return;
+
+        setLoading(true);
+        try {
+            // Giả lập loading
+            await new Promise((res) => setTimeout(res, 1000));
+            setSuccess(true);
+        } catch (err) {
+            console.error("Submit failed:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Render question preview giống ResponseFormPage
+    const renderQuestionPreview = (q) => {
+        switch (q.type) {
+            case "multiple-choice-single":
+                // Radio: chọn một
+                return (q.options || []).map((opt, i) => (
+                    <label key={i} className="option-label">
+                        <input
+                            type="radio"
+                            name={`question_${q.id}`}
+                            value={opt.text}
+                            checked={responses[q.id] === opt.text}
+                            onChange={() => handleChange(q.id, opt.text)}
+                        />
+                        <span>{opt.text}</span>
+                    </label>
+                ));
+
+            case "multiple-choice-multiple":
+                // Checkbox: chọn nhiều
+                return (q.options || []).map((opt, i) => (
+                    <label key={i} className="option-label">
+                        <input
+                            type="checkbox"
+                            name={`question_${q.id}`}
+                            value={opt.text}
+                            checked={responses[q.id]?.includes(opt.text) || false}
+                            onChange={() => handleChange(q.id, opt.text, true)}
+                        />
+                        <span>{opt.text}</span>
+                    </label>
+                ));
+
+            case "open-text":
+                return (
+                    <textarea
+                        rows="4"
+                        placeholder="Nhập câu trả lời..."
+                        value={responses[q.id] || ""}
+                        onChange={(e) => handleChange(q.id, e.target.value)}
+                    />
+                );
+
+            case "rating-scale":
+                return (
+                    <div className="rating-scale">
+                        {(q.scale || []).map((num) => (
+                            <label key={num} className="rating-circle">
+                                <input
+                                    type="radio"
+                                    name={`question_${q.id}`}
+                                    value={num}
+                                    checked={responses[q.id] === num.toString()}
+                                    onChange={() => handleChange(q.id, num.toString())}
+                                />
+                                <div>{num}</div>
+                            </label>
+                        ))}
+                    </div>
+                );
+
+            default:
+                console.log('Unknown question type:', q.type);
+                return <div>Unknown question type: {q.type}</div>;
+        }
+    };
+
 
     return (
         <div
@@ -228,67 +350,48 @@ const ViewLinkSharePage = () => {
 
                         </div>
 
-                        {/* Hiển thị danh sách câu hỏi */}
-                        {questions.length > 0 && (
-                            <div className="questions-preview">
-                                <h3>Danh sách câu hỏi ({questions.length} câu)</h3>
-                                <div className="questions-list">
-                                    {questions.map((q, index) => (
-                                        <div key={q.id} className="question-preview-item">
-                                            <div className="question-preview-header">
-                                                <span className="question-number">Câu {index + 1}</span>
-                                                <span className="question-type-badge">
-                                                    {q.type === 'open-text' && 'Trả lời ngắn'}
-                                                    {q.type === 'multiple-choice-single' && 'Trắc nghiệm (chọn 1)'}
-                                                    {q.type === 'multiple-choice-multiple' && 'Trắc nghiệm (chọn nhiều)'}
-                                                    {q.type === 'boolean' && 'Yes/No'}
-                                                    {q.type === 'rating-scale' && 'Xếp hạng'}
-                                                </span>
-                                                {q.is_required && <span className="required-badge">Bắt buộc</span>}
+                        {/* Hiển thị danh sách câu hỏi giống ResponseFormPage */}
+                        {questions.length > 0 && !success && (
+                            <form onSubmit={handleSubmit}>
+                                <div className="questions-preview">
+                                    <h3>Danh sách câu hỏi ({questions.length} câu)</h3>
+                                    <div className="questions-list">
+                                        {questions.map((q, index) => (
+                                            <div key={q.id} className={`question-card ${errors[q.id] ? "error" : ""}`}>
+                                                <h3>
+                                                    {q.text}{" "}
+                                                    {q.is_required && <span className="required">*</span>}
+                                                </h3>
+                                                {renderQuestionPreview(q)}
+                                                {errors[q.id] && (
+                                                    <p className="error-message">{errors[q.id]}</p>
+                                                )}
                                             </div>
-                                            <p className="question-preview-text">{q.text}</p>
-
-                                            {/* Hiển thị options cho multiple choice */}
-                                            {q.options && q.options.length > 0 && (
-                                                <div className="question-preview-options">
-                                                    {q.options.map((opt, optIndex) => (
-                                                        <div key={opt.id || optIndex} className="option-preview">
-                                                            <span className="option-bullet">•</span>
-                                                            <span>{opt.text}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            {/* Hiển thị scale cho rating */}
-                                            {q.scale && (
-                                                <div className="rating-preview">
-                                                    <span className="rating-label">Thang điểm:</span>
-                                                    <div className="rating-stars">
-                                                        {q.scale.map((num) => (
-                                                            <span key={num} className="rating-star">★</span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
+
+                                <div className="form-footer">
+                                    <button type="submit" disabled={loading}>
+                                        {loading ? "Đang gửi..." : "Gửi khảo sát"}
+                                    </button>
+                                    <p className="note">
+                                        Phản hồi của bạn sẽ được bảo mật và chỉ dùng để cải thiện dịch vụ
+                                    </p>
+                                </div>
+                            </form>
+                        )}
+
+                        {success && (
+                            <div className="success-modal">
+                                <div className="checkmark">✔</div>
+                                <h2>Cảm ơn bạn đã hoàn thành khảo sát!</h2>
+                                <p>Phản hồi của bạn đã được ghi lại thành công.</p>
+                                <button onClick={() => setSuccess(false)}>Đóng</button>
                             </div>
                         )}
 
-                        <div className="form-footer">
-                            <button
-                                type="button"
-                                onClick={() => navigate('/dashboard')}
-                                className="btn-back"
-                            >
-                                <i className="fa-solid fa-arrow-left"></i> Quay lại Dashboard
-                            </button>
-                            <p className="note">
-                                Chia sẻ link này để mời mọi người tham gia khảo sát của bạn
-                            </p>
-                        </div>
+
                     </>
                 )}
             </div>

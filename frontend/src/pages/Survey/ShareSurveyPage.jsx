@@ -59,7 +59,7 @@ const ShareSurveyPage = () => {
                     totalQuestions = Array.isArray(questions)
                         ? questions.length
                         : questions?.length ?? 0;
-                } catch (_) {}
+                } catch (_) { }
 
                 const token = generateUniqueToken();
 
@@ -67,13 +67,13 @@ const ShareSurveyPage = () => {
                 const shareLink =
                     detail.shareLink ||
                     survey.link ||
-                    `${window.location.origin}/response/${id}#${token}`;
+                    `${window.location.origin}/response/${id}?respondentToken=${token}`;
 
                 try {
                     if (!detail.shareLink) {
                         await surveyService.updateSurvey(id, { shareLink });
                     }
-                } catch (_) {}
+                } catch (_) { }
 
                 setSurvey({
                     id,
@@ -109,7 +109,7 @@ const ShareSurveyPage = () => {
 
             // ✅ Đổi URL chứa respondentToken
             const newShareLink = `${window.location.origin}/response/${id}?respondentToken=${newToken}`;
-
+            
             setSurvey((prev) => ({
                 ...prev,
                 link: newShareLink,
@@ -189,7 +189,7 @@ const ShareSurveyPage = () => {
                                     className="survey-link"
                                 />
                                 <button className="btn-copy" onClick={handleCopy}>
-                                <i className="fa-regular fa-copy" title="Sao chép liên kết"></i>
+                                    <i className="fa-regular fa-copy" title="Sao chép liên kết"></i>
                                 </button>
                             </div>
 

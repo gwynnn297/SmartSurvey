@@ -83,6 +83,16 @@ export default function DashboardReportPage() {
                         )}
                     />
                     <MetricCard
+                        bgClass="yellow"
+                        title="Số người tham gia"
+                        value="1000"
+                        icon={(
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 3l2.9 5.88 6.1.89-4.4 4.29 1.04 6.06L12 17.77 6.36 21.12 7.4 15.06 3 9.77l6.1-.89L12 3z" />
+                            </svg>
+                        )}
+                    />
+                    <MetricCard
                         bgClass="peach"
                         title="Hoàn thành"
                         value="95%"
@@ -104,16 +114,7 @@ export default function DashboardReportPage() {
                             </svg>
                         )}
                     />
-                    <MetricCard
-                        bgClass="yellow"
-                        title="Đánh giá TB"
-                        value="4.2/5"
-                        icon={(
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M12 3l2.9 5.88 6.1.89-4.4 4.29 1.04 6.06L12 17.77 6.36 21.12 7.4 15.06 3 9.77l6.1-.89L12 3z" />
-                            </svg>
-                        )}
-                    />
+                    
                 </section>
 
                 <section className="report-panels">
@@ -132,7 +133,7 @@ export default function DashboardReportPage() {
                             <ProgressItem label="Câu hỏi trắc nghiệm" valueLabel="8 câu" percent={100} colorClass="indigo" />
                             <ProgressItem label="Trả lời ngắn" valueLabel="2 câu" percent={40} colorClass="indigo" />
                             <ProgressItem label="Tỷ lệ hài lòng" valueLabel="87%" percent={87} colorClass="green" />
-                            <ProgressItem label="Xếp hạng" valueLabel={"+42"} percent={70} colorClass="blue" />
+                            <ProgressItem label="Xếp hạng" valueLabel={"5 sao"} percent={70} colorClass="blue" />
                         </div>
                     </div>
                 </section>

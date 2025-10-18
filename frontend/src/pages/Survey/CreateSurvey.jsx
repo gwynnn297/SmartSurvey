@@ -1139,9 +1139,10 @@ const CreateSurvey = () => {
                             <i className="fa-regular fa-eye" aria-hidden="true"></i>
                             <span> Xem trước</span>
                         </button>
-                        <button class="btn-report"
+                        <button
+                            className="btn-report"
                             type="button"
-                            onClick={() => navigate('/report')}
+                            onClick={() => navigate('/report/sentiment')}
                             disabled={loading}
                         >
                             <i className="fa-solid fa-file-lines" aria-hidden="true"></i>
