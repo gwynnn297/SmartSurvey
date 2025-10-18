@@ -6,6 +6,7 @@ import vn.duytan.c1se09.smartsurvey.domain.AiSentiment;
 import vn.duytan.c1se09.smartsurvey.domain.Survey;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Repository cho AiSentiment entity
@@ -15,5 +16,6 @@ public interface AiSentimentRepository extends JpaRepository<AiSentiment, Long> 
     List<AiSentiment> findBySurvey(Survey survey);
     
     List<AiSentiment> findBySurveyOrderByCreatedAtDesc(Survey survey);
+    
+    Optional<AiSentiment> findFirstBySurveyOrderByCreatedAtDesc(Survey survey);
 }
-

@@ -358,7 +358,16 @@ def run_sentiment_now(survey_id: int, question_id: Optional[int] = None, db: Ses
                        target_id=rec.sentiment_id, target_table="ai_sentiment",
                        description=f"Recomputed with external API only (Gemini)") )
     db.commit()
-    return {"survey_id": survey_id, "result": rec.sentiment_id, "created_at": str(rec.created_at)}
+    return {
+        "survey_id": survey_id,
+        "sentiment_id": rec.sentiment_id,
+        "total_responses": aggr["total_responses"],
+        "positive_percent": aggr["positive_percent"],
+        "neutral_percent": aggr["neutral_percent"],
+        "negative_percent": aggr["negative_percent"],
+        "counts": aggr["counts"],
+        "created_at": str(rec.created_at)
+    }
 
 
 @app.get("/ai/sentiment/{survey_id}")

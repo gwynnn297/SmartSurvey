@@ -58,4 +58,3 @@ public class AiSentiment {
         updatedAt = LocalDateTime.now();
     }
 }
-
