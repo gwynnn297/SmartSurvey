@@ -33,17 +33,12 @@ public class AiSentimentController {
             @PathVariable Long surveyId,
             @RequestParam(required = false) Long questionId,
             Principal principal) {
-        
-        // Generate unique request ID
-        String requestId = java.util.UUID.randomUUID().toString().substring(0, 8);
 
-        log.info("Debug - Controller: [{}] Nhận yêu cầu phân tích sentiment cho survey: {}, question: {}, user: {} - TIMESTAMP: {} - THREAD: {}", 
-                requestId, surveyId, questionId, principal != null ? principal.getName() : "anonymous", System.currentTimeMillis(), Thread.currentThread().getName());
+        log.info("Nhận yêu cầu phân tích sentiment cho survey: {}, question: {}, user: {}",
+                surveyId, questionId, principal != null ? principal.getName() : "anonymous");
 
         try {
-            log.info("Debug - Controller: [{}] Gọi aiSentimentService.analyzeSentiment - TIMESTAMP: {}", requestId, System.currentTimeMillis());
             SentimentAnalysisResponseDTO response = aiSentimentService.analyzeSentiment(surveyId, questionId);
-            log.info("Debug - Controller: [{}] Nhận response từ service, success: {} - TIMESTAMP: {}", requestId, response.isSuccess(), System.currentTimeMillis());
 
             if (response.isSuccess()) {
                 return ResponseEntity.ok(response);
