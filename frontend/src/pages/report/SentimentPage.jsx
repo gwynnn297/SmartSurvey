@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import MainLayout from "../../layouts/MainLayout";
 import "./SentimentPage.css";
 import { aiSentimentService } from "../../services/aiSentimentService";
@@ -12,20 +13,22 @@ import {
 } from "recharts";
 
 const SentimentPage = () => {
+  const location = useLocation();
+
   // State cho dữ liệu sentiment
   const [sentimentData, setSentimentData] = useState(null);
   const [loading, setLoading] = useState(false);
 
   // Dữ liệu mặc định khi chưa có dữ liệu thật
   const defaultStats = {
-    total: 200,
-    positive: 130,
-    neutral: 40,
-    negative: 30,
+    total: 0,
+    positive: 0,
+    neutral: 0,
+    negative: 0,
     percent: {
-      positive: 65,
-      neutral: 20,
-      negative: 15,
+      positive: 0,
+      neutral: 0,
+      negative: 0,
     },
   };
 
@@ -49,9 +52,19 @@ const SentimentPage = () => {
     try {
       setLoading(true);
 
-      // Lấy surveyId từ localStorage hoặc dùng surveyId mặc định
-      const surveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
-      const surveyId = surveys.length > 0 ? surveys[0].id : 1;
+      // Lấy surveyId từ navigation state hoặc localStorage hoặc dùng surveyId mặc định
+      let surveyId = null;
+
+      // Ưu tiên lấy từ navigation state (khi chuyển từ CreateSurvey)
+      if (location.state?.surveyId) {
+        surveyId = location.state.surveyId;
+        console.log('Using surveyId from navigation state:', surveyId);
+      } else {
+        // Fallback: lấy từ localStorage
+        const surveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
+        surveyId = surveys.length > 0 ? surveys[0].id : 1;
+        console.log('Using surveyId from localStorage:', surveyId);
+      }
 
       console.log('Loading sentiment data for survey:', surveyId);
 
@@ -112,29 +125,25 @@ const SentimentPage = () => {
   return (
     <MainLayout>
       <div className="sentiment-container">
-        <h1 className="page-title">Phân tích cảm xúc tổng quan</h1>
-        <p className="page-subtitle">AI phân tích cảm xúc dựa trên phản hồi khảo sát</p>
-
-        {!sentimentData && (
-          <div className="data-notice">
-            <i className="fa-solid fa-info-circle"></i>
-            <span>Đang hiển thị dữ liệu mẫu. Vui lòng tạo khảo sát và có phản hồi để xem dữ liệu thật.</span>
-          </div>
-        )}
+        <h1 className="page-title">
+          {location.state?.surveyTitle ?
+            `Phân tích cảm xúc: ${location.state.surveyTitle}` :
+            'Phân tích cảm xúc tổng quan'
+          }
+        </h1>
+        <p className="page-subtitle">
+          {location.state?.surveyDescription ?
+            location.state.surveyDescription :
+            'AI phân tích cảm xúc dựa trên phản hồi khảo sát'
+          }
+        </p>
 
         <div className="sentiment-summary-grid">
           {/* Biểu đồ tròn phân bố cảm xúc */}
           <div className="summary-card chart-card">
             <div className="chart-header">
               <h3><i className="fa-solid fa-chart-pie" title="Phân bố cảm xúc"></i> Phân bố cảm xúc</h3>
-              <button
-                className="btn-refresh-small"
-                onClick={loadSentimentData}
-                disabled={loading}
-                title="Làm mới dữ liệu"
-              >
-                <i className={`fa-solid fa-refresh ${loading ? 'fa-spin' : ''}`}></i>
-              </button>
+
             </div>
             <div className="chart-wrapper">
               <ResponsiveContainer width="100%" height={240}>
@@ -158,8 +167,7 @@ const SentimentPage = () => {
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
-              {/* <p className="chart-total">{stats.total}</p> */}
-              {/* <p className="chart-sub">Tổng phản hồi</p> */}
+
             </div>
           </div>
 
