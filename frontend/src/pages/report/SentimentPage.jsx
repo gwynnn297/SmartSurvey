@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import MainLayout from "../../layouts/MainLayout";
 import "./SentimentPage.css";
 import { aiSentimentService } from "../../services/aiSentimentService";
+import { responseService } from "../../services/responseService";
 import {
   PieChart,
   Pie,
@@ -14,6 +15,9 @@ import {
 
 const SentimentPage = () => {
   const location = useLocation();
+  // Guards to prevent duplicate API calls (StrictMode and concurrent clicks)
+  const isFetchingRef = useRef(false);
+  const hasLoadedRef = useRef(false);
 
   // State cho dữ liệu sentiment
   const [sentimentData, setSentimentData] = useState(null);
@@ -47,67 +51,160 @@ const SentimentPage = () => {
 
   const COLORS = ["#22c55e", "#facc15", "#ef4444"];
 
-  // Hàm để tải dữ liệu sentiment
+  // Hàm để tải dữ liệu sentiment (có chặn gọi trùng)
+  // const loadSentimentData = async () => {
+  //   if (isFetchingRef.current) return;
+  //   try {
+  //     isFetchingRef.current = true;
+  //     setLoading(true);
+
+  //     let surveyId = location.state?.surveyId
+  //       || JSON.parse(localStorage.getItem('userSurveys') || '[]')[0]?.id
+  //       || 1;
+
+  //     console.log('Loading sentiment data for survey:', surveyId);
+
+  //     // Lấy số phản hồi hiện tại từ backend và dữ liệu sentiment gần nhất
+  //     const currentResponseCount = await responseService.getResponseCount(surveyId);
+  //     const storageKey = `sentiment_count_${surveyId}`;
+  //     const lastResponseCount = parseInt(localStorage.getItem(storageKey) || '0', 10);
+  //     const latest = await aiSentimentService.getLatestSentiment(surveyId);
+
+  //     // Lần đầu tiên: chưa có dữ liệu sentiment → phân tích đầy đủ 1 lần
+  //     const noExistingSentiment = !latest.success || (latest.total_responses || 0) === 0;
+  //     if (noExistingSentiment) {
+  //       try {
+  //         console.log('🆕 No existing sentiment found → running initial full analysis...');
+  //         const analyzeResponse = await aiSentimentService.analyzeSentiment(surveyId);
+  //         if (analyzeResponse?.success) {
+  //           setSentimentData(analyzeResponse);
+  //           localStorage.setItem(storageKey, String(currentResponseCount));
+  //         } else {
+  //           // Nếu phân tích thất bại, vẫn hiển thị latest (có thể là error DTO)
+  //           setSentimentData(latest);
+  //         }
+  //       } catch (err) {
+  //         console.error('Error running initial analysis:', err);
+  //         setSentimentData(latest);
+  //       }
+  //       return;
+  //     }
+
+  //     // Đã có sentiment trước đó:
+  //     // Nếu có response mới → chỉ lấy latest (tiếp tục trạng thái, không phân tích lại từ đầu)
+  //     if (currentResponseCount > lastResponseCount) {
+  //       console.log('🔁 New responses detected → running sentiment re-analysis...');
+  //       try {
+  //         const analyzeResponse = await aiSentimentService.analyzeSentiment(surveyId);
+  //         if (analyzeResponse?.success) {
+  //           setSentimentData(analyzeResponse);
+  //           localStorage.setItem(storageKey, String(currentResponseCount));
+  //           console.log('✅ Re-analysis completed:', analyzeResponse);
+  //         } else {
+  //           console.warn('⚠️ Re-analysis failed, fallback to latest:', latest);
+  //           setSentimentData(latest);
+  //         }
+  //       } catch (err) {
+  //         console.error('❌ Error during re-analysis:', err);
+  //         setSentimentData(latest);
+  //       }
+  //     } else {
+  //       console.log('✅ No new responses → using existing sentiment data');
+  //       setSentimentData(latest);
+  //       localStorage.setItem(storageKey, String(currentResponseCount));
+  //     }
+      
+
+  //   } catch (error) {
+  //     console.error('Error loading sentiment data:', error);
+  //   } finally {
+  //     setLoading(false);
+  //     isFetchingRef.current = false;
+  //   }
+  // };
   const loadSentimentData = async () => {
+    if (isFetchingRef.current) return;
     try {
+      isFetchingRef.current = true;
       setLoading(true);
-
-      // Lấy surveyId từ navigation state hoặc localStorage hoặc dùng surveyId mặc định
-      let surveyId = null;
-
-      // Ưu tiên lấy từ navigation state (khi chuyển từ CreateSurvey)
-      if (location.state?.surveyId) {
-        surveyId = location.state.surveyId;
-        console.log('Using surveyId from navigation state:', surveyId);
-      } else {
-        // Fallback: lấy từ localStorage
-        const surveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
-        surveyId = surveys.length > 0 ? surveys[0].id : 1;
-        console.log('Using surveyId from localStorage:', surveyId);
-      }
-
-      console.log('Loading sentiment data for survey:', surveyId);
-
-      // Thử lấy dữ liệu sentiment gần nhất trước
-      let response = await aiSentimentService.getLatestSentiment(surveyId);
-
-      // Nếu không có dữ liệu (404), thực hiện phân tích mới
-      if (!response.success || !response.total_responses) {
-        console.log('No existing sentiment data found, analyzing new...');
+  
+      let surveyId = location.state?.surveyId
+        || JSON.parse(localStorage.getItem('userSurveys') || '[]')[0]?.id
+        || 1;
+  
+      console.log('📊 Bắt đầu tải dữ liệu sentiment cho survey:', surveyId);
+  
+      // Lấy số phản hồi và dữ liệu sentiment gần nhất
+      const currentResponseCount = await responseService.getResponseCount(surveyId);
+      const storageKey = `sentiment_count_${surveyId}`;
+      const lastResponseCount = parseInt(localStorage.getItem(storageKey) || '0', 10);
+      const latest = await aiSentimentService.getLatestSentiment(surveyId);
+  
+      // 🧩 1️⃣ Trường hợp chưa có sentiment
+      const noExistingSentiment = !latest.success || (latest.total_responses || 0) === 0;
+      if (noExistingSentiment) {
+        console.log('🆕 Trường hợp 1: Chưa có sentiment → chạy phân tích ban đầu');
         try {
-          response = await aiSentimentService.analyzeSentiment(surveyId);
-          if (response.success) {
-            setSentimentData(response);
-            console.log('Sentiment analysis completed:', response);
+          const analyzeResponse = await aiSentimentService.analyzeSentiment(surveyId);
+          if (analyzeResponse?.success) {
+            setSentimentData(analyzeResponse);
+            localStorage.setItem(storageKey, String(currentResponseCount));
+            console.log('✅ Hoàn tất phân tích ban đầu');
+          } else {
+            console.warn('⚠️ Phân tích ban đầu thất bại → dùng dữ liệu latest');
+            setSentimentData(latest);
           }
-        } catch (analyzeError) {
-          console.error('Error analyzing sentiment:', analyzeError);
-          // Nếu cả analyze cũng lỗi, giữ nguyên dữ liệu mặc định
+        } catch (err) {
+          console.error('❌ Lỗi khi phân tích ban đầu:', err);
+          setSentimentData(latest);
         }
-      } else {
-        setSentimentData(response);
-        console.log('Sentiment data loaded:', response);
+        return; // ⛔ Dừng tại đây, không chạy tiếp
       }
-
+  
+      // 🧩 2️⃣ Trường hợp có sentiment và có phản hồi mới
+      if (currentResponseCount > lastResponseCount) {
+        console.log('🔁 Trường hợp 2: Có phản hồi mới → chạy phân tích lại');
+        try {
+          const analyzeResponse = await aiSentimentService.analyzeSentiment(surveyId);
+          if (analyzeResponse?.success) {
+            setSentimentData(analyzeResponse);
+            localStorage.setItem(storageKey, String(currentResponseCount));
+            console.log('✅ Hoàn tất phân tích lại');
+          } else {
+            console.warn('⚠️ Phân tích lại thất bại → fallback sang latest');
+            setSentimentData(latest);
+          }
+        } catch (err) {
+          console.error('❌ Lỗi khi phân tích lại:', err);
+          setSentimentData(latest);
+        }
+        return; // ⛔ Dừng tại đây, không chạy tiếp
+      }
+  
+      // 🧩 3️⃣ Trường hợp không có phản hồi mới
+      console.log('✅ Trường hợp 3: Không có phản hồi mới → dùng dữ liệu sentiment cũ');
+      setSentimentData(latest);
+      localStorage.setItem(storageKey, String(currentResponseCount));
+      return; // ⛔ Dừng luôn
+  
     } catch (error) {
-      console.error('Error loading sentiment data:', error);
-
-      // Xử lý các loại lỗi khác nhau
-      if (error.response?.status === 404) {
-        console.log('Survey not found or no sentiment data available. Using default data.');
-      } else if (error.response?.status === 500) {
-        console.log('Server error. Using default data.');
-      }
-      // Giữ nguyên dữ liệu mặc định khi có lỗi
+      console.error('Lỗi khi tải dữ liệu sentiment:', error);
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   };
+  
 
-  // Tự động tải dữ liệu khi component mount
+  // Tự động tải dữ liệu khi component mount (chặn StrictMode gọi 2 lần)
   useEffect(() => {
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
     loadSentimentData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+
 
   const chartData = [
     { name: "Tích cực", value: stats.percent.positive },

@@ -38,7 +38,7 @@ export const aiSentimentService = {
             // Gọi API theo đúng format backend
             const response = await apiClient.post(`/ai/sentiment/${surveyId}`, {}, {
                 params,
-                timeout: 60000 // 60 seconds timeout cho sentiment analysis
+                timeout: 600000 // 60 seconds timeout cho sentiment analysis
             });
 
             console.log('✅ Sentiment analysis result:', response.data);
