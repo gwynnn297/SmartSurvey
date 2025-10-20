@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
 from typing import Dict, Any
+from dotenv import load_dotenv
+load_dotenv()
 
 from .models.survey_schemas import (
     SurveyGenerationRequest, 

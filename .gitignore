@@ -1,0 +1,40 @@
+
+#  GLOBAL IGNORE RULES
+.vscode/
+.DS_Store
+*.log
+*.tmp
+*.bak
+
+#  PYTHON (AI SERVICES)
+
+AI/**/__pycache__/
+AI/**/.venv/
+AI/**/venv/
+AI/**/*.pyc
+AI/**/env/
+AI/**/checkpoints/
+AI/**/.env
+
+#  FRONTEND (React)
+
+frontend/node_modules/
+frontend/.env
+frontend/build/
+frontend/dist/
+
+#  BACKEND (Spring Boot)
+
+backend/build/
+backend/.gradle/
+backend/.env
+backend/out/
+
+
+#  MISC
+
+*.iml
+*.class
+*.jar
+*.war
+.idea/
