@@ -8,11 +8,11 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import vn.duytan.c1se09.smartsurvey.domain.ActivityLog;
-import vn.duytan.c1se09.smartsurvey.domain.AiAnalysis;
+import vn.duytan.c1se09.smartsurvey.domain.AiSentiment;
 import vn.duytan.c1se09.smartsurvey.domain.Response;
 import vn.duytan.c1se09.smartsurvey.domain.Survey;
 import vn.duytan.c1se09.smartsurvey.dto.ai.SentimentAnalysisResponseDTO;
-import vn.duytan.c1se09.smartsurvey.repository.AiAnalysisRepository;
+import vn.duytan.c1se09.smartsurvey.repository.AiSentimentRepository;
 import vn.duytan.c1se09.smartsurvey.repository.ResponseRepository;
 import vn.duytan.c1se09.smartsurvey.repository.SurveyRepository;
 import vn.duytan.c1se09.smartsurvey.service.ActivityLogService;
@@ -23,8 +23,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Service cho AI Sentiment Analysis
- * Tích hợp với AI service của Thiện để phân tích cảm xúc
+ {@code @Service} cho AI Sentiment Analysis
+ * Tích hợp với AI service để phân tích cảm xúc
  */
 @Service
 @RequiredArgsConstructor
@@ -34,7 +34,7 @@ public class AiSentimentService {
     private final RestTemplate restTemplate;
     private final SurveyRepository surveyRepository;
     private final ResponseRepository responseRepository;
-    private final AiAnalysisRepository aiAnalysisRepository;
+    private final AiSentimentRepository aiSentimentRepository;
     private final ActivityLogService activityLogService;
     private final ObjectMapper objectMapper;
 
@@ -57,28 +57,29 @@ public class AiSentimentService {
             // 2. Kiểm tra AI service health
             validateAiServiceHealth();
 
-            // 3. Gọi AI service của Thiện
+            // 3. Gọi AI service
             SentimentAnalysisResponseDTO aiResponse = callAiSentimentService(surveyId, questionId);
 
             if (!aiResponse.isSuccess()) {
                 return aiResponse;
             }
 
-            // 4. Lưu kết quả vào database
-            AiAnalysis savedAnalysis = saveSentimentResult(surveyId, aiResponse);
+            // 4. AI Service đã tạo record rồi, không cần tạo thêm
+            // Chỉ log activity và trả về response
+            if (aiResponse.getTotalResponses() != null && aiResponse.getTotalResponses() > 0) {
+                log.info("AI service đã tạo sentiment record, không cần tạo thêm");
+                
+                // Log activity (không cần target_id vì không tạo record mới)
+                activityLogService.log(
+                        ActivityLog.ActionType.ai_generate,
+                        null,
+                        "ai_sentiment",
+                        "Phân tích sentiment với Gemini API qua AI service");
+            } else {
+                log.warn("AI service trả về response rỗng");
+            }
 
-            // 5. Log activity
-            activityLogService.log(
-                    ActivityLog.ActionType.ai_generate,
-                    savedAnalysis.getAnalysisId(), 
-                    "ai_analysis",
-                    "Phân tích sentiment với Gemini API qua AI service");
-
-            // 6. Update response với real ID
-            aiResponse.setSentimentId(savedAnalysis.getAnalysisId());
-            aiResponse.setCreatedAt(savedAnalysis.getCreatedAt());
-
-            log.info("Hoàn thành phân tích sentiment với ID: {}", savedAnalysis.getAnalysisId());
+            log.info("Hoàn thành phân tích sentiment cho survey: {}", surveyId);
             return aiResponse;
 
         } catch (Exception e) {
@@ -99,19 +100,17 @@ public class AiSentimentService {
             Survey survey = surveyRepository.findById(surveyId)
                     .orElseThrow(() -> new IllegalArgumentException("Survey không tồn tại"));
 
-            // 2. Tìm sentiment analysis gần nhất trong database
-            List<AiAnalysis> sentimentAnalyses = aiAnalysisRepository.findBySurveyOrderByCreatedAtDesc(survey);
-            AiAnalysis latestSentiment = sentimentAnalyses.stream()
-                    .filter(analysis -> analysis.getAnalysisType() == AiAnalysis.AnalysisType.SENTIMENT)
+            // 2. Lấy từ bảng ai_sentiment
+            List<AiSentiment> sentimentAnalyses = aiSentimentRepository.findBySurveyOrderByCreatedAtDesc(survey);
+            AiSentiment latestSentiment = sentimentAnalyses.stream()
                     .findFirst()
                     .orElse(null);
 
             if (latestSentiment != null) {
-                // Parse từ database
                 return parseSentimentFromDatabase(surveyId, latestSentiment);
             } else {
-                // Nếu không có trong database, gọi AI service
-                return callAiServiceGetSentiment(surveyId);
+                log.info("Không tìm thấy sentiment cho survey: {}", surveyId);
+                return SentimentAnalysisResponseDTO.error(surveyId, "Không tìm thấy kết quả sentiment");
             }
 
         } catch (Exception e) {
@@ -122,7 +121,7 @@ public class AiSentimentService {
     }
 
     /**
-     * Gọi AI service của Thiện để phân tích sentiment
+     * Gọi AI service để phân tích sentiment
      */
     private SentimentAnalysisResponseDTO callAiSentimentService(Long surveyId, Long questionId) {
         try {
@@ -144,7 +143,7 @@ public class AiSentimentService {
                 Map<String, Object> responseBody = response.getBody();
                 log.info("Nhận phản hồi từ AI service: {}", responseBody);
 
-                // Parse response từ AI service của Thiện
+                // Parse response từ AI service
                 return parseAiServiceResponse(surveyId, responseBody);
             } else {
                 log.error("AI service trả về status không phải OK: {}", response.getStatusCode());
@@ -160,63 +159,47 @@ public class AiSentimentService {
     }
 
     /**
-     * Gọi AI service để lấy kết quả sentiment gần nhất
-     */
-    private SentimentAnalysisResponseDTO callAiServiceGetSentiment(Long surveyId) {
-        try {
-            String url = aiServiceBaseUrl + "/ai/sentiment/" + surveyId;
-            log.info("Gọi AI service để lấy kết quả: {}", url);
-
-            @SuppressWarnings("rawtypes")
-            ResponseEntity<Map> response = restTemplate.getForEntity(url, Map.class);
-
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> responseBody = (Map<String, Object>) response.getBody();
-                log.info("Nhận kết quả từ AI service: {}", responseBody);
-
-                return parseAiServiceResponse(surveyId, responseBody);
-            } else {
-                return SentimentAnalysisResponseDTO.error(surveyId,
-                        "Không tìm thấy kết quả sentiment");
-            }
-
-        } catch (Exception e) {
-            log.error("Lỗi khi lấy kết quả sentiment từ AI service: {}", e.getMessage(), e);
-            return SentimentAnalysisResponseDTO.error(surveyId,
-                    "Lỗi khi lấy kết quả sentiment: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Parse response từ AI service của Thiện
+     * Parse response từ AI service
      */
     private SentimentAnalysisResponseDTO parseAiServiceResponse(Long surveyId, Map<String, Object> responseBody) {
         try {
-            Object resultObj = responseBody.get("result");
-            if (!(resultObj instanceof Map)) {
-                return SentimentAnalysisResponseDTO.error(surveyId,
-                        "AI service trả về response không đúng định dạng");
-            }
-            @SuppressWarnings("unchecked")
-            Map<String, Object> result = (Map<String, Object>) resultObj;
+            // AI service trả về trực tiếp data
+            Map<String, Object> result = responseBody;
+            
+            // Debug log để xem response format
+            log.info("Debug - AI service response keys: {}", result.keySet());
+            log.info("Debug - AI service response: {}", result);
 
             Integer totalResponses = (Integer) result.get("total_responses");
-            Double positivePercent = ((Number) result.get("positive_percent")).doubleValue();
-            Double neutralPercent = ((Number) result.get("neutral_percent")).doubleValue();
-            Double negativePercent = ((Number) result.get("negative_percent")).doubleValue();
+            Long sentimentId = null;
+            
+            // Parse sentiment_id từ AI service response
+            if (result.get("sentiment_id") != null) {
+                sentimentId = ((Number) result.get("sentiment_id")).longValue();
+            }
+            
+            // Handle null values safely
+            Double positivePercent = 0.0;
+            Double neutralPercent = 0.0;
+            Double negativePercent = 0.0;
+            
+            if (result.get("positive_percent") != null) {
+                positivePercent = ((Number) result.get("positive_percent")).doubleValue();
+            }
+            if (result.get("neutral_percent") != null) {
+                neutralPercent = ((Number) result.get("neutral_percent")).doubleValue();
+            }
+            if (result.get("negative_percent") != null) {
+                negativePercent = ((Number) result.get("negative_percent")).doubleValue();
+            }
 
-            // Parse counts từ details
+            // Parse counts trực tiếp từ response
             Map<String, Integer> counts = new HashMap<>();
-            if (result.get("details") instanceof Map) {
+            if (result.get("counts") instanceof Map) {
                 @SuppressWarnings("unchecked")
-                Map<String, Object> details = (Map<String, Object>) result.get("details");
-                if (details.get("counts") instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> countsMap = (Map<String, Object>) details.get("counts");
-                    for (Map.Entry<String, Object> entry : countsMap.entrySet()) {
-                        counts.put(entry.getKey(), ((Number) entry.getValue()).intValue());
-                    }
+                Map<String, Object> countsMap = (Map<String, Object>) result.get("counts");
+                for (Map.Entry<String, Object> entry : countsMap.entrySet()) {
+                    counts.put(entry.getKey(), ((Number) entry.getValue()).intValue());
                 }
             }
 
@@ -230,9 +213,14 @@ public class AiSentimentService {
                 }
             }
 
-            return SentimentAnalysisResponseDTO.success(surveyId, "Phân tích sentiment thành công",
+            SentimentAnalysisResponseDTO response = SentimentAnalysisResponseDTO.success(surveyId, "Phân tích sentiment thành công",
                     totalResponses, positivePercent, neutralPercent, negativePercent,
                     counts, createdAt);
+            
+            // Set sentiment_id từ AI service response
+            response.setSentimentId(sentimentId);
+            
+            return response;
 
         } catch (Exception e) {
             log.error("Lỗi khi parse response từ AI service: {}", e.getMessage(), e);
@@ -274,68 +262,39 @@ public class AiSentimentService {
     }
 
     /**
-     * Lưu kết quả sentiment vào database
+     * Parse sentiment từ database (AiSentiment entity)
      */
-    private AiAnalysis saveSentimentResult(Long surveyId, SentimentAnalysisResponseDTO aiResponse) {
+    private SentimentAnalysisResponseDTO parseSentimentFromDatabase(Long surveyId, AiSentiment sentiment) {
         try {
-            // Tạo JSON chứa toàn bộ thông tin sentiment
-            Map<String, Object> sentimentData = new HashMap<>();
-            sentimentData.put("total_responses", aiResponse.getTotalResponses());
-            sentimentData.put("positive_percent", aiResponse.getPositivePercent());
-            sentimentData.put("neutral_percent", aiResponse.getNeutralPercent());
-            sentimentData.put("negative_percent", aiResponse.getNegativePercent());
-            sentimentData.put("counts", aiResponse.getCounts());
-            
-            String analysisDataJson = objectMapper.writeValueAsString(sentimentData);
-
-            // Tìm survey entity
-            Survey survey = surveyRepository.findById(surveyId)
-                    .orElseThrow(() -> new RuntimeException("Survey không tồn tại"));
-
-            AiAnalysis analysis = new AiAnalysis();
-            analysis.setSurvey(survey);
-            analysis.setAnalysisType(AiAnalysis.AnalysisType.SENTIMENT);
-            analysis.setAnalysisData(analysisDataJson);
-
-            AiAnalysis savedAnalysis = aiAnalysisRepository.save(analysis);
-            log.info("Đã lưu sentiment result với ID: {}", savedAnalysis.getAnalysisId());
-            return savedAnalysis;
-
-        } catch (Exception e) {
-            log.error("Lỗi khi lưu sentiment result: {}", e.getMessage(), e);
-            throw new RuntimeException("Không thể lưu kết quả sentiment: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Parse sentiment từ database (AiAnalysis entity)
-     */
-    private SentimentAnalysisResponseDTO parseSentimentFromDatabase(Long surveyId, AiAnalysis analysis) {
-        try {
-            // Parse JSON từ analysisData
-            Map<String, Object> sentimentData = objectMapper.readValue(
-                    analysis.getAnalysisData(), 
-                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
-            );
-
-            Integer totalResponses = (Integer) sentimentData.get("total_responses");
-            Double positivePercent = ((Number) sentimentData.get("positive_percent")).doubleValue();
-            Double neutralPercent = ((Number) sentimentData.get("neutral_percent")).doubleValue();
-            Double negativePercent = ((Number) sentimentData.get("negative_percent")).doubleValue();
-
-            // Parse counts
+            // Parse counts từ details JSON
             Map<String, Integer> counts = new HashMap<>();
-            if (sentimentData.get("counts") instanceof Map) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> countsMap = (Map<String, Object>) sentimentData.get("counts");
-                for (Map.Entry<String, Object> entry : countsMap.entrySet()) {
-                    counts.put(entry.getKey(), ((Number) entry.getValue()).intValue());
+            if (sentiment.getDetails() != null) {
+                Map<String, Object> detailsData = objectMapper.readValue(
+                        sentiment.getDetails(), 
+                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
+                );
+                
+                if (detailsData.get("counts") instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> countsMap = (Map<String, Object>) detailsData.get("counts");
+                    for (Map.Entry<String, Object> entry : countsMap.entrySet()) {
+                        counts.put(entry.getKey(), ((Number) entry.getValue()).intValue());
+                    }
                 }
             }
 
-            return SentimentAnalysisResponseDTO.success(surveyId, "Lấy kết quả sentiment từ database thành công",
-                    totalResponses, positivePercent, neutralPercent, negativePercent,
-                    counts, analysis.getCreatedAt());
+            return SentimentAnalysisResponseDTO.builder()
+                    .success(true)
+                    .message("Lấy kết quả sentiment từ database thành công")
+                    .surveyId(surveyId)
+                    .sentimentId(sentiment.getSentimentId())
+                    .totalResponses(sentiment.getTotalResponses())
+                    .positivePercent(sentiment.getPositivePercent().doubleValue())
+                    .neutralPercent(sentiment.getNeutralPercent().doubleValue())
+                    .negativePercent(sentiment.getNegativePercent().doubleValue())
+                    .counts(counts)
+                    .createdAt(sentiment.getCreatedAt())
+                    .build();
 
         } catch (Exception e) {
             log.error("Lỗi khi parse sentiment từ database: {}", e.getMessage(), e);
@@ -343,4 +302,5 @@ public class AiSentimentService {
                     "Lỗi khi xử lý dữ liệu sentiment từ database: " + e.getMessage());
         }
     }
+
 }

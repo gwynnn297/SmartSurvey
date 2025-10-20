@@ -1073,6 +1073,67 @@ const CreateSurvey = () => {
         }
     };
 
+    const handleReport = async () => {
+        try {
+            // Kiểm tra nếu đang edit mode và có surveyId
+            if (!editSurveyId) {
+                alert('Vui lòng lưu khảo sát trước khi xem báo cáo.');
+                return;
+            }
+
+            // Lưu survey trước (nếu chưa có)
+            let surveyId = editSurveyId;
+            if (surveyId.toString().startsWith('temp_')) {
+                // Nếu đang ở draft mode, lưu survey trước
+                if (!validateForm()) {
+                    alert('Vui lòng hoàn thành tất cả thông tin bắt buộc trước khi xem báo cáo.');
+                    return;
+                }
+
+                const payload = {
+                    title: surveyData.title,
+                    description: surveyData.description,
+                    categoryId: surveyData.category_id ? parseInt(surveyData.category_id) : null,
+                    aiPrompt: null
+                };
+
+                const savedSurvey = await surveyService.createSurvey(payload);
+                if (!savedSurvey || !savedSurvey.id) {
+                    throw new Error('Không thể lưu khảo sát. Vui lòng thử lại.');
+                }
+
+                surveyId = savedSurvey.id;
+
+                // Lưu questions và options
+                await saveQuestionsAndOptions(surveyId);
+
+                // Cập nhật editSurveyId
+                setEditSurveyId(surveyId);
+            }
+
+            // Chuyển đến trang SentimentPage với surveyId cụ thể
+            navigate('/report/sentiment', {
+                state: {
+                    surveyId: surveyId,
+                    surveyTitle: surveyData.title,
+                    surveyDescription: surveyData.description
+                }
+            });
+
+        } catch (error) {
+            console.error('Lỗi khi chuyển đến báo cáo:', error);
+            let errorMessage = 'Có lỗi xảy ra khi chuyển đến báo cáo. Vui lòng thử lại.';
+
+            if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            alert(errorMessage);
+        }
+    };
+
     const saveQuestionsAndOptions = async (surveyId) => {
         if (questions.length === 0) return;
 
@@ -1139,10 +1200,18 @@ const CreateSurvey = () => {
                             <i className="fa-regular fa-eye" aria-hidden="true"></i>
                             <span> Xem trước</span>
                         </button>
-                        <button class="btn-report"
+                        <button
+                            className="btn-report"
                             type="button"
-                            onClick={() => navigate('/report')}
-                            disabled={loading}
+                            onClick={handleReport}
+                            disabled={loading || !editSurveyId || surveyData.status === 'draft'}
+                            title={
+                                !editSurveyId
+                                    ? "Cần lưu khảo sát trước khi xem báo cáo"
+                                    : surveyData.status === 'draft'
+                                        ? "Khảo sát ở trạng thái Draft - cần xuất bản để xem báo cáo"
+                                        : "Xem báo cáo phân tích"
+                            }
                         >
                             <i className="fa-solid fa-file-lines" aria-hidden="true"></i>
                             <span> Báo cáo</span>
