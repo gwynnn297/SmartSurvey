@@ -4,8 +4,8 @@ import os
 import json
 import re
 import hashlib
-from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime
+from typing import Optional, Dict, Any, List, Tuple
 
 import pymysql
 import requests
@@ -15,17 +15,36 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.sql import text
 from dotenv import load_dotenv
-load_dotenv() 
+load_dotenv()
 
-# ====== dự án sẵn có (KHÔNG dùng PhoBERT nội bộ) ======
+# ====== ML/NLP (không cần train) ======
+from typing import List as _List
+import math as _math
+import numpy as _np
+from sklearn.feature_extraction.text import TfidfVectorizer as _TfidfVectorizer
+from sklearn.decomposition import TruncatedSVD as _SVD
+from sklearn.cluster import KMeans as _KMeans
+# --- Vietnamese tokenizer (with safe fallback) ---
+try:
+    from underthesea import word_tokenize as _vn_tok  # type: ignore
+
+    def _tok_vi(s: str) -> str:
+        # underthesea trả về chuỗi đã tách bằng dấu cách (format="text")
+        return " ".join(_vn_tok(s or "", format="text").split())
+except Exception:  # ImportError hoặc lỗi init model
+    import re as _re
+
+    def _tok_vi(s: str) -> str:
+        # fallback cơ bản nếu underthesea chưa sẵn/có sự cố
+        return _re.sub(r"\s+", " ", (s or "").strip())
+import httpx
+
+
+# ====== dự án sẵn có (KHÔNG dùng model train nội bộ) ======
+# bạn giữ nguyên các module settings/db/model như dự án của bạn
 from settings import settings
 from db import init_db, SessionLocal, AiSentiment, Answer, Response, AiChatLog, ActivityLog
 
-# ============================================================
-# CẤU HÌNH GOOGLE GEMINI (Structured Output)
-# ============================================================
-# Lưu ý: EXT_SENTI_MODEL không ảnh hưởng tới Gemini ở đây, giữ để đồng nhất config
-# đúng
 EXT_URL = os.getenv("EXT_SENTI_URL")
 EXT_KEY = os.getenv("EXT_SENTI_KEY")
 EXT_LANG      = os.getenv("EXT_SENTI_LANG", "vi")
@@ -320,14 +339,6 @@ def classify_and_log(survey_id: int, question_id: Optional[int], answer_id: Opti
 
 
 # ============================================================
-# Health check endpoint
-# ============================================================
-
-@app.get("/health")
-def health_check():
-    return {"status": "healthy", "service": "ai-sentiment"}
-
-# ============================================================
 # Endpoints sentiment
 # ============================================================
 
@@ -358,16 +369,7 @@ def run_sentiment_now(survey_id: int, question_id: Optional[int] = None, db: Ses
                        target_id=rec.sentiment_id, target_table="ai_sentiment",
                        description=f"Recomputed with external API only (Gemini)") )
     db.commit()
-    return {
-        "survey_id": survey_id,
-        "sentiment_id": rec.sentiment_id,
-        "total_responses": aggr["total_responses"],
-        "positive_percent": aggr["positive_percent"],
-        "neutral_percent": aggr["neutral_percent"],
-        "negative_percent": aggr["negative_percent"],
-        "counts": aggr["counts"],
-        "created_at": str(rec.created_at)
-    }
+    return {"survey_id": survey_id, "result": rec.sentiment_id, "created_at": str(rec.created_at)}
 
 
 @app.get("/ai/sentiment/{survey_id}")
@@ -506,6 +508,277 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
 print("[startup] EXT_SENTI_URL =", os.getenv("EXT_SENTI_URL"))
 print("[startup] EXT_SENTI_KEY set? ", bool(os.getenv("EXT_SENTI_KEY")))
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# ============================================================
+# ===================== SPRINT 4 ADDITIONS ====================
+# 1) Keywords (TF-IDF)
+# 2) Basic Sentiment (rule-based, tiếng Việt)
+# 3) Summary (Gemini)
+# 4) Themes (TF-IDF -> SVD -> KMeans)
+# 5) Get latest analysis by kind
+# ============================================================
+
+def _vn_norm(s: str) -> str:
+    s = (s or "").strip()
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+def _fetch_texts_by_survey(survey_id: int) -> _List[str]:
+    rows = sql_all(
+        """
+        SELECT a.answer_text
+        FROM answers a
+        JOIN responses r ON r.response_id = a.response_id
+        WHERE r.survey_id=%s AND a.answer_text IS NOT NULL AND TRIM(a.answer_text) <> ''
+        ORDER BY a.answer_id ASC
+        """,
+        (survey_id,),
+    )
+    return [_vn_norm(r["answer_text"]) for r in rows]
+
+def _save_analysis(survey_id: int, payload: dict, kind: str, analysis_type_override: str | None = None):
+    atype = analysis_type_override or "INSIGHT"
+    sql_exec(
+        """
+        INSERT INTO ai_analysis(survey_id, analysis_data, analysis_type)
+        VALUES (%s, %s, %s)
+        """,
+        (survey_id, json.dumps({"kind": kind, **payload}, ensure_ascii=False), atype),
+    )
+
+# ---------- 1) Keywords ----------
+def _extract_keywords(texts: _List[str], top_k: int = 15) -> _List[dict]:
+    if not texts:
+        return []
+
+    corpus = [_tok_vi(t) for t in texts]  # <— dùng _tok_vi
+    vec = _TfidfVectorizer(max_df=0.9, min_df=1, ngram_range=(1, 2))
+    X = vec.fit_transform(corpus)
+    scores = X.sum(axis=0).A1
+    terms = vec.get_feature_names_out()
+    pairs = sorted(zip(terms, scores), key=lambda x: x[1], reverse=True)[:top_k]
+    return [{"keyword": k, "score": round(float(s), 4)} for k, s in pairs]
+
+@app.post("/ai/keywords/{survey_id}", tags=["Analysis Service"])
+def ai_keywords(survey_id: int):
+    texts = _fetch_texts_by_survey(survey_id)
+    kws = _extract_keywords(texts, top_k=15)
+    _save_analysis(survey_id, {"keywords": kws, "total_responses": len(texts)}, "KEYWORDS")
+    return {"ok": True, "count": len(texts), "keywords": kws}
+
+# ---------- 2) Basic sentiment (rule-based, có phủ định) ----------
+_POS_WORDS = {"tốt","hài lòng","tuyệt","ổn","đúng hẹn","rẻ","nhanh","thân thiện","dễ dùng"}
+_NEG_WORDS = {"tệ","chậm","bực","bực mình","không hài lòng","đắt","trễ","hư","lỗi","tồi","kém"}
+_NEGATORS = {"không","chẳng","chả","chưa"}
+
+def _basic_sentiment_label(s: str) -> int:
+    """
+    2=pos, 1=neu, 0=neg
+    - Đếm POS/NEG
+    - Xử lý phủ định 'không X' đảo cực
+    """
+    s2 = (s or "").lower()
+    s2 = re.sub(r"\s+", " ", s2)
+    pos, neg = 0, 0
+    toks = s2.split()
+    for i, tk in enumerate(toks):
+        if tk in _NEGATORS and i + 1 < len(toks):
+            nxt = toks[i + 1]
+            if nxt in _POS_WORDS: neg += 1
+            elif nxt in _NEG_WORDS: pos += 1
+    for w in _POS_WORDS:
+        if w in s2 and not any(ng + " " + w in s2 for ng in _NEGATORS):
+            pos += 1
+    for w in _NEG_WORDS:
+        if w in s2 and not any(ng + " " + w in s2 for ng in _NEGATORS):
+            neg += 1
+    if pos > neg: return 2
+    if neg > pos: return 0
+    return 1
+
+@app.post("/ai/basic-sentiment/{survey_id}", tags=["Analysis Service"])
+def ai_basic_senti(survey_id: int):
+    texts = _fetch_texts_by_survey(survey_id)
+    labs = [_basic_sentiment_label(t) for t in texts]
+    pos = sum(1 for l in labs if l == 2)
+    neg = sum(1 for l in labs if l == 0)
+    neu = sum(1 for l in labs if l == 1)
+    payload = {"total": len(texts), "counts": {"POS": pos, "NEU": neu, "NEG": neg}}
+    _save_analysis(survey_id, payload, "BASIC_SENTI")
+    return {"ok": True, **payload}
+
+# ---------- 3) Summarization (Gemini) ----------
+GEMINI_URL = os.getenv("EXT_SUMM_URL")
+GEMINI_KEY = os.getenv("EXT_SENTI_KEY")
+
+def _local_summary(responses: list[str], max_bullets: int = 5) -> str:
+    """Tóm tắt local đơn giản: chọn một vài câu “tiêu biểu” bằng TF-IDF."""
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    import numpy as np
+    texts = [t.strip() for t in responses if t and t.strip()]
+    if not texts:
+        return "Không có dữ liệu để tóm tắt."
+
+    # cắt dữ liệu để tránh quá dài
+    MAX_RESP = int(os.getenv("SUMMARY_MAX_RESP", "120"))
+    texts = texts[:MAX_RESP]
+
+    # tách câu (nếu không có dấu câu thì coi mỗi phản hồi là 1 câu)
+    sents = []
+    for t in texts:
+        parts = re.split(r"(?<=[.!?])\s+|\n+", t)
+        sents.extend([p.strip() for p in parts if p.strip()])
+    sents = sents[:800]
+    if not sents:
+        return "Không có dữ liệu để tóm tắt."
+
+    vec = TfidfVectorizer(max_df=0.9, min_df=1, ngram_range=(1, 2))
+    X = vec.fit_transform(sents)
+    scores = X.sum(axis=1).A1
+    idx = scores.argsort()[::-1][:max_bullets]
+    picks = [sents[i] for i in sorted(idx)]  # giữ thứ tự tự nhiên
+    return "- " + "\n- ".join(picks)
+
+def _gemini_summarize(responses: _List[str]) -> str:
+    if not responses:
+        return "Không có dữ liệu để tóm tắt."
+
+    # hạn chế độ dài input để giảm rủi ro 429
+    MAX_RESP = int(os.getenv("SUMMARY_MAX_RESP", "120"))
+    MAX_CHARS = int(os.getenv("SUMMARY_MAX_CHARS", "6000"))
+    joined = "\n- ".join([r.strip() for r in responses if r][:MAX_RESP])[:MAX_CHARS]
+
+    prompt = (
+        "Tóm tắt ngắn gọn (3-5 bullet) các ý chính từ danh sách phản hồi tiếng Việt dưới đây. "
+        "Nhấn mạnh điểm tích cực, tiêu cực và đề xuất cải tiến nếu có.\n\n"
+        "Danh sách phản hồi:\n- " + joined
+    )
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+    # nếu chưa có key → dùng local summary
+    if not GEMINI_KEY or not GEMINI_URL:
+        return _local_summary(responses)
+
+    try:
+        with httpx.Client(timeout=float(os.getenv("EXT_SENTI_TIMEOUT", "12.0"))) as client:
+            r = client.post(f"{GEMINI_URL}?key={GEMINI_KEY}", json=payload)
+
+        if r.status_code == 200:
+            data = r.json()
+            cand = (data.get("candidates") or [{}])[0]
+            content = cand.get("content") or {}
+            parts = content.get("parts") or [{}]
+            txt = parts[0].get("text")
+            if isinstance(txt, str) and txt.strip():
+                return txt
+            # fallback nếu proxy trả field khác
+            if isinstance(data, dict) and "text" in data and str(data["text"]).strip():
+                return str(data["text"])
+            return _local_summary(responses)
+
+        # lỗi: đọc body để phân biệt rate/quota
+        try:
+            err = r.json()
+        except Exception:
+            err = {"text": r.text}
+        status = (err.get("error") or {}).get("status") or err.get("status") or ""
+        # nếu là 429 / RESOURCE_EXHAUSTED → fallback cục bộ
+        if r.status_code == 429 or str(status).upper() in {"RATE_LIMIT_EXCEEDED", "RESOURCE_EXHAUSTED"}:
+            return _local_summary(responses)
+        # các lỗi khác: trả thông báo ngắn kèm fallback
+        return f"Không tóm tắt được (HTTP {r.status_code}: {status}).\n" + _local_summary(responses)
+
+    except Exception as e:
+        return f"Không tóm tắt được. Lỗi: {e}\n" + _local_summary(responses)
+
+# ---- throttle đơn giản cho /ai/summary ----
+_SUMMARY_THROTTLE = {}
+
+def _allow_summary_call(sid: int, window: int = int(os.getenv("SUMMARY_THROTTLE_SEC", "10"))) -> bool:
+    import time
+    now = time.time()
+    last = _SUMMARY_THROTTLE.get(sid, 0)
+    if now - last < window:
+        return False
+    _SUMMARY_THROTTLE[sid] = now
+    return True
+
+@app.post("/ai/summary/{survey_id}", tags=["Analysis Service"])
+def ai_summary(survey_id: int):
+    if not _allow_summary_call(survey_id):
+        return {"ok": False, "summary": "Đang giới hạn tần suất, vui lòng thử lại sau vài giây.", "count": 0}
+    texts = _fetch_texts_by_survey(survey_id)
+    summ = _gemini_summarize(texts)
+    _save_analysis(survey_id, {"summary": summ, "sample_size": len(texts)}, "SUMMARY", analysis_type_override="SUMMARY")
+    return {"ok": True, "summary": summ, "count": len(texts)}
+
+# ---------- 4) Theme clustering (TF-IDF -> SVD -> KMeans) ----------
+def _pick_k(n: int) -> int:
+    if n <= 8: return 2
+    return min(8, max(3, int(_math.sqrt(n))))
+
+def _cluster_themes(texts: _List[str], k: int | None = None):
+    if not texts:
+        return []
+    corpus = [_tok_vi(t) for t in texts]  # <— dùng _tok_vi
+    tfidf = _TfidfVectorizer(max_df=0.9, min_df=1, ngram_range=(1,2), max_features=5000)
+    X = tfidf.fit_transform(corpus)
+
+    from sklearn.decomposition import TruncatedSVD as _SVD
+    n_comp = max(2, min(100, X.shape[1] // 2))
+    svd = _SVD(n_components=n_comp, random_state=42)
+    Xr = svd.fit_transform(X)
+
+    from sklearn.cluster import KMeans as _KMeans
+    import numpy as _np
+    import math as _math
+    def _pick_k(n: int) -> int:
+        if n <= 8: return 2
+        return min(8, max(3, int(_math.sqrt(n))))
+
+    kk = k or _pick_k(len(texts))
+    km = _KMeans(n_clusters=kk, n_init="auto", random_state=42)
+    labels = km.fit_predict(Xr)
+
+    themes = []
+    for c in range(kk):
+        idx = _np.where(labels == c)[0]
+        if not len(idx): 
+            continue
+        center = km.cluster_centers_[c]
+        dists = _np.linalg.norm(Xr[idx] - center, axis=1)
+        order = idx[_np.argsort(dists)]
+        reps = [texts[i] for i in order[: min(3, len(order))]]
+        themes.append({"cluster": int(c), "size": int(len(idx)), "examples": reps})
+    themes.sort(key=lambda x: -x["size"])
+    return themes
+
+@app.post("/ai/themes/{survey_id}", tags=["Analysis Service"])
+def ai_themes(survey_id: int, k: int | None = None):
+    texts = _fetch_texts_by_survey(survey_id)
+    themes = _cluster_themes(texts, k=k)
+    _save_analysis(survey_id, {"themes": themes, "k": len(themes), "total": len(texts)}, "THEMES")
+    return {"ok": True, "k": len(themes), "themes": themes}
+
+# ---------- 5) Get latest analysis by kind ----------
+@app.get("/ai/analysis/{survey_id}/latest/{kind}", tags=["Analysis Service"])
+def get_latest_analysis(survey_id: int, kind: str):
+    # kind in: KEYWORDS | THEMES | SUMMARY | BASIC_SENTI
+    rows = sql_all(
+        """
+        SELECT analysis_id, analysis_data, analysis_type, created_at
+        FROM ai_analysis
+        WHERE survey_id=%s
+        ORDER BY created_at DESC, analysis_id DESC
+        LIMIT 50
+        """,
+        (survey_id,),
+    )
+    for r in rows:
+        try:
+            data = json.loads(r["analysis_data"]) if isinstance(r["analysis_data"], str) else r["analysis_data"]
+            if data.get("kind") == kind or (kind == "SUMMARY" and r.get("analysis_type") == "SUMMARY"):
+                return {"ok": True, "data": data, "analysis_id": r["analysis_id"], "analysis_type": r["analysis_type"]}
+        except Exception:
+            continue
+    return {"ok": False, "message": f"No analysis with kind={kind}"}
+

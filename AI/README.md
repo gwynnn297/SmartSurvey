@@ -74,3 +74,21 @@ transformers==4.43.3
 torch==2.3.1
 
 ## link checkoint : https://drive.google.com/drive/folders/1MLBOE-Ps7-oYyWvMzOb3ahjhvORgna-r?usp=sharing
+
+## Sprint 4
+1. Enhanced Text Analysis Service
+Sprint 4 – Tính năng mới (Không cần train server)
+Keywords: trích xuất n-gram bằng TF-IDF.
+Basic Sentiment (rule-based): phân loại POS/NEU/NEG bằng từ điển + xử lý phủ định cơ bản.
+Summary (Gemini + fallback): tóm tắt tiếng Việt bằng Gemini 2.5 Flash; khi quota/429 → fallback local.
+Themes: gom nhóm chủ đề với TF-IDF → SVD → K-Means (hoặc truyền ?k=).
+Lưu & truy xuất: ghi kết quả vào ai_analysis và hỗ trợ lấy bản mới nhất theo kind.
+## KIND : (SUMMARY,INSIGHT,SENTIMENT)
+## Smoke Test (5 bước)
+Vào /docs gọi lần lượt:
+POST /ai/keywords/{id}
+POST /ai/basic-sentiment/{id}
+POST /ai/themes/{id} (tùy chọn ?k=3)
+POST /ai/summary/{id}
+GET /ai/analysis/{id}/latest/SUMMARY
+
