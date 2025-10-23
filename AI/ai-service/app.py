@@ -38,6 +38,7 @@ except Exception:  # ImportError hoặc lỗi init model
         # fallback cơ bản nếu underthesea chưa sẵn/có sự cố
         return _re.sub(r"\s+", " ", (s or "").strip())
 import httpx
+import time as _time
 
 
 # ====== dự án sẵn có (KHÔNG dùng model train nội bộ) ======
@@ -517,6 +518,15 @@ print("[startup] EXT_SENTI_KEY set? ", bool(os.getenv("EXT_SENTI_KEY")))
 # 5) Get latest analysis by kind
 # ============================================================
 
+
+EXT_URL   = os.getenv("EXT_SENTI_URL") or os.getenv("EXT_SUMM_URL")
+EXT_KEY   = os.getenv("EXT_SENTI_KEY")
+EXT_TIMEOUT = float(os.getenv("EXT_SENTI_TIMEOUT", "15.0"))
+EXT_RETRY   = int(os.getenv("EXT_SENTI_MAX_RETRY", "4"))
+BATCH_SIZE  = int(os.getenv("SENTI_BATCH_SIZE", "50"))
+BACKOFF_K   = float(os.getenv("SENTI_BACKOFF_BASE", "1.2"))
+FORCE_EXTERNAL = os.getenv("FORCE_EXTERNAL_SENTI", "1") == "1"
+
 def _vn_norm(s: str) -> str:
     s = (s or "").strip()
     s = re.sub(r"\s+", " ", s)
@@ -550,7 +560,7 @@ def _extract_keywords(texts: _List[str], top_k: int = 15) -> _List[dict]:
     if not texts:
         return []
 
-    corpus = [_tok_vi(t) for t in texts]  # <— dùng _tok_vi
+    corpus = [_tok_vi(t) for t in texts]  # <— dùng _tok_vi (đã có fallback)
     vec = _TfidfVectorizer(max_df=0.9, min_df=1, ngram_range=(1, 2))
     X = vec.fit_transform(corpus)
     scores = X.sum(axis=0).A1
@@ -565,46 +575,91 @@ def ai_keywords(survey_id: int):
     _save_analysis(survey_id, {"keywords": kws, "total_responses": len(texts)}, "KEYWORDS")
     return {"ok": True, "count": len(texts), "keywords": kws}
 
-# ---------- 2) Basic sentiment (rule-based, có phủ định) ----------
-_POS_WORDS = {"tốt","hài lòng","tuyệt","ổn","đúng hẹn","rẻ","nhanh","thân thiện","dễ dùng"}
-_NEG_WORDS = {"tệ","chậm","bực","bực mình","không hài lòng","đắt","trễ","hư","lỗi","tồi","kém"}
-_NEGATORS = {"không","chẳng","chả","chưa"}
+# ---------- 2) Basic sentiment (Gemini-only batch) ----------
+# Dùng các biến ENV đã có ở đầu file:
+#   EXT_URL, EXT_KEY, EXT_TIMEOUT, EXT_MAX_RETRY, FORCE_EXTERNAL, BATCH_SIZE, BACKOFF_K
 
-def _basic_sentiment_label(s: str) -> int:
-    """
-    2=pos, 1=neu, 0=neg
-    - Đếm POS/NEG
-    - Xử lý phủ định 'không X' đảo cực
-    """
-    s2 = (s or "").lower()
-    s2 = re.sub(r"\s+", " ", s2)
-    pos, neg = 0, 0
-    toks = s2.split()
-    for i, tk in enumerate(toks):
-        if tk in _NEGATORS and i + 1 < len(toks):
-            nxt = toks[i + 1]
-            if nxt in _POS_WORDS: neg += 1
-            elif nxt in _NEG_WORDS: pos += 1
-    for w in _POS_WORDS:
-        if w in s2 and not any(ng + " " + w in s2 for ng in _NEGATORS):
-            pos += 1
-    for w in _NEG_WORDS:
-        if w in s2 and not any(ng + " " + w in s2 for ng in _NEGATORS):
-            neg += 1
-    if pos > neg: return 2
-    if neg > pos: return 0
-    return 1
+def _gemini_prompt_batch(items: list[str]) -> str:
+    return (
+        "Bạn là bộ phân loại cảm xúc TIẾNG VIỆT.\n"
+        "Với danh sách các câu dưới đây, hãy TRẢ VỀ JSON Array, "
+        "mỗi phần tử dạng: {\"i\": <index>, \"label\": \"POS|NEU|NEG\"}.\n"
+        "- POS: tích cực; NEG: tiêu cực; NEU: trung lập.\n"
+        "- Chỉ trả đúng 1 trong 3 nhãn POS/NEU/NEG cho mỗi câu.\n"
+        "- TUYỆT ĐỐI không thêm văn bản ngoài JSON.\n\n"
+        "DANH SÁCH CÂU:\n" +
+        "\n".join([f"{i}. {items[i]}" for i in range(len(items))])
+    )
+
+def gemini_classify_batch(texts: List[str]) -> List[str]:
+    """Trả list nhãn ('POS'|'NEU'|'NEG') cùng độ dài với texts. Lỗi ⇒ 'NEU'."""
+    if not texts:
+        return []
+    labels = ["NEU"] * len(texts)
+    payload = {"contents": [{"parts": [{"text": _gemini_prompt_batch(texts)}]}]}
+
+    backoff = 0.0
+    for attempt in range(1, EXT_RETRY + 1):
+        try:
+            with httpx.Client(timeout=float(EXT_TIMEOUT)) as client:
+                r = client.post(f"{EXT_URL}?key={EXT_KEY}", json=payload)
+                if r.status_code == 429:
+                    backoff = backoff * BACKOFF_K + 0.7  # backoff tăng dần
+                    _time.sleep(min(3.0, backoff))
+                    r = client.post(f"{EXT_URL}?key={EXT_KEY}", json=payload)
+
+                r.raise_for_status()
+                data = r.json()
+                text_out = (
+                    (data.get("candidates") or [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                )
+                t = text_out.strip()
+                first, last = t.find('['), t.rfind(']')
+                if first != -1 and last != -1 and last > first:
+                    t = t[first:last+1]
+
+                arr = json.loads(t)
+                for obj in arr:
+                    i = obj.get("i")
+                    lab = (obj.get("label") or "").strip().upper()
+                    if isinstance(i, int) and 0 <= i < len(labels) and lab in {"POS","NEU","NEG"}:
+                        labels[i] = lab
+                return labels
+        except Exception:
+            _time.sleep(0.5 * attempt)
+
+    return labels
+
 
 @app.post("/ai/basic-sentiment/{survey_id}", tags=["Analysis Service"])
 def ai_basic_senti(survey_id: int):
-    texts = _fetch_texts_by_survey(survey_id)
-    labs = [_basic_sentiment_label(t) for t in texts]
-    pos = sum(1 for l in labs if l == 2)
-    neg = sum(1 for l in labs if l == 0)
-    neu = sum(1 for l in labs if l == 1)
-    payload = {"total": len(texts), "counts": {"POS": pos, "NEU": neu, "NEG": neg}}
+    texts_all = _fetch_texts_by_survey(survey_id)
+    if not texts_all:
+        payload = {"total": 0, "counts": {"POS": 0, "NEU": 0, "NEG": 0}}
+        _save_analysis(survey_id, payload, "BASIC_SENTI")
+        return {"ok": True, **payload}
+
+    counts = {"POS": 0, "NEU": 0, "NEG": 0}
+
+    if FORCE_EXTERNAL:
+        labels_all: List[str] = []
+        for i in range(0, len(texts_all), BATCH_SIZE):
+            batch = texts_all[i:i + BATCH_SIZE]
+            labels_all.extend(gemini_classify_batch(batch))
+            _time.sleep(0.25)
+
+        for lab in labels_all:
+            counts[lab] += 1
+    else:
+        counts["NEU"] = len(texts_all)
+
+    payload = {"total": len(texts_all), "counts": counts}
     _save_analysis(survey_id, payload, "BASIC_SENTI")
     return {"ok": True, **payload}
+
 
 # ---------- 3) Summarization (Gemini) ----------
 GEMINI_URL = os.getenv("EXT_SUMM_URL")
@@ -730,11 +785,6 @@ def _cluster_themes(texts: _List[str], k: int | None = None):
 
     from sklearn.cluster import KMeans as _KMeans
     import numpy as _np
-    import math as _math
-    def _pick_k(n: int) -> int:
-        if n <= 8: return 2
-        return min(8, max(3, int(_math.sqrt(n))))
-
     kk = k or _pick_k(len(texts))
     km = _KMeans(n_clusters=kk, n_init="auto", random_state=42)
     labels = km.fit_predict(Xr)
