@@ -39,6 +39,9 @@ public class Question {
     @Column(name = "display_order", nullable = false)
     private Integer displayOrder = 0;
 
+    @Column(name = "question_config", columnDefinition = "JSON")
+    private String questionConfig;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 

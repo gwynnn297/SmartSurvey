@@ -54,7 +54,7 @@ Sau đó mở file `.env` và thêm nội dung:
 
 ```env
 # Required: Google Gemini API Key
-GEMINI_API_KEY=AIzaSyC2rBe8abSir3_J_oG2mskGDj6zBR2uNU0
+GEMINI_API_KEY=YOUR_ACTUAL_API_KEY_HERE
 
 # Optional: Service configuration
 HOST=0.0.0.0
@@ -66,7 +66,7 @@ DEBUG=true
 
 ```bash
 # Required: Google Gemini API Key
-export GEMINI_API_KEY="AIzaSyC2rBe8abSir3_J_oG2mskGDj6zBR2uNU0"
+export GEMINI_API_KEY="YOUR_ACTUAL_API_KEY_HERE"
 
 # Optional: Service configuration
 export HOST="0.0.0.0"
@@ -97,7 +97,7 @@ python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
 #### Cách 3: Inline environment variables (một lệnh)
 ```bash
 # Chạy từ thư mục survey-generator
-GEMINI_API_KEY=AIzaSyDKxGOcah4pFyRkUnwX3aBzGAONBJOKLLs python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8002
+GEMINI_API_KEY=AIzaSyBtMZq2ktcLM7YlzfY4vKFzwNJllD_Pj9U python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8002
 ```
 
 > **💡 Lưu ý**: 
@@ -277,6 +277,26 @@ curl http://localhost:8002/health
 - Prompt phải có ít nhất 10 ký tự
 - Sử dụng tiếng Việt rõ ràng
 - Tránh ký tự đặc biệt không cần thiết
+
+#### 5. "Rate Limit Exceeded (429)"
+```json
+{
+  "error": {
+    "code": 429,
+    "message": "Quota exceeded for quota metric 'Generate Content API requests per minute'"
+  }
+}
+```
+**Nguyên nhân & Giải pháp:**
+- **Quota bằng 0**: API key không có quota để tạo content
+  - Kiểm tra billing trong [Google Cloud Console](https://console.cloud.google.com/)
+  - Kích hoạt thanh toán cho project
+- **Vượt quá giới hạn requests/minute**: 
+  - Đợi 1 phút rồi thử lại
+  - Giảm tần suất gọi API
+- **API key hết hạn hoặc không hợp lệ**:
+  - Tạo API key mới tại [Google AI Studio](https://makersuite.google.com/app/apikey)
+  - Cập nhật API key trong environment variables
 
 ### Debug Mode
 

@@ -14,7 +14,6 @@ import vn.duytan.c1se09.smartsurvey.domain.response.question.QuestionReorderResp
 import vn.duytan.c1se09.smartsurvey.service.QuestionService;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
-
 import jakarta.validation.Valid;
 import java.util.List;
 
@@ -27,19 +26,19 @@ public class QuestionController {
     private final QuestionService questionService;
 
     /**
-     *  Tạo câu hỏi cho survey cụ thể
+     * Tạo câu hỏi cho survey cụ thể
      */
     @PostMapping("/surveys/{surveyId}/questions")
     @ApiMessage("Create new question for survey")
     public ResponseEntity<QuestionCreateResponseDTO> createQuestionForSurvey(
             @PathVariable("surveyId") Long surveyId,
             @Valid @RequestBody QuestionCreateRequestDTO request) throws IdInvalidException {
-        
+
         // Override surveyId từ path parameter nếu chưa có
         if (request.getSurveyId() == null) {
             request.setSurveyId(surveyId);
         }
-        
+
         // Gọi service method trực tiếp
         QuestionCreateResponseDTO response = questionService.createQuestionWithResponse(surveyId, request);
         return ResponseEntity.ok(response);
@@ -50,7 +49,7 @@ public class QuestionController {
      */
     @GetMapping("/questions/survey/{surveyId}")
     @ApiMessage("Get questions by survey")
-    public ResponseEntity<List<QuestionResponseDTO>> getQuestionsBySurvey(@PathVariable("surveyId") Long surveyId) 
+    public ResponseEntity<List<QuestionResponseDTO>> getQuestionsBySurvey(@PathVariable("surveyId") Long surveyId)
             throws IdInvalidException {
         List<QuestionResponseDTO> questions = questionService.getQuestionsBySurvey(surveyId);
         return ResponseEntity.ok(questions);
@@ -73,7 +72,7 @@ public class QuestionController {
      */
     @GetMapping("/questions/{id}")
     @ApiMessage("Get question detail")
-    public ResponseEntity<QuestionResponseDTO> getQuestionDetail(@PathVariable("id") Long id) 
+    public ResponseEntity<QuestionResponseDTO> getQuestionDetail(@PathVariable("id") Long id)
             throws IdInvalidException {
         QuestionResponseDTO questionDTO = questionService.getQuestionById(id);
         return ResponseEntity.ok(questionDTO);
@@ -95,10 +94,11 @@ public class QuestionController {
      */
     @DeleteMapping("/questions/{id}")
     @ApiMessage("Delete question")
-    public ResponseEntity<QuestionDeleteResponseDTO> deleteQuestion(@PathVariable("id") Long id) 
+    public ResponseEntity<QuestionDeleteResponseDTO> deleteQuestion(@PathVariable("id") Long id)
             throws IdInvalidException {
         questionService.deleteQuestion(id);
         QuestionDeleteResponseDTO response = new QuestionDeleteResponseDTO(id, "Xóa câu hỏi thành công");
         return ResponseEntity.ok(response);
     }
+
 }

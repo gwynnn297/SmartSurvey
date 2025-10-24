@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import vn.duytan.c1se09.smartsurvey.domain.request.response.ResponseSubmitRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.response.ResponseWithAnswersDTO;
 import vn.duytan.c1se09.smartsurvey.service.ResponseService;
@@ -24,6 +25,19 @@ public class ResponseController {
 	public ResponseEntity<ResponseWithAnswersDTO> submitResponse(@Valid @RequestBody ResponseSubmitRequestDTO request)
 			throws IdInvalidException {
 		return ResponseEntity.ok(responseService.submitResponse(request));
+	}
+
+	/**
+	 * Submit survey response với files (multipart/form-data)
+	 */
+	@PostMapping("/responses/with-files")
+	@ApiMessage("Submit survey response with files")
+	public ResponseEntity<ResponseWithAnswersDTO> submitResponseWithFiles(
+			@RequestParam("surveyId") Long surveyId,
+			@RequestParam("answers") String answersJson,
+			@RequestParam Map<String, MultipartFile> files) throws IdInvalidException {
+		
+		return ResponseEntity.ok(responseService.submitResponseWithFiles(surveyId, answersJson, files));
 	}
 
 	@GetMapping("/responses/{surveyId}")
@@ -53,4 +67,5 @@ public class ResponseController {
 		response.put("message", "Tổng số responses của tất cả survey");
 		return ResponseEntity.ok(response);
 	}
+
 }

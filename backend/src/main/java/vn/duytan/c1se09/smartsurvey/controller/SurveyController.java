@@ -85,7 +85,8 @@ public class SurveyController {
     }
 
     /**
-     * API 1: Get Survey Public - Lấy thông tin survey để người dùng trả lời (không cần authentication)
+     * API 1: Get Survey Public - Lấy thông tin survey để người dùng trả lời (không
+     * cần authentication)
      * Endpoint: GET /surveys/{id}/public
      */
     @GetMapping("/{id}/public")
@@ -96,23 +97,24 @@ public class SurveyController {
             return ResponseEntity.ok(surveyPublic);
         } catch (IdInvalidException e) {
             SurveyStatusResponseDTO errorResponse = SurveyStatusResponseDTO.builder()
-                .surveyId(id)
-                .status("not_found")
-                .message("Survey not found or not available")
-                .build();
+                    .surveyId(id)
+                    .status("not_found")
+                    .message("Survey not found or not available")
+                    .build();
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
         }
     }
-    
+
     /**
-     * API 2: Check Survey Status - Kiểm tra survey có active và có thể trả lời không
+     * API 2: Check Survey Status - Kiểm tra survey có active và có thể trả lời
+     * không
      * Endpoint: GET /surveys/{id}/status
      */
     @GetMapping("/{id}/status")
     @ApiMessage("Check survey status for response availability")
     public ResponseEntity<SurveyStatusResponseDTO> checkSurveyStatus(@PathVariable("id") Long id) {
         SurveyStatusResponseDTO statusResponse = surveyService.checkSurveyStatus(id);
-        
+
         // Trả về HTTP status code phù hợp với status
         switch (statusResponse.getStatus()) {
             case "active":

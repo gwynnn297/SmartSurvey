@@ -11,7 +11,7 @@ import vn.duytan.c1se09.smartsurvey.domain.ActivityLog;
 import vn.duytan.c1se09.smartsurvey.domain.AiSentiment;
 import vn.duytan.c1se09.smartsurvey.domain.Response;
 import vn.duytan.c1se09.smartsurvey.domain.Survey;
-import vn.duytan.c1se09.smartsurvey.dto.ai.SentimentAnalysisResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.ai.SentimentAnalysisResponseDTO;
 import vn.duytan.c1se09.smartsurvey.repository.AiSentimentRepository;
 import vn.duytan.c1se09.smartsurvey.repository.ResponseRepository;
 import vn.duytan.c1se09.smartsurvey.repository.SurveyRepository;
@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- {@code @Service} cho AI Sentiment Analysis
+ * {@code @Service} cho AI Sentiment Analysis
  * Tích hợp với AI service để phân tích cảm xúc
  */
 @Service
@@ -68,7 +68,7 @@ public class AiSentimentService {
             // Chỉ log activity và trả về response
             if (aiResponse.getTotalResponses() != null && aiResponse.getTotalResponses() > 0) {
                 log.info("AI service đã tạo sentiment record, không cần tạo thêm");
-                
+
                 // Log activity (không cần target_id vì không tạo record mới)
                 activityLogService.log(
                         ActivityLog.ActionType.ai_generate,
@@ -137,7 +137,9 @@ public class AiSentimentService {
             HttpEntity<String> httpEntity = new HttpEntity<>(headers);
 
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    url, HttpMethod.POST, httpEntity, new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {});
+                    url, HttpMethod.POST, httpEntity,
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {
+                    });
 
             if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
                 Map<String, Object> responseBody = response.getBody();
@@ -165,24 +167,24 @@ public class AiSentimentService {
         try {
             // AI service trả về trực tiếp data
             Map<String, Object> result = responseBody;
-            
+
             // Debug log để xem response format
             log.info("Debug - AI service response keys: {}", result.keySet());
             log.info("Debug - AI service response: {}", result);
 
             Integer totalResponses = (Integer) result.get("total_responses");
             Long sentimentId = null;
-            
+
             // Parse sentiment_id từ AI service response
             if (result.get("sentiment_id") != null) {
                 sentimentId = ((Number) result.get("sentiment_id")).longValue();
             }
-            
+
             // Handle null values safely
             Double positivePercent = 0.0;
             Double neutralPercent = 0.0;
             Double negativePercent = 0.0;
-            
+
             if (result.get("positive_percent") != null) {
                 positivePercent = ((Number) result.get("positive_percent")).doubleValue();
             }
@@ -213,13 +215,14 @@ public class AiSentimentService {
                 }
             }
 
-            SentimentAnalysisResponseDTO response = SentimentAnalysisResponseDTO.success(surveyId, "Phân tích sentiment thành công",
+            SentimentAnalysisResponseDTO response = SentimentAnalysisResponseDTO.success(surveyId,
+                    "Phân tích sentiment thành công",
                     totalResponses, positivePercent, neutralPercent, negativePercent,
                     counts, createdAt);
-            
+
             // Set sentiment_id từ AI service response
             response.setSentimentId(sentimentId);
-            
+
             return response;
 
         } catch (Exception e) {
@@ -270,10 +273,10 @@ public class AiSentimentService {
             Map<String, Integer> counts = new HashMap<>();
             if (sentiment.getDetails() != null) {
                 Map<String, Object> detailsData = objectMapper.readValue(
-                        sentiment.getDetails(), 
-                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
-                );
-                
+                        sentiment.getDetails(),
+                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                        });
+
                 if (detailsData.get("counts") instanceof Map) {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> countsMap = (Map<String, Object>) detailsData.get("counts");

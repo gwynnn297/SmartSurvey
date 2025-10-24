@@ -17,4 +17,9 @@ public class QuestionCreateRequestDTO {
     private QuestionTypeEnum questionType;
     
     private Boolean isRequired = true;
+    
+    // Cấu hình cho các question types phức tạp
+    private RankingQuestionConfigDTO rankingConfig;
+    private FileUploadQuestionConfigDTO fileUploadConfig;
+    private DateTimeQuestionConfigDTO dateTimeConfig;
 }

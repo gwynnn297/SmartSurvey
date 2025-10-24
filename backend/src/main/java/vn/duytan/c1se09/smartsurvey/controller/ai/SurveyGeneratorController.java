@@ -5,12 +5,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import vn.duytan.c1se09.smartsurvey.dto.ai.HealthCheckResponseDTO;
-import vn.duytan.c1se09.smartsurvey.dto.ai.PromptValidationResponseDTO;
-import vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationRequestDTO;
-import vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationResponseDTO;
-import vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateRequestDTO;
-import vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateResponseDTO;
+
+import vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateRequestDTO;
+import vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.request.ai.SurveyGenerationRequestDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.ai.HealthCheckResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.ai.PromptValidationResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.ai.SurveyGenerationResponseDTO;
 import vn.duytan.c1se09.smartsurvey.service.ai.SurveyGeneratorService;
 
 import jakarta.validation.Valid;

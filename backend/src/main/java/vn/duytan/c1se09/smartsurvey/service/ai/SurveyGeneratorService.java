@@ -9,8 +9,8 @@ import org.springframework.web.client.RestTemplate;
 import vn.duytan.c1se09.smartsurvey.domain.Category;
 import vn.duytan.c1se09.smartsurvey.domain.Survey;
 import vn.duytan.c1se09.smartsurvey.domain.User;
-import vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationRequestDTO;
-import vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.request.ai.SurveyGenerationRequestDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.ai.SurveyGenerationResponseDTO;
 import vn.duytan.c1se09.smartsurvey.service.CategoryService;
 import vn.duytan.c1se09.smartsurvey.service.SurveyService;
 import vn.duytan.c1se09.smartsurvey.service.UserService;
@@ -82,8 +82,8 @@ public class SurveyGeneratorService {
     /**
      * Regenerate một câu hỏi đơn lẻ
      */
-    public vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateResponseDTO regenerateQuestion(
-            vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateRequestDTO request, String username)
+    public vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateResponseDTO regenerateQuestion(
+            vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateRequestDTO request, String username)
             throws Exception {
 
         log.info("Regenerating question for user: {} with context: {}", username,
@@ -98,7 +98,7 @@ public class SurveyGeneratorService {
         validateAiServiceHealth();
 
         // 3. Tạo request đơn giản để generate 1 câu hỏi
-        vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationRequestDTO singleQuestionRequest = new vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationRequestDTO();
+        vn.duytan.c1se09.smartsurvey.domain.request.ai.SurveyGenerationRequestDTO singleQuestionRequest = new vn.duytan.c1se09.smartsurvey.domain.request.ai.SurveyGenerationRequestDTO();
 
         singleQuestionRequest.setTitle("Câu hỏi mới");
         singleQuestionRequest.setDescription("Tạo câu hỏi mới");
@@ -108,7 +108,7 @@ public class SurveyGeneratorService {
         singleQuestionRequest.setNumberOfQuestions(1); // Chỉ tạo 1 câu hỏi
 
         // 4. Gọi AI service
-        vn.duytan.c1se09.smartsurvey.dto.ai.SurveyGenerationResponseDTO aiResponse = callAiService(
+        vn.duytan.c1se09.smartsurvey.domain.response.ai.SurveyGenerationResponseDTO aiResponse = callAiService(
                 singleQuestionRequest);
 
         if (aiResponse == null || !aiResponse.isSuccess() ||
@@ -121,11 +121,11 @@ public class SurveyGeneratorService {
         var generatedQuestion = aiResponse.getGeneratedSurvey().getQuestions().get(0);
 
         // 6. Map sang DTO response
-        var responseBuilder = vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateResponseDTO.builder()
+        var responseBuilder = vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateResponseDTO.builder()
                 .success(true)
                 .message("Tạo câu hỏi thành công");
 
-        var questionBuilder = vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateResponseDTO.GeneratedQuestionDTO
+        var questionBuilder = vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateResponseDTO.GeneratedQuestionDTO
                 .builder()
                 .questionText(generatedQuestion.getQuestionText())
                 .questionType(generatedQuestion.getQuestionType())
@@ -134,7 +134,7 @@ public class SurveyGeneratorService {
         // 7. Map options nếu có
         if (generatedQuestion.getOptions() != null && !generatedQuestion.getOptions().isEmpty()) {
             var optionDTOs = generatedQuestion.getOptions().stream()
-                    .map(opt -> vn.duytan.c1se09.smartsurvey.dto.ai.QuestionRegenerateResponseDTO.GeneratedOptionDTO
+                    .map(opt -> vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateResponseDTO.GeneratedOptionDTO
                             .builder()
                             .optionText(opt.getOptionText())
                             .displayOrder(opt.getDisplayOrder())
@@ -271,7 +271,6 @@ public class SurveyGeneratorService {
 
             // Gửi cả category_id và category_name để AI service linh hoạt xử lý
             if (request.getCategoryId() != null) {
-                aiRequest.put("category_id", request.getCategoryId().intValue());
             }
             if (request.getCategoryName() != null && !request.getCategoryName().trim().isEmpty()) {
                 aiRequest.put("category_name", request.getCategoryName());
