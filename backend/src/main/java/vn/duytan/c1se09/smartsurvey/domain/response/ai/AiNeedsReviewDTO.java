@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class AiNeedsReviewDTO {
-    
+
     private Long inferenceId;
     private Long surveyId;
     private Long questionId;
@@ -31,4 +31,3 @@ public class AiNeedsReviewDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
-

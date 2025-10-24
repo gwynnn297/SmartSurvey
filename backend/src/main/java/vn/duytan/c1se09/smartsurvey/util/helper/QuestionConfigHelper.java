@@ -11,9 +11,9 @@ import vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum;
 @Component
 @Slf4j
 public class QuestionConfigHelper {
-    
+
     private final ObjectMapper objectMapper = new ObjectMapper();
-    
+
     public String serializeQuestionConfig(QuestionTypeEnum questionType, Object config) {
         try {
             if (config == null) {
@@ -25,7 +25,7 @@ public class QuestionConfigHelper {
             return null;
         }
     }
-    
+
     public RankingQuestionConfigDTO deserializeRankingConfig(String configJson) {
         try {
             if (configJson == null || configJson.trim().isEmpty()) {
@@ -37,7 +37,7 @@ public class QuestionConfigHelper {
             return null;
         }
     }
-    
+
     public FileUploadQuestionConfigDTO deserializeFileUploadConfig(String configJson) {
         try {
             if (configJson == null || configJson.trim().isEmpty()) {
@@ -49,7 +49,7 @@ public class QuestionConfigHelper {
             return null;
         }
     }
-    
+
     public DateTimeQuestionConfigDTO deserializeDateTimeConfig(String configJson) {
         try {
             if (configJson == null || configJson.trim().isEmpty()) {

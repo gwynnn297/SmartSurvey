@@ -20,10 +20,10 @@ import java.nio.file.Paths;
 @RestController
 @RequiredArgsConstructor
 public class FileController {
-    
+
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
-    
+
     /**
      * Download/View uploaded file
      */
@@ -33,13 +33,13 @@ public class FileController {
         try {
             Path filePath = Paths.get(uploadDir).resolve(filename).normalize();
             Resource resource = new UrlResource(filePath.toUri());
-            
+
             if (resource.exists() && resource.isReadable()) {
                 return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                    .header(HttpHeaders.CONTENT_DISPOSITION, 
-                           "attachment; filename=\"" + resource.getFilename() + "\"")
-                    .body(resource);
+                        .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                        .header(HttpHeaders.CONTENT_DISPOSITION,
+                                "attachment; filename=\"" + resource.getFilename() + "\"")
+                        .body(resource);
             } else {
                 return ResponseEntity.notFound().build();
             }
@@ -47,7 +47,7 @@ public class FileController {
             return ResponseEntity.badRequest().build();
         }
     }
-    
+
     /**
      * View file in browser
      */
@@ -57,13 +57,13 @@ public class FileController {
         try {
             Path filePath = Paths.get(uploadDir).resolve(filename).normalize();
             Resource resource = new UrlResource(filePath.toUri());
-            
+
             if (resource.exists() && resource.isReadable()) {
                 String contentType = determineContentType(filename);
                 return ResponseEntity.ok()
-                    .contentType(MediaType.parseMediaType(contentType))
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
-                    .body(resource);
+                        .contentType(MediaType.parseMediaType(contentType))
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                        .body(resource);
             } else {
                 return ResponseEntity.notFound().build();
             }
@@ -71,7 +71,7 @@ public class FileController {
             return ResponseEntity.badRequest().build();
         }
     }
-    
+
     private String determineContentType(String filename) {
         if (filename.toLowerCase().endsWith(".pdf")) {
             return "application/pdf";

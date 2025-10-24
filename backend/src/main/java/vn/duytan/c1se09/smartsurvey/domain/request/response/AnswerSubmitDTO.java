@@ -13,14 +13,14 @@ public class AnswerSubmitDTO {
 	private Long optionId; // For single choice questions
 
 	private List<Long> selectedOptionIds; // For multiple choice questions (IDs)
-	
+
 	private List<String> selectedOptions; // For multiple choice questions (values)
 
 	private String answerText;
-	
+
 	// For ranking questions
 	private List<String> rankingOrder;
-	
+
 	// For date/time questions
 	private String dateValue;
 	private String timeValue;

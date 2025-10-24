@@ -11,23 +11,23 @@ import java.util.List;
 
 @Repository
 public interface AnswerSelectedOptionRepository extends JpaRepository<AnswerSelectedOption, Long> {
-    
+
     /**
      * Find all selected options for an answer
      */
     List<AnswerSelectedOption> findByAnswer(Answer answer);
-    
+
     /**
      * Find all selected options for an answer by answer ID
      */
     @Query("SELECT aso FROM AnswerSelectedOption aso WHERE aso.answer.answerId = :answerId")
     List<AnswerSelectedOption> findByAnswerId(@Param("answerId") Long answerId);
-    
+
     /**
      * Delete all selected options for an answer
      */
     void deleteByAnswer(Answer answer);
-    
+
     /**
      * Get option IDs for an answer
      */

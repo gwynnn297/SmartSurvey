@@ -82,7 +82,7 @@ public class SurveyGeneratorService {
     /**
      * Regenerate một câu hỏi đơn lẻ
      */
-    public vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateResponseDTO regenerateQuestion(
+    public vn.duytan.c1se09.smartsurvey.domain.response.ai.QuestionRegenerateResponseDTO regenerateQuestion(
             vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateRequestDTO request, String username)
             throws Exception {
 
@@ -121,11 +121,11 @@ public class SurveyGeneratorService {
         var generatedQuestion = aiResponse.getGeneratedSurvey().getQuestions().get(0);
 
         // 6. Map sang DTO response
-        var responseBuilder = vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateResponseDTO.builder()
+        var responseBuilder = vn.duytan.c1se09.smartsurvey.domain.response.ai.QuestionRegenerateResponseDTO.builder()
                 .success(true)
                 .message("Tạo câu hỏi thành công");
 
-        var questionBuilder = vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateResponseDTO.GeneratedQuestionDTO
+        var questionBuilder = vn.duytan.c1se09.smartsurvey.domain.response.ai.QuestionRegenerateResponseDTO.GeneratedQuestionDTO
                 .builder()
                 .questionText(generatedQuestion.getQuestionText())
                 .questionType(generatedQuestion.getQuestionType())
@@ -134,7 +134,7 @@ public class SurveyGeneratorService {
         // 7. Map options nếu có
         if (generatedQuestion.getOptions() != null && !generatedQuestion.getOptions().isEmpty()) {
             var optionDTOs = generatedQuestion.getOptions().stream()
-                    .map(opt -> vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateResponseDTO.GeneratedOptionDTO
+                    .map(opt -> vn.duytan.c1se09.smartsurvey.domain.response.ai.QuestionRegenerateResponseDTO.GeneratedOptionDTO
                             .builder()
                             .optionText(opt.getOptionText())
                             .displayOrder(opt.getDisplayOrder())

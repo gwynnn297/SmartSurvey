@@ -11,9 +11,9 @@ import java.util.List;
 @Component
 @Slf4j
 public class AnswerDataHelper {
-    
+
     private final ObjectMapper objectMapper = new ObjectMapper();
-    
+
     public String serializeRankingOrder(List<String> rankingOrder) {
         try {
             if (rankingOrder == null || rankingOrder.isEmpty()) {
@@ -25,13 +25,14 @@ public class AnswerDataHelper {
             return null;
         }
     }
-    
+
     public List<String> deserializeRankingOrder(String rankingOrderJson) {
         try {
             if (rankingOrderJson == null || rankingOrderJson.trim().isEmpty()) {
                 return null;
             }
-            return objectMapper.readValue(rankingOrderJson, new TypeReference<List<String>>() {});
+            return objectMapper.readValue(rankingOrderJson, new TypeReference<List<String>>() {
+            });
         } catch (JsonProcessingException e) {
             log.error("Error deserializing ranking order: {}", e.getMessage());
             return null;

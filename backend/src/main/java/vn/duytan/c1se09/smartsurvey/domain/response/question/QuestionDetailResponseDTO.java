@@ -24,7 +24,7 @@ public class QuestionDetailResponseDTO {
 
     // Danh sách tùy chọn của câu hỏi
     private List<OptionResponseDTO> options;
-    
+
     // Cấu hình cho các question types phức tạp
     private RankingQuestionConfigDTO rankingConfig;
     private FileUploadQuestionConfigDTO fileUploadConfig;

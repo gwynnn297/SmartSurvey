@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import vn.duytan.c1se09.smartsurvey.dto.ai.SentimentAnalysisResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.ai.SentimentAnalysisResponseDTO;
 import vn.duytan.c1se09.smartsurvey.service.ai.AiSentimentService;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
 

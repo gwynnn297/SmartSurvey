@@ -15,7 +15,6 @@ import vn.duytan.c1se09.smartsurvey.util.helper.QuestionConfigHelper;
 import vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum;
 import vn.duytan.c1se09.smartsurvey.util.validator.QuestionValidator;
 
-
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -32,7 +31,6 @@ public class QuestionService {
     private final ActivityLogService activityLogService;
     private final QuestionConfigHelper questionConfigHelper;
     private final QuestionValidator questionValidator;
-
 
     // lấy thông tin câu hỏi
     public Question getQuestionEntityById(Long questionId) throws IdInvalidException {
@@ -52,7 +50,7 @@ public class QuestionService {
         dto.setDisplayOrder(question.getDisplayOrder());
         dto.setCreatedAt(question.getCreatedAt());
         dto.setUpdatedAt(question.getUpdatedAt());
-        
+
         // Deserialize question config based on type
         if (question.getQuestionConfig() != null) {
             switch (question.getQuestionType()) {
@@ -60,7 +58,8 @@ public class QuestionService {
                     dto.setRankingConfig(questionConfigHelper.deserializeRankingConfig(question.getQuestionConfig()));
                     break;
                 case file_upload:
-                    dto.setFileUploadConfig(questionConfigHelper.deserializeFileUploadConfig(question.getQuestionConfig()));
+                    dto.setFileUploadConfig(
+                            questionConfigHelper.deserializeFileUploadConfig(question.getQuestionConfig()));
                     break;
                 case date_time:
                     dto.setDateTimeConfig(questionConfigHelper.deserializeDateTimeConfig(question.getQuestionConfig()));
@@ -70,17 +69,16 @@ public class QuestionService {
                     break;
             }
         }
-        
+
         return dto;
     }
-
 
     private void validateUserPermission(Survey survey) throws IdInvalidException {
         User currentUser = authService.getCurrentUser();
         if (currentUser == null) {
             throw new IdInvalidException("Người dùng chưa xác thực");
         }
-        
+
         if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
             throw new IdInvalidException("Bạn không có quyền thực hiện thao tác này");
         }
@@ -90,27 +88,27 @@ public class QuestionService {
         validateUserPermission(question.getSurvey());
     }
 
-    // tạo câu hỏi 
+    // tạo câu hỏi
 
     /**
      * Tạo câu hỏi mới (phương thức chính)
-     * @param surveyId 
-     * @param request 
-     * @return 
+     * 
+     * @param surveyId
+     * @param request
+     * @return
      */
     @Transactional
-    public QuestionResponseDTO createQuestion(Long surveyId, QuestionCreateRequestDTO request) throws IdInvalidException {
-        
+    public QuestionResponseDTO createQuestion(Long surveyId, QuestionCreateRequestDTO request)
+            throws IdInvalidException {
+
         // Validate question configuration
         questionValidator.validateQuestionRequest(request);
-        
+
         Survey survey = surveyRepository.findById(surveyId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
-        
-       
+
         validateUserPermission(survey);
 
-        
         Question question = new Question();
         question.setSurvey(survey);
         question.setQuestionText(request.getQuestionText());
@@ -122,17 +120,20 @@ public class QuestionService {
         switch (request.getQuestionType()) {
             case ranking:
                 if (request.getRankingConfig() != null) {
-                    configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(), request.getRankingConfig());
+                    configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(),
+                            request.getRankingConfig());
                 }
                 break;
             case file_upload:
                 if (request.getFileUploadConfig() != null) {
-                    configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(), request.getFileUploadConfig());
+                    configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(),
+                            request.getFileUploadConfig());
                 }
                 break;
             case date_time:
                 if (request.getDateTimeConfig() != null) {
-                    configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(), request.getDateTimeConfig());
+                    configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(),
+                            request.getDateTimeConfig());
                 }
                 break;
             default:
@@ -146,7 +147,7 @@ public class QuestionService {
         question.setDisplayOrder(maxOrder + 1);
 
         Question saved = questionRepository.save(question);
-        
+
         // Log activity
         activityLogService.log(
                 ActivityLog.ActionType.add_question,
@@ -159,14 +160,16 @@ public class QuestionService {
 
     /**
      * Tạo câu hỏi mới với response message
-     * @param surveyId 
-     * @param request 
-     * @return 
+     * 
+     * @param surveyId
+     * @param request
+     * @return
      */
     @Transactional
-    public QuestionCreateResponseDTO createQuestionWithResponse(Long surveyId, QuestionCreateRequestDTO request) throws IdInvalidException {
+    public QuestionCreateResponseDTO createQuestionWithResponse(Long surveyId, QuestionCreateRequestDTO request)
+            throws IdInvalidException {
         QuestionResponseDTO questionDTO = createQuestion(surveyId, request);
-       
+
         QuestionCreateResponseDTO response = new QuestionCreateResponseDTO();
         response.setId(questionDTO.getId());
         response.setSurveyId(questionDTO.getSurveyId());
@@ -178,16 +181,16 @@ public class QuestionService {
         response.setMessage("Tạo câu hỏi thành công!");
         response.setCreatedAt(questionDTO.getCreatedAt());
         response.setUpdatedAt(questionDTO.getUpdatedAt());
-        
+
         return response;
     }
 
     // đọc danh sách câu hỏi trong survey
-    
+
     public List<QuestionResponseDTO> getQuestionsBySurvey(Long surveyId) throws IdInvalidException {
         Survey survey = surveyRepository.findById(surveyId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
-        
+
         validateUserPermission(survey);
 
         List<Question> questions = questionRepository.findBySurveyOrderByDisplayOrderAsc(survey);
@@ -238,41 +241,46 @@ public class QuestionService {
     }
 
     // cập nhập câu hỏi
-    
+
     /**
      * Cập nhật câu hỏi
-     * @param questionId 
-     * @param request 
+     * 
+     * @param questionId
+     * @param request
      * @return
      */
     @Transactional
-    public QuestionResponseDTO updateQuestion(Long questionId, QuestionUpdateRequestDTO request) throws IdInvalidException {
+    public QuestionResponseDTO updateQuestion(Long questionId, QuestionUpdateRequestDTO request)
+            throws IdInvalidException {
         Question question = getQuestionEntityById(questionId);
         validateUserPermission(question);
 
         if (request.getQuestionText() != null && !request.getQuestionText().isEmpty()) {
             question.setQuestionText(request.getQuestionText());
         }
-        
+
         if (request.getQuestionType() != null) {
             question.setQuestionType(request.getQuestionType());
-            
+
             // Update question config when type changes
             String configJson = null;
             switch (request.getQuestionType()) {
                 case ranking:
                     if (request.getRankingConfig() != null) {
-                        configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(), request.getRankingConfig());
+                        configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(),
+                                request.getRankingConfig());
                     }
                     break;
                 case file_upload:
                     if (request.getFileUploadConfig() != null) {
-                        configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(), request.getFileUploadConfig());
+                        configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(),
+                                request.getFileUploadConfig());
                     }
                     break;
                 case date_time:
                     if (request.getDateTimeConfig() != null) {
-                        configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(), request.getDateTimeConfig());
+                        configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(),
+                                request.getDateTimeConfig());
                     }
                     break;
                 default:
@@ -288,17 +296,20 @@ public class QuestionService {
                 switch (question.getQuestionType()) {
                     case ranking:
                         if (request.getRankingConfig() != null) {
-                            configJson = questionConfigHelper.serializeQuestionConfig(question.getQuestionType(), request.getRankingConfig());
+                            configJson = questionConfigHelper.serializeQuestionConfig(question.getQuestionType(),
+                                    request.getRankingConfig());
                         }
                         break;
                     case file_upload:
                         if (request.getFileUploadConfig() != null) {
-                            configJson = questionConfigHelper.serializeQuestionConfig(question.getQuestionType(), request.getFileUploadConfig());
+                            configJson = questionConfigHelper.serializeQuestionConfig(question.getQuestionType(),
+                                    request.getFileUploadConfig());
                         }
                         break;
                     case date_time:
                         if (request.getDateTimeConfig() != null) {
-                            configJson = questionConfigHelper.serializeQuestionConfig(question.getQuestionType(), request.getDateTimeConfig());
+                            configJson = questionConfigHelper.serializeQuestionConfig(question.getQuestionType(),
+                                    request.getDateTimeConfig());
                         }
                         break;
                     default:
@@ -309,13 +320,13 @@ public class QuestionService {
                 }
             }
         }
-        
+
         if (request.getIsRequired() != null) {
             question.setIsRequired(request.getIsRequired());
         }
 
         Question saved = questionRepository.save(question);
-        
+
         activityLogService.log(
                 ActivityLog.ActionType.edit_question,
                 saved.getQuestionId(),
@@ -327,14 +338,16 @@ public class QuestionService {
 
     /**
      * Cập nhật câu hỏi với response message
-     * @param questionId 
-     * @param request 
-     * @return 
+     * 
+     * @param questionId
+     * @param request
+     * @return
      */
     @Transactional
-    public QuestionUpdateResponseDTO updateQuestionWithResponse(Long questionId, QuestionUpdateRequestDTO request) throws IdInvalidException {
+    public QuestionUpdateResponseDTO updateQuestionWithResponse(Long questionId, QuestionUpdateRequestDTO request)
+            throws IdInvalidException {
         QuestionResponseDTO updatedDTO = updateQuestion(questionId, request);
-        
+
         QuestionUpdateResponseDTO response = new QuestionUpdateResponseDTO();
         response.setId(updatedDTO.getId());
         response.setSurveyId(updatedDTO.getSurveyId());
@@ -346,19 +359,19 @@ public class QuestionService {
         response.setMessage("Cập nhật câu hỏi thành công!");
         response.setCreatedAt(updatedDTO.getCreatedAt());
         response.setUpdatedAt(updatedDTO.getUpdatedAt());
-        
+
         return response;
     }
 
     // xóa câu hỏi
-    
+
     @Transactional
     public void deleteQuestion(Long questionId) throws IdInvalidException {
         Question question = getQuestionEntityById(questionId);
         validateUserPermission(question);
 
         questionRepository.delete(question);
-        
+
         activityLogService.log(
                 ActivityLog.ActionType.delete_question,
                 questionId,
@@ -366,14 +379,15 @@ public class QuestionService {
                 "Xóa câu hỏi: " + question.getQuestionText());
     }
 
-  // Tổng số câu hỏi trong hệ thống
+    // Tổng số câu hỏi trong hệ thống
     public long getTotalQuestions() {
         return questionRepository.count();
     }
- // Số câu hỏi của một khảo sát cụ thể
+
+    // Số câu hỏi của một khảo sát cụ thể
     public long getQuestionsCountBySurvey(Long surveyId) throws IdInvalidException {
         Survey survey = surveyRepository.findById(surveyId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
         return questionRepository.countBySurvey(survey);
     }
-} 
+}

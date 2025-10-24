@@ -24,7 +24,7 @@ public class AnswerSelectedOption {
     @JoinColumn(name = "answer_id", nullable = false)
     private Answer answer;
 
-    @ManyToOne(fetch = FetchType.LAZY) 
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "option_id", nullable = false)
     private Option option;
 

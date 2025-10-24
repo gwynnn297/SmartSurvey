@@ -9,15 +9,15 @@ import vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum;
 public class QuestionCreateRequestDTO {
     // Không bắt buộc vì có thể lấy từ URL
     private Long surveyId;
-    
+
     @NotBlank(message = "Nội dung câu hỏi không được để trống")
     private String questionText;
-    
+
     @NotNull(message = "Loại câu hỏi không được để trống")
     private QuestionTypeEnum questionType;
-    
+
     private Boolean isRequired = true;
-    
+
     // Cấu hình cho các question types phức tạp
     private RankingQuestionConfigDTO rankingConfig;
     private FileUploadQuestionConfigDTO fileUploadConfig;

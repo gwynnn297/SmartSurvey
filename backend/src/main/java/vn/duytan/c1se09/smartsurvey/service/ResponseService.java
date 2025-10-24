@@ -51,7 +51,7 @@ public class ResponseService {
 
 		// Kiểm tra survey có published không
 		if (survey.getStatus() != SurveyStatusEnum.published) {
-			throw new IdInvalidException("Khảo sát không khả dụng để trả lời. Trạng thái hiện tại: " + 
+			throw new IdInvalidException("Khảo sát không khả dụng để trả lời. Trạng thái hiện tại: " +
 					(survey.getStatus() != null ? survey.getStatus().name() : "null"));
 		}
 
@@ -68,7 +68,8 @@ public class ResponseService {
 
 		for (Question q : questions) {
 			if (Boolean.TRUE.equals(q.getIsRequired())) {
-				List<AnswerSubmitDTO> provided = answersByQuestion.getOrDefault(q.getQuestionId(), Collections.emptyList());
+				List<AnswerSubmitDTO> provided = answersByQuestion.getOrDefault(q.getQuestionId(),
+						Collections.emptyList());
 				if (provided.isEmpty() || !isValidProvidedForType(q, provided)) {
 					throw new IdInvalidException("Thiếu câu trả lời cho câu hỏi bắt buộc: " + q.getQuestionId());
 				}
@@ -109,7 +110,8 @@ public class ResponseService {
 					// Single option selection
 					if (dto.getOptionId() != null) {
 						Option option = optionRepository.findById(dto.getOptionId())
-								.orElseThrow(() -> new IdInvalidException("Không tìm thấy optionId: " + dto.getOptionId()));
+								.orElseThrow(
+										() -> new IdInvalidException("Không tìm thấy optionId: " + dto.getOptionId()));
 						if (!option.getQuestion().getQuestionId().equals(question.getQuestionId())) {
 							throw new IdInvalidException("option không thuộc câu hỏi");
 						}
@@ -121,7 +123,8 @@ public class ResponseService {
 						if (questionOptions != null && !questionOptions.isEmpty()) {
 							// Try to match provided text to an existing option (case-insensitive)
 							Option matched = questionOptions.stream()
-									.filter(opt -> opt.getOptionText() != null && opt.getOptionText().equalsIgnoreCase(text))
+									.filter(opt -> opt.getOptionText() != null
+											&& opt.getOptionText().equalsIgnoreCase(text))
 									.findFirst()
 									.orElse(null);
 							if (matched != null) {
@@ -136,32 +139,33 @@ public class ResponseService {
 						}
 					}
 					break;
-					
+
 				case multiple_choice:
 					// Multiple option selection - store only in normalized table
 					List<Long> selectedOptionIds = null;
-					
+
 					if (dto.getSelectedOptionIds() != null && !dto.getSelectedOptionIds().isEmpty()) {
 						selectedOptionIds = dto.getSelectedOptionIds();
 					} else if (dto.getSelectedOptions() != null && !dto.getSelectedOptions().isEmpty()) {
 						// Map text values to option ids - validate they belong to this question
 						List<Option> questionOptions = optionRepository.findByQuestion(question);
-						
+
 						if (questionOptions == null || questionOptions.isEmpty()) {
 							throw new IdInvalidException("Câu hỏi này không có options để chọn");
 						}
-						
+
 						// Build lookup map (case-insensitive)
 						Map<String, Option> textToOption = questionOptions.stream()
 								.collect(Collectors.toMap(
-									opt -> opt.getOptionText().toLowerCase(), 
-									opt -> opt,
-									(existing, replacement) -> existing // handle duplicates
+										opt -> opt.getOptionText().toLowerCase(),
+										opt -> opt,
+										(existing, replacement) -> existing // handle duplicates
 								));
-						
+
 						List<Long> resolvedIds = new ArrayList<>();
 						for (String val : dto.getSelectedOptions()) {
-							if (val == null) continue;
+							if (val == null)
+								continue;
 							Option found = textToOption.get(val.toLowerCase());
 							if (found == null) {
 								throw new IdInvalidException("Lựa chọn '" + val + "' không thuộc câu hỏi này");
@@ -170,8 +174,9 @@ public class ResponseService {
 						}
 						selectedOptionIds = resolvedIds;
 					}
-					
-					// Validate all selected option ids belong to this question and persist to normalized table
+
+					// Validate all selected option ids belong to this question and persist to
+					// normalized table
 					if (selectedOptionIds != null && !selectedOptionIds.isEmpty()) {
 						for (Long optionId : selectedOptionIds) {
 							Option option = optionRepository.findById(optionId)
@@ -180,12 +185,12 @@ public class ResponseService {
 								throw new IdInvalidException("option không thuộc câu hỏi");
 							}
 						}
-						
+
 						// Store selected options in map for later persistence
 						multipleChoiceSelections.put(answer, selectedOptionIds);
 					}
 					break;
-					
+
 				case ranking:
 					// Ranking question - store order
 					if (dto.getRankingOrder() != null && !dto.getRankingOrder().isEmpty()) {
@@ -195,7 +200,7 @@ public class ResponseService {
 						answer.setAnswerText(dto.getAnswerText());
 					}
 					break;
-					
+
 				case date_time:
 					// Date/time question
 					if (dto.getDateValue() != null || dto.getTimeValue() != null) {
@@ -212,7 +217,7 @@ public class ResponseService {
 						answer.setAnswerText(dto.getAnswerText());
 					}
 					break;
-					
+
 				case open_ended:
 				case file_upload:
 				default:
@@ -233,8 +238,7 @@ public class ResponseService {
 				ActivityLog.ActionType.submit_response,
 				savedResponse.getResponseId(),
 				"responses",
-				"Gửi phản hồi cho survey " + survey.getSurveyId()
-		);
+				"Gửi phản hồi cho survey " + survey.getSurveyId());
 
 		ResponseWithAnswersDTO dto = new ResponseWithAnswersDTO();
 		dto.setResponseId(savedResponse.getResponseId());
@@ -249,16 +253,16 @@ public class ResponseService {
 			ad.setOptionId(a.getOption() != null ? a.getOption().getOptionId() : null);
 			ad.setAnswerText(a.getAnswerText());
 			ad.setCreatedAt(a.getCreatedAt());
-            ad.setQuestionText(a.getQuestion().getQuestionText());
-            
+			ad.setQuestionText(a.getQuestion().getQuestionText());
+
 			// Read selected options from normalized table only
 			List<Long> normalizedOptionIds = answerSelectedOptionRepository.findOptionIdsByAnswerId(a.getAnswerId());
 			if (normalizedOptionIds != null && !normalizedOptionIds.isEmpty()) {
 				ad.setSelectedOptionIds(normalizedOptionIds);
 			}
-            
-            // Parse special answer formats
-            if (a.getAnswerText() != null && a.getQuestion().getQuestionType() != null) {
+
+			// Parse special answer formats
+			if (a.getAnswerText() != null && a.getQuestion().getQuestionType() != null) {
 				switch (a.getQuestion().getQuestionType()) {
 					case ranking:
 						ad.setRankingOrder(answerDataHelper.deserializeRankingOrder(a.getAnswerText()));
@@ -270,7 +274,7 @@ public class ResponseService {
 						break;
 				}
 			}
-            
+
 			return ad;
 		}).toList());
 		return dto;
@@ -281,7 +285,8 @@ public class ResponseService {
 		Survey survey = surveyRepository.findById(surveyId)
 				.orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
 		List<Response> responses = responseRepository.findBySurvey(survey);
-		if (responses.isEmpty()) return List.of();
+		if (responses.isEmpty())
+			return List.of();
 
 		return responses.stream().map(r -> {
 			ResponseWithAnswersDTO dto = new ResponseWithAnswersDTO();
@@ -298,18 +303,20 @@ public class ResponseService {
 				ad.setOptionId(a.getOption() != null ? a.getOption().getOptionId() : null);
 				ad.setAnswerText(a.getAnswerText());
 				ad.setCreatedAt(a.getCreatedAt());
-                ad.setQuestionText(a.getQuestion().getQuestionText());
-                
-                // Get option IDs from normalized table if available
+				ad.setQuestionText(a.getQuestion().getQuestionText());
+
+				// Get option IDs from normalized table if available
 				try {
-					List<Long> normalizedOptionIds = answerSelectedOptionRepository.findOptionIdsByAnswerId(a.getAnswerId());
+					List<Long> normalizedOptionIds = answerSelectedOptionRepository
+							.findOptionIdsByAnswerId(a.getAnswerId());
 					if (normalizedOptionIds != null && !normalizedOptionIds.isEmpty()) {
 						ad.setSelectedOptionIds(normalizedOptionIds);
 					}
 				} catch (Exception ex) {
-					System.out.println("ERROR reading normalized options for answer " + a.getAnswerId() + ": " + ex.getMessage());
+					System.out.println(
+							"ERROR reading normalized options for answer " + a.getAnswerId() + ": " + ex.getMessage());
 				}
-                
+
 				return ad;
 			}).toList();
 
@@ -324,27 +331,23 @@ public class ResponseService {
 			case single_choice:
 			case boolean_:
 			case rating:
-				return provided.stream().anyMatch(a -> 
-						(a.getAnswerText() != null && !a.getAnswerText().isBlank())
+				return provided.stream().anyMatch(a -> (a.getAnswerText() != null && !a.getAnswerText().isBlank())
 						|| a.getOptionId() != null);
 			case multiple_choice:
-				return provided.stream().anyMatch(a -> 
-						(a.getSelectedOptions() != null && !a.getSelectedOptions().isEmpty())
-						|| (a.getSelectedOptionIds() != null && !a.getSelectedOptionIds().isEmpty())
-						|| a.getOptionId() != null);
+				return provided.stream()
+						.anyMatch(a -> (a.getSelectedOptions() != null && !a.getSelectedOptions().isEmpty())
+								|| (a.getSelectedOptionIds() != null && !a.getSelectedOptionIds().isEmpty())
+								|| a.getOptionId() != null);
 			case open_ended:
 				return provided.stream().anyMatch(a -> a.getAnswerText() != null && !a.getAnswerText().isBlank());
 			case ranking:
-				return provided.stream().anyMatch(a -> 
-						(a.getAnswerText() != null && !a.getAnswerText().isBlank())
+				return provided.stream().anyMatch(a -> (a.getAnswerText() != null && !a.getAnswerText().isBlank())
 						|| (a.getRankingOrder() != null && !a.getRankingOrder().isEmpty()));
 			case date_time:
-				return provided.stream().anyMatch(a -> 
-						(a.getAnswerText() != null && !a.getAnswerText().isBlank())
+				return provided.stream().anyMatch(a -> (a.getAnswerText() != null && !a.getAnswerText().isBlank())
 						|| a.getDateValue() != null || a.getTimeValue() != null);
 			case file_upload:
-				return provided.stream().anyMatch(a -> 
-						a.getAnswerText() != null && !a.getAnswerText().isBlank());
+				return provided.stream().anyMatch(a -> a.getAnswerText() != null && !a.getAnswerText().isBlank());
 			default:
 				return false;
 		}
@@ -359,10 +362,11 @@ public class ResponseService {
 				}
 				break;
 			case multiple_choice:
-				if ((dto.getSelectedOptionIds() == null || dto.getSelectedOptionIds().isEmpty()) 
-					&& (dto.getSelectedOptions() == null || dto.getSelectedOptions().isEmpty())
-					&& dto.getOptionId() == null) {
-					throw new IdInvalidException("Câu hỏi trắc nghiệm nhiều lựa chọn yêu cầu selectedOptionIds, selectedOptions hoặc optionId");
+				if ((dto.getSelectedOptionIds() == null || dto.getSelectedOptionIds().isEmpty())
+						&& (dto.getSelectedOptions() == null || dto.getSelectedOptions().isEmpty())
+						&& dto.getOptionId() == null) {
+					throw new IdInvalidException(
+							"Câu hỏi trắc nghiệm nhiều lựa chọn yêu cầu selectedOptionIds, selectedOptions hoặc optionId");
 				}
 				break;
 			case boolean_:
@@ -440,10 +444,11 @@ public class ResponseService {
 			return null;
 		}
 	}
-	
+
 	private void parseDateTimeAnswer(String answerText, AnswerDTO ad) {
-		if (answerText == null) return;
-		
+		if (answerText == null)
+			return;
+
 		String[] parts = answerText.split(";");
 		for (String part : parts) {
 			if (part.startsWith("date:")) {
@@ -455,28 +460,34 @@ public class ResponseService {
 	}
 
 	/**
-	 * Persist normalized entries for multiple-choice answers into answer_selected_options table.
-	 * This will delete any existing selections for the answer and insert the new ones.
+	 * Persist normalized entries for multiple-choice answers into
+	 * answer_selected_options table.
+	 * This will delete any existing selections for the answer and insert the new
+	 * ones.
 	 */
-	private void persistNormalizedSelections(List<Answer> savedAnswers, Map<Answer, List<Long>> multipleChoiceSelections) {
-		if (savedAnswers == null || savedAnswers.isEmpty()) return;
+	private void persistNormalizedSelections(List<Answer> savedAnswers,
+			Map<Answer, List<Long>> multipleChoiceSelections) {
+		if (savedAnswers == null || savedAnswers.isEmpty())
+			return;
 		List<AnswerSelectedOption> toSave = new ArrayList<>();
-		
+
 		for (Answer a : savedAnswers) {
-			if (a == null || a.getQuestion() == null) continue;
-			
+			if (a == null || a.getQuestion() == null)
+				continue;
+
 			// Remove existing selections for this answer to avoid duplicates
 			try {
 				answerSelectedOptionRepository.deleteByAnswer(a);
-			} catch (Exception ignored) {}
+			} catch (Exception ignored) {
+			}
 
 			List<Long> optionIds = new ArrayList<>();
-			
+
 			// Handle single choice from option field
 			if (a.getQuestion().getQuestionType() == QuestionTypeEnum.single_choice ||
-				a.getQuestion().getQuestionType() == QuestionTypeEnum.boolean_ ||
-				a.getQuestion().getQuestionType() == QuestionTypeEnum.rating) {
-				
+					a.getQuestion().getQuestionType() == QuestionTypeEnum.boolean_ ||
+					a.getQuestion().getQuestionType() == QuestionTypeEnum.rating) {
+
 				if (a.getOption() != null) {
 					optionIds.add(a.getOption().getOptionId());
 				}
@@ -492,14 +503,15 @@ public class ResponseService {
 			// Create normalized entries
 			for (Long oid : optionIds) {
 				Option opt = optionRepository.findById(oid).orElse(null);
-				if (opt == null) continue;
+				if (opt == null)
+					continue;
 				AnswerSelectedOption aso = new AnswerSelectedOption();
 				aso.setAnswer(a);
 				aso.setOption(opt);
 				toSave.add(aso);
 			}
 		}
-		
+
 		if (!toSave.isEmpty()) {
 			answerSelectedOptionRepository.saveAll(toSave);
 		}
@@ -509,40 +521,42 @@ public class ResponseService {
 	 * Submit response with files in single request
 	 */
 	@Transactional
-	public ResponseWithAnswersDTO submitResponseWithFiles(Long surveyId, String answersJson, Map<String, MultipartFile> files) throws IdInvalidException {
+	public ResponseWithAnswersDTO submitResponseWithFiles(Long surveyId, String answersJson,
+			Map<String, MultipartFile> files) throws IdInvalidException {
 		try {
 			// Parse JSON answers
 			ObjectMapper mapper = new ObjectMapper();
-			List<AnswerSubmitDTO> answers = mapper.readValue(answersJson, new TypeReference<List<AnswerSubmitDTO>>() {});
-			
+			List<AnswerSubmitDTO> answers = mapper.readValue(answersJson, new TypeReference<List<AnswerSubmitDTO>>() {
+			});
+
 			// Create request DTO
 			ResponseSubmitRequestDTO request = new ResponseSubmitRequestDTO();
 			request.setSurveyId(surveyId);
 			request.setAnswers(answers);
-			
+
 			// Submit response first
 			ResponseWithAnswersDTO response = submitResponse(request);
-			
+
 			// Handle file uploads for file_upload questions
 			if (files != null && !files.isEmpty()) {
 				for (Map.Entry<String, MultipartFile> entry : files.entrySet()) {
 					String key = entry.getKey();
 					MultipartFile file = entry.getValue();
-					
+
 					// Extract question ID from key (format: "file_questionId")
 					if (key.startsWith("file_") && !file.isEmpty()) {
 						try {
 							Long questionId = Long.parseLong(key.substring(5));
-							
+
 							// Find corresponding answer by questionId
 							Optional<AnswerDTO> answerDTO = response.getAnswers().stream()
-								.filter(a -> a.getQuestionId().equals(questionId))
-								.findFirst();
-							
+									.filter(a -> a.getQuestionId().equals(questionId))
+									.findFirst();
+
 							if (answerDTO.isPresent()) {
 								Answer answer = answerRepository.findById(answerDTO.get().getAnswerId())
-									.orElse(null);
-								
+										.orElse(null);
+
 								if (answer != null) {
 									// Inline file upload logic to avoid circular dependency
 									try {
@@ -551,20 +565,22 @@ public class ResponseService {
 										if (originalFilename == null || originalFilename.trim().isEmpty()) {
 											originalFilename = "unnamed_file";
 										}
-										
-										String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-										String uniqueFilename = UUID.randomUUID().toString() + "_" + timestamp + "_" + originalFilename;
-										
+
+										String timestamp = LocalDateTime.now()
+												.format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+										String uniqueFilename = UUID.randomUUID().toString() + "_" + timestamp + "_"
+												+ originalFilename;
+
 										// Create upload directory if not exists
 										Path uploadPath = Paths.get(uploadDir);
 										if (!Files.exists(uploadPath)) {
 											Files.createDirectories(uploadPath);
 										}
-										
+
 										// Save file to filesystem
 										Path filePath = uploadPath.resolve(uniqueFilename);
 										Files.copy(file.getInputStream(), filePath);
-										
+
 										// Save file record to database
 										FileUpload fileUpload = new FileUpload();
 										fileUpload.setAnswer(answer);
@@ -574,7 +590,7 @@ public class ResponseService {
 										fileUpload.setFileType(file.getContentType());
 										fileUpload.setFilePath(filePath.toString());
 										fileUploadRepository.save(fileUpload);
-										
+
 										// Update answer text with success message
 										answer.setAnswerText("File uploaded successfully: " + originalFilename);
 									} catch (Exception e) {
@@ -590,9 +606,9 @@ public class ResponseService {
 					}
 				}
 			}
-			
+
 			return response;
-			
+
 		} catch (Exception e) {
 			throw new IdInvalidException("Lỗi khi xử lý request: " + e.getMessage());
 		}

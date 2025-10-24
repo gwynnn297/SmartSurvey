@@ -7,10 +7,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateRequestDTO;
-import vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.ai.SurveyGenerationRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.ai.HealthCheckResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.ai.PromptValidationResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.ai.QuestionRegenerateResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.ai.SurveyGenerationResponseDTO;
 import vn.duytan.c1se09.smartsurvey.service.ai.SurveyGeneratorService;
 

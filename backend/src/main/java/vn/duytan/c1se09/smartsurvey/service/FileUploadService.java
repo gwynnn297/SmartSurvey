@@ -29,46 +29,46 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class FileUploadService {
-    
+
     private final FileUploadRepository fileUploadRepository;
     private final AnswerRepository answerRepository;
     private final ResponseRepository responseRepository;
-    
+
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
-    
+
     @Value("${app.base.url:http://localhost:8080}")
     private String baseUrl;
-    
+
     @Transactional
     public FileUploadResponseDTO uploadFile(Long answerId, MultipartFile file) throws IdInvalidException {
         // Validate answer exists
         Answer answer = answerRepository.findById(answerId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy answer"));
-        
+
         // Validate file
         if (file.isEmpty()) {
             throw new IdInvalidException("File không được để trống");
         }
-        
+
         try {
             // Create upload directory if not exists
             Path uploadPath = Paths.get(uploadDir);
             if (!Files.exists(uploadPath)) {
                 Files.createDirectories(uploadPath);
             }
-            
+
             // Generate unique filename
             String originalFileName = file.getOriginalFilename();
-            String fileExtension = originalFileName != null && originalFileName.contains(".") 
-                ? originalFileName.substring(originalFileName.lastIndexOf("."))
-                : "";
+            String fileExtension = originalFileName != null && originalFileName.contains(".")
+                    ? originalFileName.substring(originalFileName.lastIndexOf("."))
+                    : "";
             String fileName = UUID.randomUUID().toString() + fileExtension;
-            
+
             // Save file to disk
             Path filePath = uploadPath.resolve(fileName);
             Files.copy(file.getInputStream(), filePath);
-            
+
             // Save file info to database
             FileUpload fileUpload = new FileUpload();
             fileUpload.setAnswer(answer);
@@ -77,28 +77,28 @@ public class FileUploadService {
             fileUpload.setFileType(file.getContentType());
             fileUpload.setFileSize(file.getSize());
             fileUpload.setFilePath(filePath.toString());
-            
+
             FileUpload saved = fileUploadRepository.save(fileUpload);
-            
+
             // Return response DTO
             return toFileUploadResponseDTO(saved);
-            
+
         } catch (IOException e) {
             log.error("Error uploading file: {}", e.getMessage());
             throw new IdInvalidException("Lỗi khi upload file: " + e.getMessage());
         }
     }
-    
+
     public List<FileUploadResponseDTO> getFileUploadsByResponse(Long responseId) throws IdInvalidException {
         Response response = responseRepository.findById(responseId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy response"));
-        
+
         List<FileUpload> fileUploads = fileUploadRepository.findByAnswerResponse(response);
         return fileUploads.stream()
                 .map(this::toFileUploadResponseDTO)
                 .collect(Collectors.toList());
     }
-    
+
     private FileUploadResponseDTO toFileUploadResponseDTO(FileUpload fileUpload) {
         FileUploadResponseDTO dto = new FileUploadResponseDTO();
         dto.setFileId(fileUpload.getFileId());

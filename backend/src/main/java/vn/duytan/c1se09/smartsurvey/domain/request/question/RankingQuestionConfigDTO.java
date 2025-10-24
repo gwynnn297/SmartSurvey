@@ -11,7 +11,7 @@ import java.util.List;
 public class RankingQuestionConfigDTO {
     @NotEmpty(message = "Ranking options không được để trống")
     private List<String> rankingOptions;
-    
+
     @NotNull(message = "Max rankings không được để trống")
     @Min(value = 1, message = "Max rankings phải lớn hơn 0")
     private Integer maxRankings;

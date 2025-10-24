@@ -1,4 +1,4 @@
-package vn.duytan.c1se09.smartsurvey.dto.ai;
+package vn.duytan.c1se09.smartsurvey.domain.request.ai;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Max;

@@ -1,4 +1,4 @@
-package vn.duytan.c1se09.smartsurvey.dto.ai;
+package vn.duytan.c1se09.smartsurvey.domain.response.ai;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
@@ -58,9 +58,9 @@ public class SentimentAnalysisResponseDTO {
     }
 
     public static SentimentAnalysisResponseDTO success(Long surveyId, String message,
-                                                       Integer totalResponses, Double positivePercent,
-                                                       Double neutralPercent, Double negativePercent,
-                                                       Map<String, Integer> counts, LocalDateTime createdAt) {
+            Integer totalResponses, Double positivePercent,
+            Double neutralPercent, Double negativePercent,
+            Map<String, Integer> counts, LocalDateTime createdAt) {
         return SentimentAnalysisResponseDTO.builder()
                 .success(true)
                 .message(message)
@@ -91,6 +91,3 @@ public class SentimentAnalysisResponseDTO {
                 .build();
     }
 }
-
-
-

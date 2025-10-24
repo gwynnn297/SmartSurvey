@@ -1,4 +1,4 @@
-package vn.duytan.c1se09.smartsurvey.dto.ai;
+package vn.duytan.c1se09.smartsurvey.domain.response.ai;
 
 import lombok.Builder;
 import lombok.Data;

@@ -11,11 +11,11 @@ import java.util.List;
 public class FileUploadQuestionConfigDTO {
     @NotEmpty(message = "Allowed file types không được để trống")
     private List<String> allowedFileTypes;
-    
+
     @NotNull(message = "Max file size không được để trống")
     @Min(value = 1, message = "Max file size phải lớn hơn 0")
     private Long maxFileSize; // bytes
-    
+
     @NotNull(message = "Max files không được để trống")
     @Min(value = 1, message = "Max files phải lớn hơn 0")
     private Integer maxFiles;

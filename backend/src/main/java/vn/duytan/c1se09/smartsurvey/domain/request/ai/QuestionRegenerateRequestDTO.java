@@ -1,4 +1,4 @@
-package vn.duytan.c1se09.smartsurvey.dto.ai;
+package vn.duytan.c1se09.smartsurvey.domain.request.ai;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

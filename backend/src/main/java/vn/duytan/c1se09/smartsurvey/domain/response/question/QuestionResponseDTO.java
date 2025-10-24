@@ -16,14 +16,14 @@ public class QuestionResponseDTO {
     private String questionType;
     private String questionTypeDescription;
     private Boolean isRequired;
-    
+
     private Integer displayOrder;
-    
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    
+
     // Cấu hình cho các question types phức tạp
     private RankingQuestionConfigDTO rankingConfig;
     private FileUploadQuestionConfigDTO fileUploadConfig;
     private DateTimeQuestionConfigDTO dateTimeConfig;
-} 
+}

@@ -11,5 +11,6 @@ import java.util.List;
 @Repository
 public interface FileUploadRepository extends JpaRepository<FileUpload, Long> {
     List<FileUpload> findByAnswer(Answer answer);
+
     List<FileUpload> findByAnswerResponse(Response response);
 }

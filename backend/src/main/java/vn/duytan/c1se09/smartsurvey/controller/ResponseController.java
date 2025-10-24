@@ -36,7 +36,7 @@ public class ResponseController {
 			@RequestParam("surveyId") Long surveyId,
 			@RequestParam("answers") String answersJson,
 			@RequestParam Map<String, MultipartFile> files) throws IdInvalidException {
-		
+
 		return ResponseEntity.ok(responseService.submitResponseWithFiles(surveyId, answersJson, files));
 	}
 
