@@ -19,7 +19,8 @@ public class AnswerSubmitDTO {
 	private String answerText;
 
 	// For ranking questions
-	private List<String> rankingOrder;
+	private List<String> rankingOrder; // Deprecated - for backward compatibility
+	private List<Long> rankingOptionIds; // New field - option IDs in ranking order
 
 	// For date/time questions
 	private String dateValue;

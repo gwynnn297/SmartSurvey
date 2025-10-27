@@ -18,8 +18,6 @@ public class QuestionCreateRequestDTO {
 
     private Boolean isRequired = true;
 
-    // Cấu hình cho các question types phức tạp
-    private RankingQuestionConfigDTO rankingConfig;
-    private FileUploadQuestionConfigDTO fileUploadConfig;
-    private DateTimeQuestionConfigDTO dateTimeConfig;
+    // Note: Using simplified approach - only basic fields needed
+    // surveyId, questionText, questionType, isRequired
 }

@@ -1,9 +1,6 @@
 package vn.duytan.c1se09.smartsurvey.domain.response.question;
 
 import lombok.Data;
-import vn.duytan.c1se09.smartsurvey.domain.request.question.DateTimeQuestionConfigDTO;
-import vn.duytan.c1se09.smartsurvey.domain.request.question.FileUploadQuestionConfigDTO;
-import vn.duytan.c1se09.smartsurvey.domain.request.question.RankingQuestionConfigDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.option.OptionResponseDTO;
 
 import java.time.LocalDateTime;
@@ -18,15 +15,14 @@ public class QuestionDetailResponseDTO {
     private String questionType;
     private String questionTypeDescription;
     private Boolean isRequired;
+
     private Integer displayOrder;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    // Danh sách tùy chọn của câu hỏi
+    // Associated options for multiple choice, single choice, etc.
     private List<OptionResponseDTO> options;
 
-    // Cấu hình cho các question types phức tạp
-    private RankingQuestionConfigDTO rankingConfig;
-    private FileUploadQuestionConfigDTO fileUploadConfig;
-    private DateTimeQuestionConfigDTO dateTimeConfig;
+    // Note: Removed question config fields - using simplified approach
 }

@@ -5,7 +5,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * Entity đại diện cho bảng answers
@@ -52,19 +51,5 @@ public class Answer {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
-    }
-
-    // Normalized relationship for multiple choice options
-    @OneToMany(mappedBy = "answer", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<AnswerSelectedOption> selectedOptionsList;
-
-    // Optional: Helper method to get option IDs
-    public List<Long> getSelectedOptionIds() {
-        if (selectedOptionsList != null) {
-            return selectedOptionsList.stream()
-                    .map(answerOption -> answerOption.getOption().getOptionId())
-                    .toList();
-        }
-        return List.of();
     }
 }

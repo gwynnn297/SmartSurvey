@@ -16,9 +16,24 @@ public class AnswerDTO {
     private String questionText;
 
     // For ranking questions
-    private List<String> rankingOrder;
+    private List<String> rankingOrder; // Legacy format - for backward compatibility
+    private List<Long> rankingOptionIds; // New format - option IDs in ranking order
 
     // For date/time questions
     private String dateValue;
     private String timeValue;
+
+    // For file upload questions
+    private List<FileUploadInfo> uploadedFiles;
+
+    @Data
+    public static class FileUploadInfo {
+        private Long fileId;
+        private String originalFileName;
+        private String fileName;
+        private String fileType;
+        private Long fileSize;
+        private String downloadUrl;
+        private LocalDateTime uploadedAt;
+    }
 }

@@ -38,4 +38,35 @@ public class AnswerDataHelper {
             return null;
         }
     }
+
+    /**
+     * Serialize selected option IDs for multiple choice questions
+     */
+    public String serializeSelectedOptionIds(List<Long> optionIds) {
+        try {
+            if (optionIds == null || optionIds.isEmpty()) {
+                return null;
+            }
+            return objectMapper.writeValueAsString(optionIds);
+        } catch (JsonProcessingException e) {
+            log.error("Error serializing selected option IDs: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Deserialize selected option IDs for multiple choice questions
+     */
+    public List<Long> deserializeSelectedOptionIds(String selectedOptionIdsJson) {
+        try {
+            if (selectedOptionIdsJson == null || selectedOptionIdsJson.trim().isEmpty()) {
+                return null;
+            }
+            return objectMapper.readValue(selectedOptionIdsJson, new TypeReference<List<Long>>() {
+            });
+        } catch (JsonProcessingException e) {
+            log.error("Error deserializing selected option IDs: {}", e.getMessage());
+            return null;
+        }
+    }
 }

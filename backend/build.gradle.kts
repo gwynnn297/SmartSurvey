@@ -1,3 +1,9 @@
+buildscript {
+    dependencies {
+        classpath("org.flywaydb:flyway-mysql:11.7.2")
+    }
+}
+
 plugins {
     java
     id("org.springframework.boot") version "3.5.5"
@@ -62,9 +68,9 @@ dependencies {
     testImplementation("org.springframework.security:spring-security-test")
     testImplementation("com.h2database:h2")
 
-    // Thư viện cho các task Gradle của Flyway (cần plugin DB + driver)
-    add("flywayMigration", "org.flywaydb:flyway-mysql:11.7.2")
-    add("flywayMigration", "com.mysql:mysql-connector-j:9.0.0")
+    // Flyway MySQL plugin và driver cho Gradle tasks
+    implementation("org.flywaydb:flyway-mysql:11.7.2")
+    implementation("com.mysql:mysql-connector-j:9.0.0")
 }
 
 tasks.withType<Test> {
@@ -85,5 +91,5 @@ flyway {
         ?: "jdbc:mysql://localhost:3306/smartsurvey")
     user = System.getenv("DB_USERNAME") ?: "root"
     password = System.getenv("DB_PASSWORD") ?: ""
-    locations = arrayOf("classpath:db/migration") // thư mục migration trong resources
+    locations = arrayOf("filesystem:src/main/resources/db/migration") // use filesystem path
 }

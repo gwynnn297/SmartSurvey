@@ -200,23 +200,6 @@ public class SurveyGeneratorService {
     }
 
     /**
-     * Validate category tồn tại (nếu có) - Legacy method
-     */
-    @Deprecated
-    private Category validateCategory(Long categoryId) throws Exception {
-        if (categoryId == null) {
-            return null;
-        }
-
-        Category category = categoryService.findCategoryById(categoryId);
-        if (category == null) {
-            log.warn("Category not found: {}", categoryId);
-            throw new Exception("Danh mục không tồn tại");
-        }
-        return category;
-    }
-
-    /**
      * Kiểm tra AI service health
      */
     private void validateAiServiceHealth() throws Exception {

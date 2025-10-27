@@ -35,7 +35,6 @@ public class ResponseService {
 	private final QuestionRepository questionRepository;
 	private final OptionRepository optionRepository;
 	private final FileUploadRepository fileUploadRepository;
-	private final AnswerSelectedOptionRepository answerSelectedOptionRepository;
 
 	private final AuthService authService;
 	private final ActivityLogService activityLogService;
@@ -90,7 +89,6 @@ public class ResponseService {
 		Response savedResponse = responseRepository.save(response);
 
 		List<Answer> toSave = new ArrayList<>();
-		Map<Answer, List<Long>> multipleChoiceSelections = new HashMap<>();
 		for (AnswerSubmitDTO dto : request.getAnswers()) {
 			Question question = questionById.get(dto.getQuestionId());
 			if (question == null) {
@@ -141,7 +139,7 @@ public class ResponseService {
 					break;
 
 				case multiple_choice:
-					// Multiple option selection - store only in normalized table
+					// Multiple option selection - create separate Answer record for each selected option
 					List<Long> selectedOptionIds = null;
 
 					if (dto.getSelectedOptionIds() != null && !dto.getSelectedOptionIds().isEmpty()) {
@@ -175,8 +173,7 @@ public class ResponseService {
 						selectedOptionIds = resolvedIds;
 					}
 
-					// Validate all selected option ids belong to this question and persist to
-					// normalized table
+					// Validate all selected option ids belong to this question and create separate Answer records
 					if (selectedOptionIds != null && !selectedOptionIds.isEmpty()) {
 						for (Long optionId : selectedOptionIds) {
 							Option option = optionRepository.findById(optionId)
@@ -184,16 +181,42 @@ public class ResponseService {
 							if (!option.getQuestion().getQuestionId().equals(question.getQuestionId())) {
 								throw new IdInvalidException("option không thuộc câu hỏi");
 							}
-						}
 
-						// Store selected options in map for later persistence
-						multipleChoiceSelections.put(answer, selectedOptionIds);
+							// Create separate Answer record for each selected option
+							Answer multipleChoiceAnswer = new Answer();
+							multipleChoiceAnswer.setResponse(savedResponse);
+							multipleChoiceAnswer.setQuestion(question);
+							multipleChoiceAnswer.setOption(option); // Store the selected option
+							// No need to set answer_text for multiple choice with option selection
+							toSave.add(multipleChoiceAnswer);
+						}
+						// Skip creating the main answer since we created individual records
+						continue;
 					}
 					break;
 
 				case ranking:
-					// Ranking question - store order
-					if (dto.getRankingOrder() != null && !dto.getRankingOrder().isEmpty()) {
+					// Ranking question - store as multiple Answer records with option_id and rank
+					if (dto.getRankingOptionIds() != null && !dto.getRankingOptionIds().isEmpty()) {
+						// Create separate Answer record for each ranked option
+						for (int i = 0; i < dto.getRankingOptionIds().size(); i++) {
+							Long optionId = dto.getRankingOptionIds().get(i);
+							int rank = i + 1; // Rank starts from 1
+							
+							Option option = optionRepository.findById(optionId)
+									.orElseThrow(() -> new IdInvalidException("Không tìm thấy optionId: " + optionId));
+							
+							Answer rankingAnswer = new Answer();
+							rankingAnswer.setResponse(savedResponse);
+							rankingAnswer.setQuestion(question);
+							rankingAnswer.setOption(option); // Store the option
+							rankingAnswer.setAnswerText(String.valueOf(rank)); // Store rank as answer_text
+							toSave.add(rankingAnswer);
+						}
+						// Skip creating the main answer since we created individual records
+						continue;
+					} else if (dto.getRankingOrder() != null && !dto.getRankingOrder().isEmpty()) {
+						// Legacy: store order as JSON string
 						answer.setAnswerText(answerDataHelper.serializeRankingOrder(dto.getRankingOrder()));
 					} else if (dto.getAnswerText() != null && !dto.getAnswerText().isBlank()) {
 						// Advanced ranking with JSON answerText
@@ -231,9 +254,6 @@ public class ResponseService {
 		}
 		List<Answer> savedAnswers = answerRepository.saveAll(toSave);
 
-		// Persist normalized selected options for multiple choice answers
-		persistNormalizedSelections(savedAnswers, multipleChoiceSelections);
-
 		activityLogService.log(
 				ActivityLog.ActionType.submit_response,
 				savedResponse.getResponseId(),
@@ -246,37 +266,85 @@ public class ResponseService {
 		dto.setUserId(savedResponse.getUser() != null ? savedResponse.getUser().getUserId() : null);
 		dto.setRequestToken(savedResponse.getRequestToken());
 		dto.setSubmittedAt(savedResponse.getSubmittedAt());
-		dto.setAnswers(savedAnswers.stream().map(a -> {
+		
+		// Group answers by question for multiple choice handling  
+		Map<Long, List<Answer>> submitAnswersByQuestion = savedAnswers.stream()
+				.collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
+
+		List<AnswerDTO> answerDTOs = new ArrayList<>();
+		
+		for (Map.Entry<Long, List<Answer>> entry : submitAnswersByQuestion.entrySet()) {
+			Long questionId = entry.getKey();
+			List<Answer> questionAnswers = entry.getValue();
+			
+			if (questionAnswers.isEmpty()) continue;
+			
+			Answer firstAnswer = questionAnswers.get(0);
+			Question question = firstAnswer.getQuestion();
+			
 			AnswerDTO ad = new AnswerDTO();
-			ad.setAnswerId(a.getAnswerId());
-			ad.setQuestionId(a.getQuestion().getQuestionId());
-			ad.setOptionId(a.getOption() != null ? a.getOption().getOptionId() : null);
-			ad.setAnswerText(a.getAnswerText());
-			ad.setCreatedAt(a.getCreatedAt());
-			ad.setQuestionText(a.getQuestion().getQuestionText());
-
-			// Read selected options from normalized table only
-			List<Long> normalizedOptionIds = answerSelectedOptionRepository.findOptionIdsByAnswerId(a.getAnswerId());
-			if (normalizedOptionIds != null && !normalizedOptionIds.isEmpty()) {
-				ad.setSelectedOptionIds(normalizedOptionIds);
-			}
-
-			// Parse special answer formats
-			if (a.getAnswerText() != null && a.getQuestion().getQuestionType() != null) {
-				switch (a.getQuestion().getQuestionType()) {
-					case ranking:
-						ad.setRankingOrder(answerDataHelper.deserializeRankingOrder(a.getAnswerText()));
-						break;
-					case date_time:
-						parseDateTimeAnswer(a.getAnswerText(), ad);
-						break;
-					default:
-						break;
+			ad.setQuestionId(questionId);
+			ad.setQuestionText(question.getQuestionText());
+			ad.setCreatedAt(firstAnswer.getCreatedAt());
+			
+			// Handle different question types
+			if (question.getQuestionType() == QuestionTypeEnum.multiple_choice) {
+				// For multiple choice: collect all selected option IDs from multiple Answer records
+				List<Long> selectedOptionIds = questionAnswers.stream()
+						.filter(a -> a.getOption() != null)
+						.map(a -> a.getOption().getOptionId())
+						.distinct()
+						.toList();
+				
+				ad.setSelectedOptionIds(selectedOptionIds);
+				ad.setAnswerId(firstAnswer.getAnswerId()); // Use first answer's ID as representative
+				// Don't set optionId or answerText for multiple choice
+			} else if (question.getQuestionType() == QuestionTypeEnum.ranking) {
+				// For ranking: handle both new and legacy formats
+				processRankingAnswer(questionAnswers, ad);
+			} else {
+				// For single choice and other types: use the single Answer record
+				ad.setAnswerId(firstAnswer.getAnswerId());
+				ad.setOptionId(firstAnswer.getOption() != null ? firstAnswer.getOption().getOptionId() : null);
+				ad.setAnswerText(firstAnswer.getAnswerText());
+				
+				// Parse special answer formats
+				if (firstAnswer.getAnswerText() != null && question.getQuestionType() != null) {
+					switch (question.getQuestionType()) {
+						case date_time:
+							parseDateTimeAnswer(firstAnswer.getAnswerText(), ad);
+							break;
+						case file_upload:
+							// For file upload questions, get uploaded files info
+							List<FileUpload> files = fileUploadRepository.findByAnswer(firstAnswer);
+							if (!files.isEmpty()) {
+								List<AnswerDTO.FileUploadInfo> fileInfos = files.stream()
+										.map(this::mapToFileUploadInfo)
+										.toList();
+								ad.setUploadedFiles(fileInfos);
+							}
+							break;
+						default:
+							break;
+					}
 				}
 			}
+			
+			// For all question types: check if there are uploaded files
+			if (question.getQuestionType() == QuestionTypeEnum.file_upload) {
+				List<FileUpload> files = fileUploadRepository.findByAnswer(firstAnswer);
+				if (!files.isEmpty()) {
+					List<AnswerDTO.FileUploadInfo> fileInfos = files.stream()
+							.map(this::mapToFileUploadInfo)
+							.toList();
+					ad.setUploadedFiles(fileInfos);
+				}
+			}
+			
+			answerDTOs.add(ad);
+		}
 
-			return ad;
-		}).toList());
+		dto.setAnswers(answerDTOs);
 		return dto;
 	}
 
@@ -296,29 +364,50 @@ public class ResponseService {
 			dto.setRequestToken(r.getRequestToken());
 			dto.setSubmittedAt(r.getSubmittedAt());
 
-			List<AnswerDTO> answers = answerRepository.findByResponse(r).stream().map(a -> {
+			// Get all answers for this response
+			List<Answer> allAnswers = answerRepository.findByResponse(r);
+			
+			// Group answers by question for multiple choice handling
+			Map<Long, List<Answer>> answersByQuestion = allAnswers.stream()
+					.collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
+
+			List<AnswerDTO> answers = new ArrayList<>();
+			
+			for (Map.Entry<Long, List<Answer>> entry : answersByQuestion.entrySet()) {
+				Long questionId = entry.getKey();
+				List<Answer> questionAnswers = entry.getValue();
+				
+				if (questionAnswers.isEmpty()) continue;
+				
+				Answer firstAnswer = questionAnswers.get(0);
+				Question question = firstAnswer.getQuestion();
+				
 				AnswerDTO ad = new AnswerDTO();
-				ad.setAnswerId(a.getAnswerId());
-				ad.setQuestionId(a.getQuestion().getQuestionId());
-				ad.setOptionId(a.getOption() != null ? a.getOption().getOptionId() : null);
-				ad.setAnswerText(a.getAnswerText());
-				ad.setCreatedAt(a.getCreatedAt());
-				ad.setQuestionText(a.getQuestion().getQuestionText());
-
-				// Get option IDs from normalized table if available
-				try {
-					List<Long> normalizedOptionIds = answerSelectedOptionRepository
-							.findOptionIdsByAnswerId(a.getAnswerId());
-					if (normalizedOptionIds != null && !normalizedOptionIds.isEmpty()) {
-						ad.setSelectedOptionIds(normalizedOptionIds);
-					}
-				} catch (Exception ex) {
-					System.out.println(
-							"ERROR reading normalized options for answer " + a.getAnswerId() + ": " + ex.getMessage());
+				ad.setQuestionId(questionId);
+				ad.setQuestionText(question.getQuestionText());
+				ad.setCreatedAt(firstAnswer.getCreatedAt());
+				
+				// Handle different question types
+				if (question.getQuestionType() == QuestionTypeEnum.multiple_choice) {
+					// For multiple choice: collect all selected option IDs from multiple Answer records
+					List<Long> selectedOptionIds = questionAnswers.stream()
+							.filter(a -> a.getOption() != null)
+							.map(a -> a.getOption().getOptionId())
+							.distinct()
+							.toList();
+					
+					ad.setSelectedOptionIds(selectedOptionIds);
+					ad.setAnswerId(firstAnswer.getAnswerId()); // Use first answer's ID as representative
+					// Don't set optionId or answerText for multiple choice
+				} else {
+					// For single choice and other types: use the single Answer record
+					ad.setAnswerId(firstAnswer.getAnswerId());
+					ad.setOptionId(firstAnswer.getOption() != null ? firstAnswer.getOption().getOptionId() : null);
+					ad.setAnswerText(firstAnswer.getAnswerText());
 				}
-
-				return ad;
-			}).toList();
+				
+				answers.add(ad);
+			}
 
 			dto.setAnswers(answers);
 			return dto;
@@ -342,7 +431,8 @@ public class ResponseService {
 				return provided.stream().anyMatch(a -> a.getAnswerText() != null && !a.getAnswerText().isBlank());
 			case ranking:
 				return provided.stream().anyMatch(a -> (a.getAnswerText() != null && !a.getAnswerText().isBlank())
-						|| (a.getRankingOrder() != null && !a.getRankingOrder().isEmpty()));
+						|| (a.getRankingOrder() != null && !a.getRankingOrder().isEmpty())
+						|| (a.getRankingOptionIds() != null && !a.getRankingOptionIds().isEmpty()));
 			case date_time:
 				return provided.stream().anyMatch(a -> (a.getAnswerText() != null && !a.getAnswerText().isBlank())
 						|| a.getDateValue() != null || a.getTimeValue() != null);
@@ -381,10 +471,27 @@ public class ResponseService {
 				}
 				break;
 			case ranking:
-				if (dto.getRankingOrder() == null || dto.getRankingOrder().isEmpty()) {
+				if (dto.getRankingOptionIds() != null && !dto.getRankingOptionIds().isEmpty()) {
+					// Validate that all option IDs belong to the question
+					List<Option> questionOptions = optionRepository.findByQuestionOrderByCreatedAt(question);
+					List<Long> validOptionIds = questionOptions.stream()
+							.map(Option::getOptionId)
+							.collect(Collectors.toList());
+					
+					for (Long optionId : dto.getRankingOptionIds()) {
+						if (!validOptionIds.contains(optionId)) {
+							throw new IdInvalidException("Option ID " + optionId + " không thuộc câu hỏi ranking này");
+						}
+					}
+					
+					// Check if all options are ranked (optional - depends on business logic)
+					if (dto.getRankingOptionIds().size() != validOptionIds.size()) {
+						throw new IdInvalidException("Phải xếp hạng tất cả các options cho câu hỏi ranking");
+					}
+				} else if (dto.getRankingOrder() == null || dto.getRankingOrder().isEmpty()) {
 					// Allow answerText for advanced ranking questions
 					if (dto.getAnswerText() == null || dto.getAnswerText().isBlank()) {
-						throw new IdInvalidException("Câu hỏi xếp hạng yêu cầu rankingOrder hoặc answerText JSON");
+						throw new IdInvalidException("Câu hỏi xếp hạng yêu cầu rankingOptionIds, rankingOrder hoặc answerText JSON");
 					}
 				}
 				break;
@@ -456,64 +563,6 @@ public class ResponseService {
 			} else if (part.startsWith("time:")) {
 				ad.setTimeValue(part.substring(5));
 			}
-		}
-	}
-
-	/**
-	 * Persist normalized entries for multiple-choice answers into
-	 * answer_selected_options table.
-	 * This will delete any existing selections for the answer and insert the new
-	 * ones.
-	 */
-	private void persistNormalizedSelections(List<Answer> savedAnswers,
-			Map<Answer, List<Long>> multipleChoiceSelections) {
-		if (savedAnswers == null || savedAnswers.isEmpty())
-			return;
-		List<AnswerSelectedOption> toSave = new ArrayList<>();
-
-		for (Answer a : savedAnswers) {
-			if (a == null || a.getQuestion() == null)
-				continue;
-
-			// Remove existing selections for this answer to avoid duplicates
-			try {
-				answerSelectedOptionRepository.deleteByAnswer(a);
-			} catch (Exception ignored) {
-			}
-
-			List<Long> optionIds = new ArrayList<>();
-
-			// Handle single choice from option field
-			if (a.getQuestion().getQuestionType() == QuestionTypeEnum.single_choice ||
-					a.getQuestion().getQuestionType() == QuestionTypeEnum.boolean_ ||
-					a.getQuestion().getQuestionType() == QuestionTypeEnum.rating) {
-
-				if (a.getOption() != null) {
-					optionIds.add(a.getOption().getOptionId());
-				}
-			}
-			// Handle multiple choice from map
-			else if (a.getQuestion().getQuestionType() == QuestionTypeEnum.multiple_choice) {
-				List<Long> selectedIds = multipleChoiceSelections.get(a);
-				if (selectedIds != null && !selectedIds.isEmpty()) {
-					optionIds.addAll(selectedIds);
-				}
-			}
-
-			// Create normalized entries
-			for (Long oid : optionIds) {
-				Option opt = optionRepository.findById(oid).orElse(null);
-				if (opt == null)
-					continue;
-				AnswerSelectedOption aso = new AnswerSelectedOption();
-				aso.setAnswer(a);
-				aso.setOption(opt);
-				toSave.add(aso);
-			}
-		}
-
-		if (!toSave.isEmpty()) {
-			answerSelectedOptionRepository.saveAll(toSave);
 		}
 	}
 
@@ -605,12 +654,168 @@ public class ResponseService {
 						}
 					}
 				}
+				
+				// After all files are processed, regenerate the response DTO to include file info
+				Response savedResponse = responseRepository.findById(response.getResponseId())
+						.orElseThrow(() -> new IdInvalidException("Response not found"));
+				return buildResponseWithAnswersDTO(savedResponse);
 			}
 
 			return response;
 
 		} catch (Exception e) {
 			throw new IdInvalidException("Lỗi khi xử lý request: " + e.getMessage());
+		}
+	}
+
+	/**
+	 * Map FileUpload entity to FileUploadInfo DTO
+	 */
+	private AnswerDTO.FileUploadInfo mapToFileUploadInfo(FileUpload fileUpload) {
+		AnswerDTO.FileUploadInfo info = new AnswerDTO.FileUploadInfo();
+		info.setFileId(fileUpload.getFileId());
+		info.setOriginalFileName(fileUpload.getOriginalFileName());
+		info.setFileName(fileUpload.getFileName());
+		info.setFileType(fileUpload.getFileType());
+		info.setFileSize(fileUpload.getFileSize());
+		info.setUploadedAt(fileUpload.getCreatedAt());
+		
+		// Create download URL (assuming base URL from properties)
+		info.setDownloadUrl("/api/files/download/" + fileUpload.getFileId());
+		
+		return info;
+	}
+
+	/**
+	 * Build complete ResponseWithAnswersDTO from Response entity including file info
+	 */
+	private ResponseWithAnswersDTO buildResponseWithAnswersDTO(Response response) {
+		ResponseWithAnswersDTO dto = new ResponseWithAnswersDTO();
+		dto.setResponseId(response.getResponseId());
+		dto.setSurveyId(response.getSurvey().getSurveyId());
+		dto.setUserId(response.getUser() != null ? response.getUser().getUserId() : null);
+		dto.setRequestToken(response.getRequestToken());
+		dto.setSubmittedAt(response.getSubmittedAt());
+
+		// Get all answers for this response
+		List<Answer> allAnswers = answerRepository.findByResponse(response);
+		
+		// Group answers by question for multiple choice handling
+		Map<Long, List<Answer>> answersByQuestion = allAnswers.stream()
+				.collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
+
+		List<AnswerDTO> answerDTOs = new ArrayList<>();
+		
+		for (Map.Entry<Long, List<Answer>> entry : answersByQuestion.entrySet()) {
+			Long questionId = entry.getKey();
+			List<Answer> questionAnswers = entry.getValue();
+			
+			if (questionAnswers.isEmpty()) continue;
+			
+			Answer firstAnswer = questionAnswers.get(0);
+			Question question = firstAnswer.getQuestion();
+			
+			AnswerDTO ad = new AnswerDTO();
+			ad.setQuestionId(questionId);
+			ad.setQuestionText(question.getQuestionText());
+			ad.setCreatedAt(firstAnswer.getCreatedAt());
+			
+			// Handle different question types
+			if (question.getQuestionType() == QuestionTypeEnum.multiple_choice) {
+				// For multiple choice: collect all selected option IDs from multiple Answer records
+				List<Long> selectedOptionIds = questionAnswers.stream()
+						.filter(a -> a.getOption() != null)
+						.map(a -> a.getOption().getOptionId())
+						.distinct()
+						.toList();
+				
+				ad.setSelectedOptionIds(selectedOptionIds);
+				ad.setAnswerId(firstAnswer.getAnswerId()); // Use first answer's ID as representative
+				// Don't set optionId or answerText for multiple choice
+			} else if (question.getQuestionType() == QuestionTypeEnum.ranking) {
+				// For ranking: handle both new and legacy formats
+				processRankingAnswer(questionAnswers, ad);
+			} else {
+				// For single choice and other types: use the single Answer record
+				ad.setAnswerId(firstAnswer.getAnswerId());
+				ad.setOptionId(firstAnswer.getOption() != null ? firstAnswer.getOption().getOptionId() : null);
+				ad.setAnswerText(firstAnswer.getAnswerText());
+				
+				// Parse special answer formats
+				if (firstAnswer.getAnswerText() != null && question.getQuestionType() != null) {
+					switch (question.getQuestionType()) {
+						case date_time:
+							parseDateTimeAnswer(firstAnswer.getAnswerText(), ad);
+							break;
+						case file_upload:
+							// For file upload questions, get uploaded files info
+							List<FileUpload> files = fileUploadRepository.findByAnswer(firstAnswer);
+							if (!files.isEmpty()) {
+								List<AnswerDTO.FileUploadInfo> fileInfos = files.stream()
+										.map(this::mapToFileUploadInfo)
+										.toList();
+								ad.setUploadedFiles(fileInfos);
+							}
+							break;
+						default:
+							break;
+					}
+				}
+			}
+			
+			// For all question types: check if there are uploaded files
+			if (question.getQuestionType() == QuestionTypeEnum.file_upload) {
+				List<FileUpload> files = fileUploadRepository.findByAnswer(firstAnswer);
+				if (!files.isEmpty()) {
+					List<AnswerDTO.FileUploadInfo> fileInfos = files.stream()
+							.map(this::mapToFileUploadInfo)
+							.toList();
+					ad.setUploadedFiles(fileInfos);
+				}
+			}
+			
+			answerDTOs.add(ad);
+		}
+
+		dto.setAnswers(answerDTOs);
+		return dto;
+	}
+
+	/**
+	 * Helper method to process ranking answers for both new and legacy formats
+	 */
+	private void processRankingAnswer(List<Answer> questionAnswers, AnswerDTO ad) {
+		Answer firstAnswer = questionAnswers.get(0);
+		
+		// Check if we have multiple Answer records with option_id and ranks (new format)
+		boolean hasRankingRecords = questionAnswers.stream()
+				.allMatch(a -> a.getOption() != null && a.getAnswerText() != null);
+		
+		if (hasRankingRecords && questionAnswers.size() > 1) {
+			// New ranking format: multiple records with option_id and rank
+			List<Long> rankingOptionIds = questionAnswers.stream()
+					.sorted((a1, a2) -> {
+						// Sort by rank (stored in answerText)
+						try {
+							int rank1 = Integer.parseInt(a1.getAnswerText());
+							int rank2 = Integer.parseInt(a2.getAnswerText());
+							return Integer.compare(rank1, rank2);
+						} catch (NumberFormatException e) {
+							return 0;
+						}
+					})
+					.map(a -> a.getOption().getOptionId())
+					.toList();
+			
+			ad.setRankingOptionIds(rankingOptionIds);
+			ad.setAnswerId(firstAnswer.getAnswerId()); // Use first answer's ID as representative
+		} else {
+			// Legacy ranking format: JSON string in answerText
+			ad.setAnswerId(firstAnswer.getAnswerId());
+			ad.setAnswerText(firstAnswer.getAnswerText());
+			if (firstAnswer.getAnswerText() != null) {
+				ad.setRankingOrder(answerDataHelper.deserializeRankingOrder(firstAnswer.getAnswerText()));
+			}
 		}
 	}
 

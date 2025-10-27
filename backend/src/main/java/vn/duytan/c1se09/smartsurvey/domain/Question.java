@@ -39,9 +39,8 @@ public class Question {
     @Column(name = "display_order", nullable = false)
     private Integer displayOrder = 0;
 
-    @Column(name = "question_config", columnDefinition = "JSON")
-    private String questionConfig;
-
+    // Removed question_config field - not used in application logic
+    
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 

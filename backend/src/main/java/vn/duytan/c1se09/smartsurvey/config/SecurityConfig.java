@@ -88,11 +88,15 @@ public class SecurityConfig {
                         .requestMatchers("/dashboard/**").authenticated()
                         .requestMatchers("/surveys/{id}/public", "/surveys/{id}/status").permitAll()
                         .requestMatchers(HttpMethod.POST, "/responses").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/responses/with-files").authenticated()
+                        .requestMatchers("/api/responses/**").authenticated()
                         .requestMatchers("/surveys/**").authenticated()
                         .requestMatchers("/questions/**").authenticated()
                         .requestMatchers("/options/**").authenticated()
                         .requestMatchers("/categories/**").authenticated()
                         .requestMatchers("/ai/**").authenticated()
+                        .requestMatchers("/api/files/**").authenticated() // File endpoints require authentication
+                        .requestMatchers("/files/**").authenticated() // Legacy file endpoints
                         .requestMatchers("/api/public/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         .anyRequest().authenticated());

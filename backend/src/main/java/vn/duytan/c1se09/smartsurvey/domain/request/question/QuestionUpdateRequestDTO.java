@@ -9,8 +9,5 @@ public class QuestionUpdateRequestDTO {
     private QuestionTypeEnum questionType; // optional
     private Boolean isRequired; // optional
 
-    // Cấu hình cho các question types phức tạp (optional)
-    private RankingQuestionConfigDTO rankingConfig;
-    private FileUploadQuestionConfigDTO fileUploadConfig;
-    private DateTimeQuestionConfigDTO dateTimeConfig;
+    // Note: Removed question config fields - using simplified approach
 }

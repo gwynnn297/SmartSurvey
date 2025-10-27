@@ -11,9 +11,6 @@ import vn.duytan.c1se09.smartsurvey.domain.response.question.QuestionCreateRespo
 import vn.duytan.c1se09.smartsurvey.domain.response.question.QuestionUpdateResponseDTO;
 import vn.duytan.c1se09.smartsurvey.repository.*;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
-import vn.duytan.c1se09.smartsurvey.util.helper.QuestionConfigHelper;
-import vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum;
-import vn.duytan.c1se09.smartsurvey.util.validator.QuestionValidator;
 
 import java.util.List;
 import java.util.Set;
@@ -29,8 +26,6 @@ public class QuestionService {
     private final SurveyRepository surveyRepository;
     private final AuthService authService;
     private final ActivityLogService activityLogService;
-    private final QuestionConfigHelper questionConfigHelper;
-    private final QuestionValidator questionValidator;
 
     // lấy thông tin câu hỏi
     public Question getQuestionEntityById(Long questionId) throws IdInvalidException {
@@ -50,25 +45,6 @@ public class QuestionService {
         dto.setDisplayOrder(question.getDisplayOrder());
         dto.setCreatedAt(question.getCreatedAt());
         dto.setUpdatedAt(question.getUpdatedAt());
-
-        // Deserialize question config based on type
-        if (question.getQuestionConfig() != null) {
-            switch (question.getQuestionType()) {
-                case ranking:
-                    dto.setRankingConfig(questionConfigHelper.deserializeRankingConfig(question.getQuestionConfig()));
-                    break;
-                case file_upload:
-                    dto.setFileUploadConfig(
-                            questionConfigHelper.deserializeFileUploadConfig(question.getQuestionConfig()));
-                    break;
-                case date_time:
-                    dto.setDateTimeConfig(questionConfigHelper.deserializeDateTimeConfig(question.getQuestionConfig()));
-                    break;
-                default:
-                    // No additional config needed for other types
-                    break;
-            }
-        }
 
         return dto;
     }
@@ -101,8 +77,7 @@ public class QuestionService {
     public QuestionResponseDTO createQuestion(Long surveyId, QuestionCreateRequestDTO request)
             throws IdInvalidException {
 
-        // Validate question configuration
-        questionValidator.validateQuestionRequest(request);
+        // Validate basic question info
 
         Survey survey = surveyRepository.findById(surveyId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
@@ -115,32 +90,8 @@ public class QuestionService {
         question.setQuestionType(request.getQuestionType());
         question.setIsRequired(request.getIsRequired() != null ? request.getIsRequired() : true);
 
-        // Handle question config based on type
-        String configJson = null;
-        switch (request.getQuestionType()) {
-            case ranking:
-                if (request.getRankingConfig() != null) {
-                    configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(),
-                            request.getRankingConfig());
-                }
-                break;
-            case file_upload:
-                if (request.getFileUploadConfig() != null) {
-                    configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(),
-                            request.getFileUploadConfig());
-                }
-                break;
-            case date_time:
-                if (request.getDateTimeConfig() != null) {
-                    configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(),
-                            request.getDateTimeConfig());
-                }
-                break;
-            default:
-                // No additional config needed for other types
-                break;
-        }
-        question.setQuestionConfig(configJson);
+        // Note: Using simplified approach - only basic fields needed
+        // Chỉ lưu thông tin cơ bản: surveyId, questionText, questionType, isRequired
 
         // set display order to max + 1 within survey
         int maxOrder = questionRepository.findMaxDisplayOrderBySurvey(survey);
@@ -261,64 +212,7 @@ public class QuestionService {
 
         if (request.getQuestionType() != null) {
             question.setQuestionType(request.getQuestionType());
-
-            // Update question config when type changes
-            String configJson = null;
-            switch (request.getQuestionType()) {
-                case ranking:
-                    if (request.getRankingConfig() != null) {
-                        configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(),
-                                request.getRankingConfig());
-                    }
-                    break;
-                case file_upload:
-                    if (request.getFileUploadConfig() != null) {
-                        configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(),
-                                request.getFileUploadConfig());
-                    }
-                    break;
-                case date_time:
-                    if (request.getDateTimeConfig() != null) {
-                        configJson = questionConfigHelper.serializeQuestionConfig(request.getQuestionType(),
-                                request.getDateTimeConfig());
-                    }
-                    break;
-                default:
-                    // Clear config for simple types
-                    configJson = null;
-                    break;
-            }
-            question.setQuestionConfig(configJson);
-        } else {
-            // Update config for existing type
-            if (question.getQuestionType() != null) {
-                String configJson = null;
-                switch (question.getQuestionType()) {
-                    case ranking:
-                        if (request.getRankingConfig() != null) {
-                            configJson = questionConfigHelper.serializeQuestionConfig(question.getQuestionType(),
-                                    request.getRankingConfig());
-                        }
-                        break;
-                    case file_upload:
-                        if (request.getFileUploadConfig() != null) {
-                            configJson = questionConfigHelper.serializeQuestionConfig(question.getQuestionType(),
-                                    request.getFileUploadConfig());
-                        }
-                        break;
-                    case date_time:
-                        if (request.getDateTimeConfig() != null) {
-                            configJson = questionConfigHelper.serializeQuestionConfig(question.getQuestionType(),
-                                    request.getDateTimeConfig());
-                        }
-                        break;
-                    default:
-                        break;
-                }
-                if (configJson != null) {
-                    question.setQuestionConfig(configJson);
-                }
-            }
+            // Note: Using simplified approach without complex configurations
         }
 
         if (request.getIsRequired() != null) {
