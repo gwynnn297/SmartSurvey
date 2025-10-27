@@ -832,3 +832,371 @@ def get_latest_analysis(survey_id: int, kind: str):
             continue
     return {"ok": False, "message": f"No analysis with kind={kind}"}
 
+# ============================================================
+# ============ SPRINT 4 (Optimal): Survey Generation =========
+# - Templates/rules in DB tables (no survey_id FK)
+# - Gemini generation + validator (rules from DB)
+# - History into ai_survey_gen_history
+# ============================================================
+
+from pydantic import BaseModel, Field
+from typing import Optional as _Opt, List as _L, Dict as _D
+import json, os, re, time
+import httpx
+
+# -------- ENV / runtime knobs --------
+GEMINI_URL  = os.getenv("GEMINI_URL") or os.getenv("EXT_SENTI_URL") \
+              or "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+GEMINI_KEY  = os.getenv("GEMINI_KEY") or os.getenv("EXT_SENTI_KEY") or ""
+GEN_TIMEOUT = float(os.getenv("GEN_TIMEOUT", "12.0"))
+GEN_RETRY   = int(os.getenv("GEN_MAX_RETRY", "3"))
+GEN_BACKOFF = float(os.getenv("GEN_BACKOFF_K", "1.4"))
+CFG_TTL_SEC = float(os.getenv("SURVEY_CFG_TTL_SEC", "300"))
+POOL_N      = int(os.getenv("SURVEY_GEN_POOL", "12"))
+
+# -------- In-memory cache for config --------
+_CFG = {"loaded_at": 0.0, "templates_by_industry": {}, "rules": {"BLOCK": [], "LEADING": []}}
+
+def _cfg_reload(force=False):
+    now = time.time()
+    if not force and now - _CFG["loaded_at"] < CFG_TTL_SEC:
+        return
+
+    # 1) Load templates từ ai_survey_industry
+    rows = sql_all("""
+        SELECT code AS industry, COALESCE(templates, '[]') AS tpls
+        FROM ai_survey_industry
+        WHERE is_active = 1
+    """, ())
+    tpl_map = {}
+    for r in rows or []:
+        ind = r["industry"] if isinstance(r, dict) else r[0]
+        tpls_json = r["tpls"] if isinstance(r, dict) else r[1]
+        try:
+            tpl_map[ind] = json.loads(tpls_json or "[]")
+        except Exception:
+            tpl_map[ind] = []
+
+    # 2) Load rules từ ai_survey_rule (map rule_type -> kind, pattern -> value)
+    rows = sql_all("""
+        SELECT
+          CASE WHEN rule_type = 'LEADING' THEN 'LEADING' ELSE 'BLOCK' END AS kind,
+          pattern AS value,
+          COALESCE(lang, 'vi') AS lang
+        FROM ai_survey_rule
+        WHERE is_active = 1
+    """, ())
+    rules = {"BLOCK": [], "LEADING": []}
+    for r in rows or []:
+        kind = r["kind"] if isinstance(r, dict) else r[0]
+        value = r["value"] if isinstance(r, dict) else r[1]
+        lang  = r["lang"]  if isinstance(r, dict) else r[2]
+        if lang == "vi" and (value or "").strip():
+            rules[kind].append(value.strip())
+
+    _CFG["templates_by_industry"] = tpl_map
+    _CFG["rules"] = rules
+    _CFG["loaded_at"] = now
+
+def _get_templates(industry: str) -> list[str]:
+    _cfg_reload(False)
+    m = _CFG["templates_by_industry"]
+    return m.get(industry) or m.get("general", []) or []
+
+def _rules():
+    _cfg_reload(False)
+    r = _CFG["rules"]
+    return set(map(str.lower, r.get("BLOCK", []))), list(map(str.lower, r.get("LEADING", [])))
+
+# -------- Schemas --------
+class TemplatePack(BaseModel):
+    industry: str = Field(..., description="e.g., retail, education, fintech, ...")
+    templates: _L[str]
+
+class GenReq(BaseModel):
+    topic: str
+    industry: str = "general"
+    n: int = Field(10, ge=3, le=30)
+    language: str = "vi"
+    use_llm: bool = True
+    survey_id: _Opt[int] = Field(None, description="(optional) attach to a real survey when storing history")
+    user_id: _Opt[int] = None
+
+class GenResp(BaseModel):
+    topic: str
+    industry: str
+    language: str
+    n: int
+    questions: _L[str]
+    source: str               # gemini | fallback
+    validation: _D[str, int]
+    history_id: _Opt[int] = None
+
+# -------- Validator --------
+def _validate(qs: _L[str]) -> _L[str]:
+    block, leading = _rules()
+    out, seen = [], set()
+    for q in qs:
+        q = re.sub(r"\s+", " ", (q or "").strip())
+        if not q: continue
+        tl = q.lower()
+        if any(p in tl for p in leading):  # loại dẫn dắt
+            continue
+        if any(w in tl for w in block):    # loại cảm tính/cường điệu
+            continue
+        if not q.endswith("?"):
+            q += "?"
+        if len(q) < 8 or len(q) > 300:     # độ dài an toàn
+            continue
+        key = tl
+        if key in seen:  # bỏ trùng
+            continue
+        seen.add(key)
+        out.append(q)
+    return out
+
+# -------- Fallback (TF-IDF trên templates DB) --------
+def _fallback(topic: str, industry: str, n: int) -> _L[str]:
+    pool = _get_templates(industry)
+    if not pool:
+        pool = [
+            "Bạn đánh giá mức độ hài lòng chung về {topic} như thế nào?",
+            "Những điều cần cải thiện đối với {topic} là gì?",
+            "Bạn có sẵn sàng giới thiệu {topic} cho người khác không?",
+            "Những yếu tố ảnh hưởng lớn nhất đến trải nghiệm với {topic} là gì?",
+            "Góp ý cụ thể để nâng cao chất lượng {topic}."
+        ]
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        import numpy as _np
+        vec = TfidfVectorizer(ngram_range=(1,2), max_features=3000)
+        X = vec.fit_transform(pool)
+        qv = vec.transform([topic])
+        sims = (qv @ X.T).A1
+        idx = sims.argsort()[::-1][:max(n, min(POOL_N, len(pool)))]
+        picked = [pool[i].format(topic=topic) for i in idx]
+        return picked[:n]
+    except Exception:
+        # nếu sklearn không có, trả ngẫu nhiên đơn giản
+        return [t.format(topic=topic) for t in pool][:n]
+
+# -------- Gemini caller (JSON array string) --------
+def _gemini_call(payload: dict) -> _L[str]:
+    backoff = 0.0
+    for _try in range(1, GEN_RETRY+1):
+        try:
+            with httpx.Client(timeout=GEN_TIMEOUT) as cli:
+                r = cli.post(f"{GEMINI_URL}?key={GEMINI_KEY}", json=payload)
+            if r.status_code == 429:
+                backoff = backoff * GEN_BACKOFF + 0.7
+                time.sleep(min(3.0, backoff))
+                continue
+            r.raise_for_status()
+            data = r.json()
+            txt = (data.get("candidates") or [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "[]").strip()
+            arr = json.loads(txt) if txt.startswith("[") else []
+            return [str(x) for x in arr]
+        except Exception:
+            time.sleep(0.25 * _try)
+    return []
+
+def _prompt(topic: str, industry: str, n: int, lang: str) -> dict:
+    tpls = _get_templates(industry)[:15]
+    schema = {"type":"array","items":{"type":"string"},"minItems":max(3,n),"maxItems":max(3,n)}
+    guidance = (
+        f"Bạn là chuyên gia thiết kế khảo sát bằng tiếng {'Việt' if lang=='vi' else 'Anh'}.\n"
+        f"Chủ đề: {topic}\nNgành: {industry}\n"
+        f"Yêu cầu: sinh đúng {n} câu hỏi rõ ràng, một ý, tránh dẫn dắt/cường điệu, kết thúc bằng dấu hỏi.\n"
+        f"Tham khảo các pattern (nếu phù hợp, thay {{topic}} đúng ngữ cảnh):\n" +
+        "\n".join(f"- {t}" for t in tpls) +
+        "\nChỉ trả JSON Array các chuỗi câu hỏi, không kèm giải thích."
+    ).strip()
+    return {
+        "contents": [{"parts": [{"text": guidance}]}],
+        "generationConfig": {
+            "temperature": 0.2, "topP": 1, "topK": 1, "candidateCount": 1,
+            "responseMimeType": "application/json",
+            "responseSchema": schema
+        }
+    }
+
+# -------- Endpoints: config (templates/rules) --------
+@app.post("/ai/survey/templates/upsert", tags=["SurveyGen"])
+def upsert_template_pack(pack: TemplatePack):
+    sql_exec("""
+        INSERT INTO ai_survey_industry (code, name, templates, is_active, updated_at)
+        VALUES (%s, %s, %s, 1, NOW())
+        ON DUPLICATE KEY UPDATE
+            templates = VALUES(templates),
+            is_active = 1,
+            updated_at = NOW()
+    """, (pack.industry, pack.industry, json.dumps(pack.templates, ensure_ascii=False)))
+    _cfg_reload(True)
+    return {"ok": True, "industry": pack.industry, "count": len(pack.templates)}
+
+
+@app.get("/ai/survey/templates", tags=["SurveyGen"])
+def list_template_packs():
+    _cfg_reload(True)
+    rows = sql_all("""
+        SELECT code AS industry,
+               JSON_LENGTH(templates) AS size,
+               is_active,
+               updated_at
+        FROM ai_survey_industry
+        ORDER BY code
+    """, ())
+    out = []
+    for r in rows or []:
+        ind        = r["industry"] if isinstance(r, dict) else r[0]
+        size       = r["size"]     if isinstance(r, dict) else r[1]
+        is_active  = r["is_active"]if isinstance(r, dict) else r[2]
+        updated_at = r["updated_at"] if isinstance(r, dict) else r[3]
+        out.append({
+            "industry": ind,
+            "size": int(size or 0),
+            "is_active": bool(is_active),
+            "updated_at": str(updated_at) if updated_at else None
+        })
+    return {"ok": True, "packs": out}
+
+class RuleReq(BaseModel):
+    rule_type: str = Field(..., pattern="^(BLOCK|LEADING)$")
+    pattern: str
+    lang: str = "vi"
+    is_active: bool = True
+    industry_code: _Opt[str] = None  # nếu không dùng theo ngành, để None
+
+@app.post("/ai/survey/rules/add", tags=["SurveyGen"])
+def add_rule(req: RuleReq):
+    sql_exec("""
+        INSERT INTO ai_survey_rule (industry_code, rule_type, pattern, lang, is_active)
+        VALUES (%s,%s,%s,%s,%s)
+        ON DUPLICATE KEY UPDATE
+            is_active = VALUES(is_active),
+            pattern   = VALUES(pattern),
+            lang      = VALUES(lang)
+    """, (req.industry_code, req.rule_type, req.pattern.strip(), req.lang, 1 if req.is_active else 0))
+    _cfg_reload(True)
+    return {"ok": True}
+
+@app.post("/ai/survey/config/reload", tags=["SurveyGen"])
+def reload_cfg():
+    _cfg_reload(True)
+    m = _CFG.get("templates_by_industry", {})
+    r = _CFG.get("rules", {"BLOCK": [], "LEADING": []})
+    return {
+        "ok": True,
+        "templates_industries": len(m),
+        "rules_block": len(r.get("BLOCK", [])),
+        "rules_leading": len(r.get("LEADING", []))
+    }
+
+# -------- Endpoint: generate --------
+@app.post("/ai/survey/generate", response_model=GenResp, tags=["SurveyGen"])
+def survey_generate(req: GenReq, db: Session = Depends(get_db)):
+    _cfg_reload(False)
+    if req.use_llm and GEMINI_KEY and GEMINI_URL:
+        raw = _gemini_call(_prompt(req.topic, req.industry, req.n, req.language))
+        source = "gemini" if raw else "fallback"
+    else:
+        raw, source = [], "fallback"
+    if not raw:
+        raw = _fallback(req.topic, req.industry, req.n)
+
+    # thay {topic} và validate
+    raw = [q.replace("{topic}", req.topic) for q in raw]
+    cleaned = _validate(raw)
+    if len(cleaned) < req.n:
+        # bù thêm từ pool fallback
+        extra = _validate(_fallback(req.topic, req.industry, POOL_N))
+        merged = []
+        seen = set()
+        for q in cleaned + extra:
+            k = q.casefold()
+            if k in seen: continue
+            seen.add(k); merged.append(q)
+        cleaned = merged[:req.n]
+
+    # lưu lịch sử (không buộc survey_id)
+    payload = {
+        "topic": req.topic, "industry": req.industry, "language": req.language,
+        "n": req.n, "questions": cleaned
+    }
+    sql_exec("""
+        INSERT INTO ai_survey_gen_history (survey_id, topic, industry, language, n, source, payload)
+        VALUES (%s,%s,%s,%s,%s,%s,%s)
+    """, (req.survey_id, req.topic, req.industry, req.language, req.n, source, json.dumps(payload, ensure_ascii=False)))
+    row = sql_one("SELECT LAST_INSERT_ID() AS id")
+    hist_id = int(row["id"]) if row and "id" in row else None
+
+    # (an toàn) ghi activity log nếu bạn đã có model ActivityLog
+    try:
+        db.add(ActivityLog(
+            user_id=req.user_id, action_type="ai_generate",
+            target_id=hist_id, target_table="ai_survey_gen_history",
+            description=f"SurveyGen {req.industry} / {req.topic}"
+        ))
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    return GenResp(
+        topic=req.topic, industry=req.industry, language=req.language, n=req.n,
+        questions=cleaned, source=source,
+        validation={"unique": len({q.casefold() for q in cleaned}), "total": len(cleaned)},
+        history_id=hist_id
+    )
+
+# -------- Optional: quick seed (≥5 industries) --------
+@app.post("/ai/survey/templates/seed", tags=["SurveyGen"])
+def seed_templates():
+    seeds = {
+        "general": [
+            "Bạn đánh giá mức độ hài lòng chung về {topic} như thế nào?",
+            "Những điều cần cải thiện đối với {topic} là gì?",
+            "Bạn có sẵn sàng giới thiệu {topic} cho người khác không?",
+            "Những yếu tố ảnh hưởng lớn nhất đến trải nghiệm với {topic} là gì?",
+            "Góp ý cụ thể để nâng cao chất lượng {topic}."
+        ],
+        "education": [
+            "Nội dung {topic} có rõ ràng và bám sát mục tiêu học tập không?",
+            "Tốc độ và khối lượng bài tập của {topic} có phù hợp không?",
+            "Mức độ hỗ trợ của giảng viên/assistant cho {topic} như thế nào?",
+            "Tài liệu và công cụ cho {topic} có đầy đủ/dễ dùng không?",
+            "Bạn mong muốn cải thiện gì cho {topic}?"
+        ],
+        "retail": [
+            "Bạn hài lòng thế nào với chất lượng sản phẩm liên quan {topic}?",
+            "Giá cả/khuyến mãi cho {topic} có hợp lý?",
+            "Quy trình thanh toán/giao hàng {topic} có thuận tiện?",
+            "Dịch vụ bảo hành/hậu mãi cho {topic} như thế nào?",
+            "Bạn có sẵn sàng mua lại/giới thiệu {topic}?"
+        ],
+        "fintech": [
+            "Trải nghiệm đăng ký/KYC cho {topic} có dễ dàng?",
+            "Tốc độ/độ ổn định giao dịch của {topic} có đáp ứng nhu cầu?",
+            "Thông tin phí và điều khoản của {topic} có minh bạch?",
+            "Bạn đánh giá mức độ an toàn/bảo mật của {topic} như thế nào?",
+            "CSKH của {topic} có phản hồi kịp thời?"
+        ],
+        "healthcare": [
+            "Thời gian chờ và quy trình cho {topic} có hợp lý?",
+            "Thái độ và chuyên môn của nhân viên y tế đối với {topic} như thế nào?",
+            "Cơ sở vật chất/vệ sinh liên quan {topic} có đảm bảo?",
+            "Chi phí cho {topic} có phù hợp với chất lượng nhận được?",
+            "Bạn có yên tâm giới thiệu dịch vụ {topic} cho người khác?"
+        ]
+    }
+    for ind, tpls in seeds.items():
+        sql_exec("""
+            INSERT INTO ai_survey_industry (code, name, templates, is_active, updated_at)
+            VALUES (%s, %s, %s, 1, NOW())
+            ON DUPLICATE KEY UPDATE
+                templates = VALUES(templates),
+                is_active = 1,
+                updated_at = NOW()
+        """, (ind, ind, json.dumps(tpls, ensure_ascii=False)))
+    _cfg_reload(True)
+    return {"ok": True, "seeded": list(seeds.keys())}
+
