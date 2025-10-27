@@ -36,6 +36,7 @@ public class OptionService {
         dto.setQuestionId(option.getQuestion().getQuestionId());
         dto.setQuestionText(option.getQuestion().getQuestionText());
         dto.setOptionText(option.getOptionText());
+       
         dto.setCreatedAt(option.getCreatedAt());
         dto.setUpdatedAt(option.getUpdatedAt());
         return dto;
@@ -70,6 +71,7 @@ public class OptionService {
         Option option = new Option();
         option.setQuestion(question);
         option.setOptionText(request.getOptionText());
+       
 
         Option saved = optionRepository.save(option);
 
@@ -100,6 +102,7 @@ public class OptionService {
         response.setQuestionId(optionDTO.getQuestionId());
         response.setQuestionText(optionDTO.getQuestionText());
         response.setOptionText(optionDTO.getOptionText());
+        
         response.setMessage("Tạo tùy chọn thành công!");
         response.setCreatedAt(optionDTO.getCreatedAt());
         response.setUpdatedAt(optionDTO.getUpdatedAt());
@@ -140,6 +143,7 @@ public class OptionService {
         if (request.getOptionText() != null && !request.getOptionText().isEmpty()) {
             option.setOptionText(request.getOptionText());
         }
+      
 
         Option saved = optionRepository.save(option);
 

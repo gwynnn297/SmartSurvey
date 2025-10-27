@@ -9,6 +9,7 @@ public class OptionUpdateResponseDTO {
     private Long questionId;
     private String questionText;
     private String optionText;
+    private Boolean isCorrect;
     private String message;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
