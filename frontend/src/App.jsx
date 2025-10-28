@@ -20,6 +20,7 @@ import PublicResponsePage from "./pages/Response/PublicResponsePage";
 import ShareSurveyPage from "./pages/Survey/ShareSurveyPage";
 import ViewLinkSharePage from "./pages/Response/ViewLinkSharePage";
 import OpenFeedbackPage from "./pages/report/OpenFeedbackPage";
+import IndividualResponsesPage from "./pages/report/IndividualResponsesPage";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -135,6 +136,14 @@ function App() {
           element={
             <PrivateRoute>
               <OpenFeedbackPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/report/individual-responses"
+          element={
+            <PrivateRoute>
+              <IndividualResponsesPage />
             </PrivateRoute>
           }
         />

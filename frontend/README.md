@@ -102,6 +102,7 @@ $env:DB_USERNAME = "root"
 $env:DB_PASSWORD = password
 $env:MYSQL_HOST  = "localhost"
 
+# General Survey 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 $env:GEMINI_API_KEY = 'AIzaSyC2rBe8abSir3_J_oG2mskGDj6zBR2uNU0'
@@ -109,6 +110,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
 
 
 # Phân tích cảm xúc 
+.\.venv\Scripts\Activate.ps1
 python -m uvicorn app:app --reload
 
 test QR thì vào 

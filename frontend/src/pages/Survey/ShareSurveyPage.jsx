@@ -109,7 +109,7 @@ const ShareSurveyPage = () => {
 
             // ✅ Đổi URL chứa respondentToken
             const newShareLink = `${window.location.origin}/response/${id}?respondentToken=${newToken}`;
-            
+
             setSurvey((prev) => ({
                 ...prev,
                 link: newShareLink,

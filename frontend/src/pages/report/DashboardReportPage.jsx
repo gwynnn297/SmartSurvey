@@ -114,7 +114,7 @@ export default function DashboardReportPage() {
                             </svg>
                         )}
                     />
-                    
+
                 </section>
 
                 <section className="report-panels">
@@ -143,9 +143,9 @@ export default function DashboardReportPage() {
                         <span className="btn-icon" aria-hidden="true">📊</span>
                         Xem thống kê chi tiết
                     </button>
-                    <button className="btn green" onClick={() => navigate('/report/open-feedback')}>
+                    <button className="btn green" onClick={() => navigate('/report/individual-responses')}>
                         <span className="btn-icon" aria-hidden="true">🧠</span>
-                        Phân tích phản hồi mở
+                        Danh sách phản hồi
                     </button>
                     <button className="btn teal" onClick={() => navigate('/report/sentiment')}>
                         <span className="btn-icon" aria-hidden="true">😊</span>
