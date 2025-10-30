@@ -35,6 +35,9 @@ public class Response {
     @Column(name = "submitted_at", updatable = false)
     private LocalDateTime submittedAt;
 
+    @Column(name = "duration_seconds")
+    private Integer durationSeconds;
+
     @PrePersist
     protected void onCreate() {
         submittedAt = LocalDateTime.now();

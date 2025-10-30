@@ -1,10 +1,12 @@
 package vn.duytan.c1se09.smartsurvey.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import vn.duytan.c1se09.smartsurvey.service.SurveyViewService;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyResponseDTO;
@@ -27,6 +29,7 @@ import jakarta.validation.Valid;
 @RequiredArgsConstructor
 public class SurveyController {
     private final SurveyService surveyService;
+    private final SurveyViewService surveyViewService;
 
     // Endpoint hợp nhất: luôn trả về danh sách phân trang
     @GetMapping
@@ -91,8 +94,23 @@ public class SurveyController {
      */
     @GetMapping("/{id}/public")
     @ApiMessage("Get survey public information for response")
-    public ResponseEntity<?> getSurveyPublic(@PathVariable("id") Long id) {
+    public ResponseEntity<?> getSurveyPublic(@PathVariable("id") Long id, HttpServletRequest request) {
         try {
+            // Tự động track view khi mở form
+            try {
+                String ipAddress = getClientIpAddress(request);
+                String userAgent = request.getHeader("User-Agent");
+                if (userAgent == null) userAgent = "Unknown";
+                
+                System.out.println("DEBUG: Tracking view for survey " + id + " from IP " + ipAddress);
+                surveyViewService.trackView(id, ipAddress, userAgent);
+                System.out.println("DEBUG: Successfully tracked view for survey " + id);
+            } catch (Exception e) {
+                // Log error nhưng không fail việc lấy survey
+                System.err.println("ERROR: Failed to track view for survey " + id + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+            
             SurveyPublicResponseDTO surveyPublic = surveyService.getSurveyPublic(id);
             return ResponseEntity.ok(surveyPublic);
         } catch (IdInvalidException e) {
@@ -126,6 +144,23 @@ public class SurveyController {
             default:
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(statusResponse);
         }
+    }
+
+    /**
+     * Lấy IP address thực của client (xử lý proxy/load balancer)
+     */
+    private String getClientIpAddress(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isEmpty() && !"unknown".equalsIgnoreCase(xForwardedFor)) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (xRealIp != null && !xRealIp.isEmpty() && !"unknown".equalsIgnoreCase(xRealIp)) {
+            return xRealIp;
+        }
+        
+        return request.getRemoteAddr();
     }
 
 }

@@ -24,4 +24,6 @@ public interface QuestionRepository extends JpaRepository<Question, Long> {
 
     @Query("SELECT COALESCE(MAX(q.displayOrder), 0) FROM Question q WHERE q.survey = :survey")
     int findMaxDisplayOrderBySurvey(@Param("survey") Survey survey);
+    
+    List<Question> findBySurveyAndIsRequiredTrue(Survey survey);
 }

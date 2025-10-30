@@ -7,6 +7,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import vn.duytan.c1se09.smartsurvey.domain.request.response.ResponseSubmitRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.response.ResponseWithAnswersDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.response.ResponseSummaryDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.response.ResponsePageDTO;
+import vn.duytan.c1se09.smartsurvey.domain.request.response.ResponseFilterRequestDTO;
 import vn.duytan.c1se09.smartsurvey.service.ResponseService;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
@@ -14,6 +17,7 @@ import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
@@ -36,36 +40,57 @@ public class ResponseController {
 			@RequestParam("surveyId") Long surveyId,
 			@RequestParam("answers") String answersJson,
 			@RequestParam Map<String, MultipartFile> files) throws IdInvalidException {
-
 		return ResponseEntity.ok(responseService.submitResponseWithFiles(surveyId, answersJson, files));
 	}
 
-	@GetMapping("/responses/{surveyId}")
-	@ApiMessage("Get responses by survey")
-	public ResponseEntity<List<ResponseWithAnswersDTO>> getResponsesBySurvey(@PathVariable("surveyId") Long surveyId)
-			throws IdInvalidException {
-		return ResponseEntity.ok(responseService.getResponsesBySurvey(surveyId));
+	// Responses APIs (standardized URLs)
+	/**
+	 * List responses with pagination + filtering + search
+	 */
+	@GetMapping("/api/surveys/{surveyId}/responses")
+	@ApiMessage("List responses (paginated)")
+	public ResponseEntity<ResponsePageDTO<ResponseSummaryDTO>> listResponses(
+			@PathVariable Long surveyId,
+			ResponseFilterRequestDTO filter) throws IdInvalidException {
+		return ResponseEntity.ok(responseService.listResponses(surveyId, filter));
 	}
 
-	@GetMapping("/responses/{surveyId}/count")
-	@ApiMessage("Get response count by survey")
-	public ResponseEntity<Map<String, Object>> getResponseCount(@PathVariable("surveyId") Long surveyId)
-			throws IdInvalidException {
-		long count = responseService.getResponseCountBySurvey(surveyId);
-		Map<String, Object> response = new HashMap<>();
-		response.put("surveyId", surveyId);
-		response.put("totalResponses", count);
-		return ResponseEntity.ok(response);
+	/**
+	 * Get response detail with all answers
+	 */
+	@GetMapping("/api/responses/{responseId}")
+	@ApiMessage("Get response detail")
+	public ResponseEntity<ResponseWithAnswersDTO> getResponseDetail(@PathVariable Long responseId) throws IdInvalidException {
+		return ResponseEntity.ok(responseService.getResponseDetail(responseId));
 	}
 
-	@GetMapping("/responses/total-count")
-	@ApiMessage("Get total response count for all surveys")
-	public ResponseEntity<Map<String, Object>> getTotalResponseCount() {
-		long totalCount = responseService.getTotalResponseCount();
-		Map<String, Object> response = new HashMap<>();
-		response.put("totalResponses", totalCount);
-		response.put("message", "Tổng số responses của tất cả survey");
-		return ResponseEntity.ok(response);
+	/**
+	 * Export CSV/Excel
+	 */
+	@PostMapping("/api/surveys/{surveyId}/responses/export")
+	@ApiMessage("Export responses CSV/Excel")
+	public ResponseEntity<byte[]> exportResponses(
+			@PathVariable Long surveyId,
+			@RequestParam(name = "format", defaultValue = "csv") String format,
+			@RequestParam(name = "includeAnswers", defaultValue = "true") boolean includeAnswers,
+			ResponseFilterRequestDTO filter) throws IdInvalidException {
+		return responseService.exportResponses(surveyId, filter, format, includeAnswers);
 	}
+
+	/**
+	 * Bulk delete responses
+	 */
+	@DeleteMapping("/api/surveys/{surveyId}/responses")
+	@ApiMessage("Bulk delete responses")
+	public ResponseEntity<Map<String, Object>> bulkDelete(
+			@PathVariable Long surveyId,
+			@RequestBody List<Long> responseIds) throws IdInvalidException {
+		int deleted = responseService.bulkDelete(surveyId, responseIds);
+		Map<String, Object> resp = new HashMap<>();
+		resp.put("deleted", deleted);
+		resp.put("requested", responseIds != null ? responseIds.size() : 0);
+		return ResponseEntity.ok(resp);
+	}
+
 
 }

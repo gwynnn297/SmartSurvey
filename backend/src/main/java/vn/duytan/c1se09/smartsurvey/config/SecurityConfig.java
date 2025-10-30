@@ -91,6 +91,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/responses/with-files").authenticated()
                         .requestMatchers("/api/responses/**").authenticated()
                         .requestMatchers("/surveys/**").authenticated()
+                        .requestMatchers("/api/surveys/**").authenticated()
                         .requestMatchers("/questions/**").authenticated()
                         .requestMatchers("/options/**").authenticated()
                         .requestMatchers("/categories/**").authenticated()

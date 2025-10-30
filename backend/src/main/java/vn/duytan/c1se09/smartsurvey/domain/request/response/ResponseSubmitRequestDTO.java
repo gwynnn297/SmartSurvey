@@ -13,6 +13,9 @@ public class ResponseSubmitRequestDTO {
 
 	private String requestToken;
 
+	// Thời gian làm survey (giây) - FE tự động tính và gửi
+	private Integer durationSeconds;
+
 	@Valid
 	@NotNull(message = "answers không được trống")
 	private List<AnswerSubmitDTO> answers;

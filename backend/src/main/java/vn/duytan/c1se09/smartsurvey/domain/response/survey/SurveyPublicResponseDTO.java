@@ -14,7 +14,7 @@ public class SurveyPublicResponseDTO {
     private String description;
     private String status;
     private String categoryName;
-    private LocalDateTime createdAt;
+        private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     
     // Danh sách câu hỏi công khai (không có AI prompt, user info)

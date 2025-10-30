@@ -44,6 +44,8 @@ dependencies {
     implementation("org.thymeleaf.extras:thymeleaf-extras-springsecurity6")
 
     implementation("com.turkraft.springfilter:jpa:3.1.7")
+    // Excel export
+    implementation("org.apache.poi:poi-ooxml:5.3.0")
 
     // Flyway chạy lúc ứng dụng start
     implementation("org.flywaydb:flyway-core:11.7.2")
@@ -62,6 +64,7 @@ dependencies {
 
     // MySQL driver cho ứng dụng
     runtimeOnly("com.mysql:mysql-connector-j:9.0.0")
+
 
     // Test
     testImplementation("org.springframework.boot:spring-boot-starter-test")

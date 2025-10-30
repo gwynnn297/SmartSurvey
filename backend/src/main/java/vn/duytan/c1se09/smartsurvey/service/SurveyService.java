@@ -33,6 +33,7 @@ public class SurveyService {
     private final CategoryRepository categoryRepository;
     private final QuestionRepository questionRepository;
     private final OptionRepository optionRepository;
+    private final ResponseRepository responseRepository;
     private final AuthService authService;
     private final ActivityLogService activityLogService;
 
