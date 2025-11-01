@@ -138,7 +138,7 @@ const cloneQuestion = (question) => {
 
     // Handle choice_type for multiple_choice and single_choice
     if (question.question_type === 'multiple_choice' || question.question_type === 'single_choice') {
-        cloned.choice_type = question.choice_type || 
+        cloned.choice_type = question.choice_type ||
             (question.question_type === 'multiple_choice' ? 'multiple' : 'single');
     } else {
         delete cloned.choice_type;
@@ -185,8 +185,8 @@ const normalizeQuestionData = (rawQuestion) => {
         return {
             ...base,
             options: mappedOptions,
-            choice_type: rawQuestion.choice_type || rawQuestion.choiceType || 
-                         (normalizedType === 'multiple_choice' ? 'multiple' : 'single')
+            choice_type: rawQuestion.choice_type || rawQuestion.choiceType ||
+                (normalizedType === 'multiple_choice' ? 'multiple' : 'single')
         };
     }
 
@@ -579,7 +579,7 @@ const CreateSurvey = () => {
             const current = { ...next[index], question_type: type };
 
             if (type === 'multiple_choice' || type === 'single_choice') {
-                current.choice_type = choiceType || current.choice_type || 
+                current.choice_type = choiceType || current.choice_type ||
                     (type === 'multiple_choice' ? 'multiple' : 'single');
                 current.options = (current.options && current.options.length > 0)
                     ? current.options
@@ -632,10 +632,10 @@ const CreateSurvey = () => {
         setQuestions(prev => {
             const currentQuestion = prev[questionIndex];
             // Allow adding options for multiple_choice, single_choice, and ranking
-            if (!currentQuestion || 
-                (currentQuestion.question_type !== 'multiple_choice' && 
-                 currentQuestion.question_type !== 'single_choice' && 
-                 currentQuestion.question_type !== 'ranking')) {
+            if (!currentQuestion ||
+                (currentQuestion.question_type !== 'multiple_choice' &&
+                    currentQuestion.question_type !== 'single_choice' &&
+                    currentQuestion.question_type !== 'ranking')) {
                 return prev;
             }
             const next = [...prev];
@@ -729,10 +729,10 @@ const CreateSurvey = () => {
             setQuestions(prev => {
                 const currentQuestion = prev[questionIndex];
                 // Allow deleting options for multiple_choice, single_choice, and ranking
-                if (!currentQuestion || 
-                    (currentQuestion.question_type !== 'multiple_choice' && 
-                     currentQuestion.question_type !== 'single_choice' && 
-                     currentQuestion.question_type !== 'ranking')) {
+                if (!currentQuestion ||
+                    (currentQuestion.question_type !== 'multiple_choice' &&
+                        currentQuestion.question_type !== 'single_choice' &&
+                        currentQuestion.question_type !== 'ranking')) {
                     return prev;
                 }
                 const next = [...prev];
@@ -769,7 +769,7 @@ const CreateSurvey = () => {
         autoSaveTimeoutRef.current = setTimeout(async () => {
             try {
                 setAutoSaveStatus('saving');
-                
+
                 const payload = {
                     title: surveyData.title,
                     description: surveyData.description,
@@ -778,7 +778,7 @@ const CreateSurvey = () => {
                 };
 
                 await surveyService.updateSurvey(editSurveyId, payload);
-                
+
                 setAutoSaveStatus('saved');
                 setTimeout(() => setAutoSaveStatus('idle'), 2000);
             } catch (err) {
@@ -894,8 +894,8 @@ const CreateSurvey = () => {
                 newErrors[`question_${idx}`] = 'Nội dung câu hỏi là bắt buộc';
             }
             // Validate options for questions that need them
-            if (q.question_type === 'multiple_choice' || 
-                q.question_type === 'single_choice' || 
+            if (q.question_type === 'multiple_choice' ||
+                q.question_type === 'single_choice' ||
                 q.question_type === 'ranking') {
                 const validOpts = q.options?.filter(o => o.option_text.trim());
                 if (!validOpts || validOpts.length < 2) {
@@ -1359,12 +1359,16 @@ const CreateSurvey = () => {
                 setEditSurveyId(surveyId);
             }
 
-            // Chuyển đến trang SentimentPage với surveyId cụ thể
-            navigate('/report/sentiment', {
+            // Chuyển đến trang DashboardReportPage với surveyId cụ thể
+            navigate('/report', {
                 state: {
                     surveyId: surveyId,
                     surveyTitle: surveyData.title,
-                    surveyDescription: surveyData.description
+                    surveyDescription: surveyData.description,
+                    surveyData: surveyData,
+                    questions: questions,
+                    questionsCount: questions.length,
+                    isFromCreateSurvey: true
                 }
             });
 
@@ -1885,7 +1889,7 @@ const CreateSurvey = () => {
 
                                                         const oldIndex = activeQuestion.options.findIndex(opt => opt.id === active.id);
                                                         const newIndex = activeQuestion.options.findIndex(opt => opt.id === over.id);
-                                                        
+
                                                         const newOptions = arrayMove(activeQuestion.options, oldIndex, newIndex);
                                                         setQuestions(prev => {
                                                             const next = [...prev];
@@ -2091,8 +2095,8 @@ const CreateSurvey = () => {
                     <div className="mobile-view-container" onClick={(e) => e.stopPropagation()}>
                         <div className="mobile-view-header">
                             <h3>Xem trước trên Mobile</h3>
-                            <button 
-                                className="mobile-view-close" 
+                            <button
+                                className="mobile-view-close"
                                 onClick={() => setShowMobileView(false)}
                                 aria-label="Đóng xem trước"
                             >
@@ -2116,33 +2120,33 @@ const CreateSurvey = () => {
                                                         </p>
                                                     )}
                                                 </div>
-                                                
+
                                                 {preview.questions.map((q, idx) => (
-                                                    <div key={q.id || idx} style={{ 
-                                                        background: '#f8fafc', 
-                                                        border: '1px solid #e2e8f0', 
-                                                        borderRadius: '8px', 
-                                                        padding: '16px', 
-                                                        marginBottom: '16px' 
+                                                    <div key={q.id || idx} style={{
+                                                        background: '#f8fafc',
+                                                        border: '1px solid #e2e8f0',
+                                                        borderRadius: '8px',
+                                                        padding: '16px',
+                                                        marginBottom: '16px'
                                                     }}>
-                                                        <h3 style={{ 
-                                                            fontSize: '16px', 
-                                                            fontWeight: '600', 
+                                                        <h3 style={{
+                                                            fontSize: '16px',
+                                                            fontWeight: '600',
                                                             margin: '0 0 12px 0',
-                                                            color: '#1e293b' 
+                                                            color: '#1e293b'
                                                         }}>
                                                             {q.text || 'Câu hỏi'}
                                                             {q.is_required && <span style={{ color: '#ef4444', marginLeft: '4px' }}>*</span>}
                                                         </h3>
-                                                        
+
                                                         {/* Render preview of question type */}
                                                         {q.type === 'open-ended' && (
-                                                            <textarea 
-                                                                disabled 
-                                                                style={{ 
-                                                                    width: '100%', 
-                                                                    padding: '12px', 
-                                                                    border: '1px solid #cbd5e1', 
+                                                            <textarea
+                                                                disabled
+                                                                style={{
+                                                                    width: '100%',
+                                                                    padding: '12px',
+                                                                    border: '1px solid #cbd5e1',
                                                                     borderRadius: '6px',
                                                                     fontSize: '14px',
                                                                     resize: 'vertical',
@@ -2151,18 +2155,18 @@ const CreateSurvey = () => {
                                                                 placeholder="Nhập câu trả lời..."
                                                             />
                                                         )}
-                                                        
+
                                                         {(q.type === 'multiple-choice-single' || q.type === 'multiple-choice-multiple' || q.type === 'boolean') && q.options && (
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                                 {q.options.map((opt, optIdx) => (
-                                                                    <label key={optIdx} style={{ 
-                                                                        display: 'flex', 
-                                                                        alignItems: 'center', 
+                                                                    <label key={optIdx} style={{
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
                                                                         gap: '10px',
                                                                         cursor: 'pointer'
                                                                     }}>
-                                                                        <input 
-                                                                            type={q.type === 'multiple-choice-multiple' ? 'checkbox' : 'radio'} 
+                                                                        <input
+                                                                            type={q.type === 'multiple-choice-multiple' ? 'checkbox' : 'radio'}
                                                                             disabled
                                                                             style={{ width: '18px', height: '18px' }}
                                                                         />
@@ -2173,26 +2177,26 @@ const CreateSurvey = () => {
                                                                 ))}
                                                             </div>
                                                         )}
-                                                        
+
                                                         {q.type === 'ranking' && q.options && (
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                                 {q.options.map((opt, optIdx) => (
-                                                                    <div key={optIdx} style={{ 
-                                                                        display: 'flex', 
-                                                                        alignItems: 'center', 
+                                                                    <div key={optIdx} style={{
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
                                                                         gap: '12px',
                                                                         padding: '12px',
                                                                         background: '#fff',
                                                                         border: '1px solid #e2e8f0',
                                                                         borderRadius: '6px'
                                                                     }}>
-                                                                        <div style={{ 
-                                                                            minWidth: '32px', 
-                                                                            height: '32px', 
-                                                                            background: 'linear-gradient(135deg, #6366f1, #7c3aed)', 
-                                                                            borderRadius: '50%', 
-                                                                            display: 'flex', 
-                                                                            alignItems: 'center', 
+                                                                        <div style={{
+                                                                            minWidth: '32px',
+                                                                            height: '32px',
+                                                                            background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
+                                                                            borderRadius: '50%',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
                                                                             justifyContent: 'center',
                                                                             color: '#fff',
                                                                             fontWeight: '600',
@@ -2207,7 +2211,7 @@ const CreateSurvey = () => {
                                                                 ))}
                                                             </div>
                                                         )}
-                                                        
+
                                                         {q.type === 'rating-scale' && (
                                                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                                                                 {[1, 2, 3, 4, 5].map(num => (
@@ -2230,13 +2234,13 @@ const CreateSurvey = () => {
                                                                 ))}
                                                             </div>
                                                         )}
-                                                        
+
                                                         {q.type === 'date_time' && (
                                                             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                                                <input 
-                                                                    type="date" 
-                                                                    disabled 
-                                                                    style={{ 
+                                                                <input
+                                                                    type="date"
+                                                                    disabled
+                                                                    style={{
                                                                         flex: 1,
                                                                         minWidth: '120px',
                                                                         padding: '12px',
@@ -2246,10 +2250,10 @@ const CreateSurvey = () => {
                                                                         background: '#f8fafc'
                                                                     }}
                                                                 />
-                                                                <input 
-                                                                    type="time" 
-                                                                    disabled 
-                                                                    style={{ 
+                                                                <input
+                                                                    type="time"
+                                                                    disabled
+                                                                    style={{
                                                                         flex: 1,
                                                                         minWidth: '120px',
                                                                         padding: '12px',
@@ -2261,10 +2265,10 @@ const CreateSurvey = () => {
                                                                 />
                                                             </div>
                                                         )}
-                                                        
+
                                                         {q.type === 'file_upload' && (
-                                                            <div style={{ 
-                                                                border: '2px dashed #cbd5e1', 
+                                                            <div style={{
+                                                                border: '2px dashed #cbd5e1',
                                                                 borderRadius: '12px',
                                                                 padding: '24px',
                                                                 textAlign: 'center',
@@ -2281,11 +2285,11 @@ const CreateSurvey = () => {
                                                         )}
                                                     </div>
                                                 ))}
-                                                
-                                                <button 
+
+                                                <button
                                                     type="button"
                                                     disabled
-                                                    style={{ 
+                                                    style={{
                                                         width: '100%',
                                                         padding: '14px',
                                                         background: '#e5e7eb',
