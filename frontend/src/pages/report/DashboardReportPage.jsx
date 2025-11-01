@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
-import { dashboardReportService } from '../../services/dashboardReport';
+import { dashboardReportService } from '../../services/dashboardReportService';
 
 import './DashboardReportPage.css';
 
@@ -58,12 +58,21 @@ export default function DashboardReportPage() {
         completionRate: 0,
         averageTime: '0m',
         loading: true,
-        error: null
+        error: null,
+        isRealData: false,
+        fallbackReason: null
     });
 
     // State cho danh sách phản hồi gần đây
     const [recentResponses, setRecentResponses] = useState({
-        data: [],
+        hourlyData: [], // Dữ liệu theo giờ từ timeline API
+        loading: true,
+        error: null
+    });
+
+    // State cho thống kê số câu hỏi theo loại
+    const [questionCounts, setQuestionCounts] = useState({
+        data: null,
         loading: true,
         error: null
     });
@@ -89,19 +98,21 @@ export default function DashboardReportPage() {
     useEffect(() => {
         const fetchDashboardStats = async () => {
             if (!surveyId) {
-                // Nếu không có surveyId, sử dụng dữ liệu mặc định
+                // Nếu không có surveyId, sử dụng dữ liệu mặc định là 0
                 setDashboardStats(prev => ({
                     ...prev,
-                    totalResponses: isFromCreateSurvey ? questionsCount : 128,
-                    totalViews: isFromCreateSurvey ? 0 : 1000,
-                    completionRate: isFromCreateSurvey ? 0 : 95,
-                    averageTime: isFromCreateSurvey ? '0m' : '3.2m',
-                    loading: false
+                    totalResponses: 0,
+                    totalViews: 0,
+                    completionRate: 0,
+                    averageTime: '0m',
+                    loading: false,
+                    isRealData: false,
+                    fallbackReason: 'No surveyId provided'
                 }));
 
                 setRecentResponses(prev => ({
                     ...prev,
-                    data: [],
+                    hourlyData: [],
                     loading: false,
                     error: null
                 }));
@@ -112,30 +123,46 @@ export default function DashboardReportPage() {
                 setDashboardStats(prev => ({ ...prev, loading: true, error: null }));
                 setRecentResponses(prev => ({ ...prev, loading: true, error: null }));
 
-                // Gọi API để lấy thống kê phản hồi
-                const responseData = await dashboardReportService.getResponsesWithStats(surveyId, {
-                    filter: { page: 0, size: 1 }, // Chỉ cần thống kê, không cần dữ liệu chi tiết
-                    includeStats: true
-                });
+                // Gọi API tổng hợp từ StatisticsController với fallback mechanism
+                const dashboardData = await dashboardReportService.getDashboardData(surveyId);
 
-                // Gọi API để lấy danh sách phản hồi gần đây (5 phản hồi mới nhất)
-                const recentResponsesData = await dashboardReportService.listResponses(surveyId, {
-                    page: 0,
-                    size: 5,
-                    sortBy: 'submittedAt',
-                    sortDir: 'desc'
-                });
+                const { overview: overviewData, timeline: timelineData, questionCounts: questionCountsData, isRealData, fallbackReason } = dashboardData;
 
-                // Tính toán dữ liệu thống kê
-                const totalResponses = responseData.statistics?.totalResponses || responseData.totalElements || 0;
-                const completionRate = responseData.statistics?.completionRate || 0;
+                // Log data source information
+                if (isRealData) {
+                    console.log('✅ Using real data from StatisticsController APIs');
+                } else {
+                    console.log('📊 API returned fallback/mock data:', fallbackReason);
+                }
 
-                // Tính total views (giả sử = totalResponses * 1.5 cho demo, có thể thay đổi logic)
-                const totalViews = Math.floor(totalResponses * 1.5) || 0;
+                // Nếu không có dữ liệu thực (API lỗi hoặc fallback), hiển thị 0
+                if (!isRealData) {
+                    setDashboardStats(prev => ({
+                        ...prev,
+                        totalResponses: 0,
+                        totalViews: 0,
+                        completionRate: 0,
+                        averageTime: '0m',
+                        loading: false,
+                        error: 'Không thể lấy dữ liệu thống kê',
+                        isRealData: false,
+                        fallbackReason
+                    }));
 
-                // Tính average time (giả sử mỗi response mất 3.2 phút, có thể thay đổi logic)
-                const averageTimeMinutes = totalResponses > 0 ? 3.2 : 0;
-                const averageTime = averageTimeMinutes > 0 ? `${averageTimeMinutes}m` : '0m';
+                    setRecentResponses(prev => ({
+                        ...prev,
+                        data: [],
+                        loading: false,
+                        error: 'Không thể tải danh sách phản hồi'
+                    }));
+                    return;
+                }
+
+                // Map dữ liệu từ SurveyOverviewResponseDTO (chỉ khi có dữ liệu thực)
+                const totalResponses = overviewData.totalResponses || 0;
+                const totalViews = overviewData.viewership || 0;
+                const completionRate = overviewData.completionRate || 0;
+                const averageTime = overviewData.avgCompletionTime || '0m';
 
                 setDashboardStats(prev => ({
                     ...prev,
@@ -144,12 +171,25 @@ export default function DashboardReportPage() {
                     completionRate,
                     averageTime,
                     loading: false,
-                    error: null
+                    error: null,
+                    isRealData,
+                    fallbackReason
                 }));
+
+                // Map hourly data từ timeline để tạo danh sách phản hồi gần đây
+                const hourlyData = timelineData.hourly ? timelineData.hourly : [];
 
                 setRecentResponses(prev => ({
                     ...prev,
-                    data: recentResponsesData.content || [],
+                    hourlyData: hourlyData,
+                    loading: false,
+                    error: null
+                }));
+
+                // Lưu dữ liệu question counts từ API
+                setQuestionCounts(prev => ({
+                    ...prev,
+                    data: questionCountsData,
                     loading: false,
                     error: null
                 }));
@@ -157,22 +197,31 @@ export default function DashboardReportPage() {
             } catch (error) {
                 console.error('Lỗi khi lấy dữ liệu thống kê:', error);
 
-                // Fallback về dữ liệu mặc định khi có lỗi
+                // Fallback về dữ liệu mặc định khi có lỗi (tất cả là 0)
                 setDashboardStats(prev => ({
                     ...prev,
-                    totalResponses: isFromCreateSurvey ? questionsCount : 128,
-                    totalViews: isFromCreateSurvey ? 0 : 1000,
-                    completionRate: isFromCreateSurvey ? 0 : 95,
-                    averageTime: isFromCreateSurvey ? '0m' : '3.2m',
+                    totalResponses: 0,
+                    totalViews: 0,
+                    completionRate: 0,
+                    averageTime: '0m',
                     loading: false,
-                    error: 'Không thể tải dữ liệu thống kê'
+                    error: 'Không thể tải dữ liệu thống kê',
+                    isRealData: false,
+                    fallbackReason: 'API error - using fallback data'
                 }));
 
                 setRecentResponses(prev => ({
                     ...prev,
-                    data: [],
+                    hourlyData: [],
                     loading: false,
                     error: 'Không thể tải danh sách phản hồi'
+                }));
+
+                setQuestionCounts(prev => ({
+                    ...prev,
+                    data: null,
+                    loading: false,
+                    error: 'Không thể tải thống kê câu hỏi'
                 }));
             }
         };
@@ -180,36 +229,42 @@ export default function DashboardReportPage() {
         fetchDashboardStats();
     }, [surveyId, isFromCreateSurvey, questionsCount]);
 
-    // Helper function để format thời gian
-    const formatDateTime = (dateTimeString) => {
-        if (!dateTimeString) return 'Không xác định';
+    // Helper function để format thời gian "X phút trước" từ hourly data
+    // Hourly data là 24 giờ gần nhất (từ hôm qua đến hôm nay)
+    const formatTimeAgoFromHourly = (hour, currentDate = new Date()) => {
+        if (!hour) return 'Không xác định';
 
         try {
-            const date = new Date(dateTimeString);
-            const now = new Date();
-            const diffInMs = now - date;
+            // Parse hour format "HH:mm"
+            const [hours, minutes] = hour.split(':').map(Number);
+            const now = new Date(currentDate);
+            const nowHours = now.getHours();
+            const nowMinutes = now.getMinutes();
+
+            // Xác định date: hourly data là 24 giờ gần nhất
+            // Nếu hour > giờ hiện tại => là hôm qua (vì đã qua 24 giờ)
+            // Nếu hour <= giờ hiện tại => là hôm nay
+            const targetDate = new Date(now);
+
+            if (hours > nowHours || (hours === nowHours && minutes > nowMinutes)) {
+                // Hour này là từ hôm qua
+                targetDate.setDate(targetDate.getDate() - 1);
+            }
+
+            targetDate.setHours(hours, minutes, 0, 0);
+
+            // Tính khoảng thời gian từ targetDate đến hiện tại
+            const diffInMs = now - targetDate;
             const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-            const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
-            const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
 
             if (diffInMinutes < 1) {
                 return 'Vừa xong';
             } else if (diffInMinutes < 60) {
                 return `${diffInMinutes} phút trước`;
-            } else if (diffInHours < 24) {
-                return `${diffInHours} giờ trước`;
-            } else if (diffInDays === 1) {
-                return 'Hôm qua';
-            } else if (diffInDays < 7) {
-                return `${diffInDays} ngày trước`;
+            } else if (diffInMinutes < 60 * 24) {
+                return `${Math.floor(diffInMinutes / 60)} giờ trước`;
             } else {
-                return date.toLocaleDateString('vi-VN', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
+                return `${Math.floor(diffInMinutes / (60 * 24))} ngày trước`;
             }
         } catch (error) {
             return 'Không xác định';
@@ -217,7 +272,58 @@ export default function DashboardReportPage() {
     };
 
     const recentActivities = useMemo(() => {
-        if (isFromCreateSurvey) {
+        // Nếu đang loading, hiển thị thông báo loading
+        if (recentResponses.loading) {
+            return [
+                { color: 'blue', text: 'Đang tải danh sách phản hồi...', time: '' }
+            ];
+        }
+
+        // Nếu có lỗi, hiển thị thông báo lỗi
+        if (recentResponses.error) {
+            return [
+                { color: 'red', text: 'Không thể tải danh sách phản hồi', time: '' }
+            ];
+        }
+
+        // Nếu có hourlyData và có dữ liệu, hiển thị danh sách phản hồi thực tế
+        if (recentResponses.hourlyData && recentResponses.hourlyData.length > 0) {
+            // Tạo danh sách từ hourly data: mỗi response là một "Phản hồi mới từ Người tham gia XXX"
+            const colors = ['green', 'blue', 'purple', 'orange', 'red', 'teal', 'yellow'];
+            const activities = [];
+
+            // Bắt đầu counter từ 0 và tăng dần (0, 1, 2, 3...)
+            let participantCounter = 1;
+
+            // Lấy hourly data và sắp xếp theo giờ (mới nhất trước)
+            // Hourly data từ backend đã được sắp xếp theo giờ tăng dần, cần reverse để có mới nhất trước
+            const sortedHourlyData = [...recentResponses.hourlyData].reverse();
+
+            // Tạo danh sách items từ hourly data
+            sortedHourlyData.forEach((hourData) => {
+                const count = hourData.count || 0;
+                const hour = hourData.hour || '';
+
+                if (!hour || count === 0) return;
+
+                // Tạo count items cho mỗi hour (mỗi item là một "Phản hồi mới từ Người tham gia XXX")
+                for (let i = 0; i < count; i++) {
+                    const colorIndex = activities.length % colors.length;
+                    activities.push({
+                        color: colors[colorIndex],
+                        text: `Phản hồi mới từ Người tham gia ${participantCounter}`,
+                        time: formatTimeAgoFromHourly(hour)
+                    });
+                    participantCounter++;
+                }
+            });
+
+            // Trả về tất cả activities (sẽ có thanh cuộn nếu nhiều hơn 10 items)
+            return activities;
+        }
+
+        // Nếu không có dữ liệu và đang ở chế độ tạo survey mới, hiển thị thông báo tạo survey
+        if (isFromCreateSurvey && (!surveyId || !recentResponses.hourlyData || recentResponses.hourlyData.length === 0)) {
             return [
                 { color: 'green', text: `Khảo sát "${surveyTitle}" đã được tạo`, time: 'Vừa xong' },
                 { color: 'blue', text: `Tổng ${questionsCount} câu hỏi đã được thiết lập`, time: 'Vừa xong' },
@@ -225,37 +331,75 @@ export default function DashboardReportPage() {
             ];
         }
 
-        // Nếu đang loading hoặc có lỗi, hiển thị thông báo tương ứng
-        if (recentResponses.loading) {
-            return [
-                { color: 'blue', text: 'Đang tải danh sách phản hồi...', time: '' }
-            ];
-        }
+        // Mặc định: không có phản hồi nào
+        return [
+            { color: 'gray', text: 'Chưa có phản hồi nào', time: '' }
+        ];
+    }, [isFromCreateSurvey, surveyTitle, questionsCount, recentResponses, surveyId]);
 
-        if (recentResponses.error) {
-            return [
-                { color: 'red', text: 'Không thể tải danh sách phản hồi', time: '' }
-            ];
-        }
+    // Helper function để map loại câu hỏi sang tiếng Việt
+    const getQuestionTypeLabel = (type) => {
+        const typeMap = {
+            'multiple_choice': 'Trắc nghiệm nhiều lựa chọn',
+            'single_choice': 'Trắc nghiệm một lựa chọn',
+            'open_ended': 'Câu hỏi mở',
+            'rating': 'Đánh giá sao',
+            'boolean_': 'Đúng/Sai',
+            'ranking': 'Xếp hạng',
+            'file_upload': 'Tải file',
+            'date_time': 'Ngày/Giờ'
+        };
+        return typeMap[type] || type;
+    };
 
-        // Nếu không có phản hồi nào
-        if (!recentResponses.data || recentResponses.data.length === 0) {
-            return [
-                { color: 'gray', text: 'Chưa có phản hồi nào', time: '' }
-            ];
-        }
+    // Helper function để lấy màu cho từng loại câu hỏi
+    const getQuestionTypeColor = (type) => {
+        const colorMap = {
+            'multiple_choice': 'indigo',
+            'single_choice': 'purple',
+            'open_ended': 'green',
+            'rating': 'yellow',
+            'boolean_': 'blue',
+            'ranking': 'orange',
+            'file_upload': 'red',
+            'date_time': 'teal'
+        };
+        return colorMap[type] || 'indigo';
+    };
 
-        // Tạo danh sách từ dữ liệu thật
-        const colors = ['green', 'purple', 'orange', 'blue', 'red', 'teal', 'yellow'];
-        return recentResponses.data.map((response, index) => ({
-            color: colors[index % colors.length],
-            text: 'Phản hồi mới từ Ẩn danh', // Luôn hiển thị "Ẩn danh" cho tất cả phản hồi
-            time: formatDateTime(response.submittedAt || response.createdAt)
-        }));
-    }, [isFromCreateSurvey, surveyTitle, questionsCount, recentResponses]);
+    // Helper function để render tất cả các loại câu hỏi
+    const renderQuestionStats = (byType = {}, totalQuestions = 0) => {
+        const allQuestionTypes = [
+            'multiple_choice',
+            'single_choice',
+            'open_ended',
+            'rating',
+            'boolean_',
+            'ranking',
+            'file_upload',
+            'date_time'
+        ];
+
+        return allQuestionTypes.map((type) => {
+            const count = byType[type] || 0;
+            const percent = totalQuestions > 0 ? (count / totalQuestions) * 100 : 0;
+
+            return (
+                <ProgressItem
+                    key={type}
+                    label={getQuestionTypeLabel(type)}
+                    valueLabel={`${count} câu`}
+                    percent={percent}
+                    colorClass={getQuestionTypeColor(type)}
+                />
+            );
+        });
+    };
 
     const handleExport = () => {
-        navigate('/report/export');
+        navigate('/report/export', {
+            state: surveyId ? { surveyId, surveyTitle, surveyDescription } : undefined
+        });
     };
 
     return (
@@ -285,6 +429,32 @@ export default function DashboardReportPage() {
                         </button>
                     </div>
                 </header>
+
+                {/* Data Source Notice
+                {surveyId && !dashboardStats.error && !dashboardStats.loading && (
+                    <div style={{
+                        margin: '16px 0',
+                        padding: '12px 16px',
+                        background: dashboardStats.isRealData ? '#f0fdf4' : '#fffbeb',
+                        border: dashboardStats.isRealData ? '1px solid #16a34a' : '1px solid #f59e0b',
+                        borderRadius: '8px',
+                        color: dashboardStats.isRealData ? '#166534' : '#92400e',
+                        fontSize: '14px'
+                    }}>
+                        {dashboardStats.isRealData ? (
+                            <>
+                                <strong>✅ Đã kết nối:</strong> Đang sử dụng dữ liệu thực từ StatisticsController backend APIs
+                            </>
+                        ) : (
+                            <>
+                                <strong>⚠️ Chế độ fallback:</strong> StatisticsController APIs trả về lỗi 401 (Unauthorized).
+                                Đang sử dụng dữ liệu mẫu. Cần cấu hình authentication cho StatisticsController ở backend.
+                                <br />
+                                <small>Lý do: {dashboardStats.fallbackReason}</small>
+                            </>
+                        )}
+                    </div>
+                )} */}
 
                 {dashboardStats.error && (
                     <div style={{
@@ -353,6 +523,14 @@ export default function DashboardReportPage() {
                 <section className="report-panels">
                     <div className="panel left">
                         <h3>Hoạt động gần đây</h3>
+                        {/* 
+                        📊 VIEW TRACKING SYSTEM:
+                        - Số lượt xem tự động tăng khi người dùng truy cập /response/{surveyId}
+                        - PublicResponsePage.jsx gọi incrementViewCount() qua /surveys/{id}/public endpoint  
+                        - Backend SurveyController.getSurveyPublic() tự động track view với IP + User Agent
+                        - StatisticsController.getSurveyOverview() trả về viewership count mới nhất
+                        - Sử dụng "+1 View" button để test hoặc "Refresh" để cập nhật
+                        */}
                         <div className="recent-list">
                             {recentActivities.map((item, idx) => (
                                 <RecentItem key={idx} {...item} />
@@ -363,79 +541,35 @@ export default function DashboardReportPage() {
                     <div className="panel right">
                         <h3>Thống kê nhanh</h3>
                         <div className="quick-stats">
-                            {isFromCreateSurvey ? (
-                                <>
-                                    {surveyStats.multipleChoice > 0 && (
-                                        <ProgressItem
-                                            label="Trắc nghiệm nhiều lựa chọn"
-                                            valueLabel={`${surveyStats.multipleChoice} câu`}
-                                            percent={(surveyStats.multipleChoice / surveyStats.totalQuestions) * 100}
-                                            colorClass="indigo"
-                                        />
-                                    )}
-                                    {surveyStats.singleChoice > 0 && (
-                                        <ProgressItem
-                                            label="Trắc nghiệm một lựa chọn"
-                                            valueLabel={`${surveyStats.singleChoice} câu`}
-                                            percent={(surveyStats.singleChoice / surveyStats.totalQuestions) * 100}
-                                            colorClass="purple"
-                                        />
-                                    )}
-                                    {surveyStats.openEnded > 0 && (
-                                        <ProgressItem
-                                            label="Câu hỏi mở"
-                                            valueLabel={`${surveyStats.openEnded} câu`}
-                                            percent={(surveyStats.openEnded / surveyStats.totalQuestions) * 100}
-                                            colorClass="green"
-                                        />
-                                    )}
-                                    {surveyStats.boolean > 0 && (
-                                        <ProgressItem
-                                            label="Đúng/Sai"
-                                            valueLabel={`${surveyStats.boolean} câu`}
-                                            percent={(surveyStats.boolean / surveyStats.totalQuestions) * 100}
-                                            colorClass="blue"
-                                        />
-                                    )}
-                                    {surveyStats.ranking > 0 && (
-                                        <ProgressItem
-                                            label="Xếp hạng"
-                                            valueLabel={`${surveyStats.ranking} câu`}
-                                            percent={(surveyStats.ranking / surveyStats.totalQuestions) * 100}
-                                            colorClass="orange"
-                                        />
-                                    )}
-                                    {surveyStats.rating > 0 && (
-                                        <ProgressItem
-                                            label="Đánh giá sao"
-                                            valueLabel={`${surveyStats.rating} câu`}
-                                            percent={(surveyStats.rating / surveyStats.totalQuestions) * 100}
-                                            colorClass="yellow"
-                                        />
-                                    )}
-                                    {surveyStats.dateTime > 0 && (
-                                        <ProgressItem
-                                            label="Ngày/Giờ"
-                                            valueLabel={`${surveyStats.dateTime} câu`}
-                                            percent={(surveyStats.dateTime / surveyStats.totalQuestions) * 100}
-                                            colorClass="teal"
-                                        />
-                                    )}
-                                    {surveyStats.fileUpload > 0 && (
-                                        <ProgressItem
-                                            label="Tải file"
-                                            valueLabel={`${surveyStats.fileUpload} câu`}
-                                            percent={(surveyStats.fileUpload / surveyStats.totalQuestions) * 100}
-                                            colorClass="red"
-                                        />
-                                    )}
-                                </>
+                            {questionCounts.loading ? (
+                                <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                                    Đang tải thống kê...
+                                </div>
                             ) : (
                                 <>
-                                    <ProgressItem label="Câu hỏi trắc nghiệm" valueLabel="8 câu" percent={100} colorClass="indigo" />
-                                    <ProgressItem label="Trả lời ngắn" valueLabel="2 câu" percent={40} colorClass="indigo" />
-                                    <ProgressItem label="Tỷ lệ hài lòng" valueLabel="87%" percent={87} colorClass="green" />
-                                    <ProgressItem label="Xếp hạng" valueLabel={"5 sao"} percent={70} colorClass="blue" />
+                                    {/* Luôn hiển thị tất cả các loại câu hỏi */}
+                                    {/* Nếu có dữ liệu từ API thì dùng, nếu không thì hiển thị 0 cho tất cả */}
+                                    {questionCounts.data && questionCounts.data.byType ? (
+                                        renderQuestionStats(
+                                            questionCounts.data.byType,
+                                            questionCounts.data.total || 0
+                                        )
+                                    ) : isFromCreateSurvey && surveyStats.totalQuestions > 0 ? (
+                                        // Fallback cho chế độ tạo survey mới với dữ liệu từ surveyStats
+                                        renderQuestionStats({
+                                            'multiple_choice': surveyStats.multipleChoice || 0,
+                                            'single_choice': surveyStats.singleChoice || 0,
+                                            'open_ended': surveyStats.openEnded || 0,
+                                            'rating': surveyStats.rating || 0,
+                                            'boolean_': surveyStats.boolean || 0,
+                                            'ranking': surveyStats.ranking || 0,
+                                            'file_upload': surveyStats.fileUpload || 0,
+                                            'date_time': surveyStats.dateTime || 0
+                                        }, surveyStats.totalQuestions)
+                                    ) : (
+                                        // Không có dữ liệu: hiển thị tất cả với giá trị 0
+                                        renderQuestionStats({}, 0)
+                                    )}
                                 </>
                             )}
                         </div>
@@ -452,19 +586,19 @@ export default function DashboardReportPage() {
                         </button>
                     )} */}
                     <button className="btn blue" onClick={() => navigate('/report/details-statistic', {
-                        state: isFromCreateSurvey ? { surveyId, surveyTitle, surveyDescription } : undefined
+                        state: surveyId ? { surveyId, surveyTitle, surveyDescription } : undefined
                     })}>
                         <span className="btn-icon" aria-hidden="true">📊</span>
                         Xem thống kê chi tiết
                     </button>
                     <button className="btn green" onClick={() => navigate('/report/individual-responses', {
-                        state: isFromCreateSurvey ? { surveyId, surveyTitle, surveyDescription } : undefined
+                        state: surveyId ? { surveyId, surveyTitle, surveyDescription } : undefined
                     })}>
                         <span className="btn-icon" aria-hidden="true">🧠</span>
                         Danh sách phản hồi
                     </button>
                     <button className="btn teal" onClick={() => navigate('/report/sentiment', {
-                        state: isFromCreateSurvey ? { surveyId, surveyTitle, surveyDescription } : undefined
+                        state: surveyId ? { surveyId, surveyTitle, surveyDescription } : undefined
                     })}>
                         <span className="btn-icon" aria-hidden="true">😊</span>
                         Phân tích cảm xúc

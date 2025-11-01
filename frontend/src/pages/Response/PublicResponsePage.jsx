@@ -1,9 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import "./ResponseFormPage.css";
 import { responseService } from "../../services/responseService";
-import { surveyService } from "../../services/surveyService";
-import { questionService, optionService } from "../../services/questionSurvey";
+import { getSurveyPublicInfo } from "../../services/dashboardReportService";
 import { isValidTokenFormat } from "../../utils/tokenGenerator";
 import logoSmartSurvey from "../../assets/logoSmartSurvey.png";
 import { apiClient } from "../../services/authService";
@@ -49,9 +48,10 @@ const PublicResponsePage = () => {
     const [loadingSurvey, setLoadingSurvey] = useState(false);
     const [loadedSurvey, setLoadedSurvey] = useState(null);
     const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+    const loadedSurveyIdRef = useRef(null);
 
     const activeSurvey = useMemo(() => loadedSurvey, [loadedSurvey]);
-    
+
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
     );
@@ -81,16 +81,29 @@ const PublicResponsePage = () => {
         const surveyId = idFromParams || idFromPath;
         if (!surveyId) return;
 
+        // Tránh load survey nhiều lần với cùng surveyId (React StrictMode trong development có thể chạy useEffect 2 lần)
+        if (loadedSurveyIdRef.current === surveyId) return;
+        loadedSurveyIdRef.current = surveyId;
+
         const loadSurvey = async () => {
             try {
                 setLoadingSurvey(true);
-                const detail = await surveyService.getSurveyById(surveyId);
-                const questions = await questionService.getQuestionsBySurvey(surveyId);
-                const mappedQuestions = [];
 
-                for (const q of questions) {
+                // Lấy thông tin survey từ public endpoint (tự động track view ở backend)
+                // Endpoint /surveys/{id}/public đã tự động track view khi được gọi
+                const publicSurveyData = await getSurveyPublicInfo(surveyId);
+
+                // Map dữ liệu từ SurveyPublicResponseDTO
+                const detail = {
+                    id: publicSurveyData.id,
+                    title: publicSurveyData.title,
+                    description: publicSurveyData.description
+                };
+
+                // Map questions từ public API response
+                const mappedQuestions = (publicSurveyData.questions || []).map((q) => {
                     let type = "open-ended";
-                    const backendType = q.questionType || q.question_type;
+                    const backendType = q.type;
 
                     if (backendType === "multiple_choice") {
                         type = "multiple-choice-multiple";
@@ -110,39 +123,34 @@ const PublicResponsePage = () => {
                         type = "open-ended";
                     }
 
+                    // Map options từ public API response
                     let options = [];
-                    if (type === "multiple-choice-multiple" || type === "multiple-choice-single" || type === "boolean" || type === "ranking") {
-                        try {
-                            const opts = await optionService.getOptionsByQuestion(q.id);
-                            options = (opts || []).map((o) => ({
-                                id: o.id || o.optionId || o.option_id,
-                                text: o.optionText || o.option_text,
-                            }));
-                        } catch (_) {
-                            options = (q.options || []).map((o) => ({
-                                id: o.id || o.optionId || o.option_id,
-                                text: o.optionText || o.option_text,
-                            }));
-                        }
-                        if (options.length === 0 && type === "boolean") {
-                            options = [
-                                { id: 1, text: "Có" },
-                                { id: 2, text: "Không" },
-                            ];
-                        }
+                    if (q.options && q.options.length > 0) {
+                        options = q.options.map((o) => ({
+                            id: o.id,
+                            text: o.text,
+                        }));
+                    }
+
+                    // Nếu là boolean mà không có options, tạo mặc định
+                    if (type === "boolean" && options.length === 0) {
+                        options = [
+                            { id: 1, text: "Có" },
+                            { id: 2, text: "Không" },
+                        ];
                     }
 
                     const scale = type === "rating-scale" ? [1, 2, 3, 4, 5] : undefined;
 
-                    mappedQuestions.push({
+                    return {
                         id: q.id,
-                        text: q.questionText || q.question_text,
+                        text: q.text,
                         type,
                         options,
                         scale,
-                        is_required: q.isRequired ?? q.is_required ?? false,
-                    });
-                }
+                        is_required: q.required ?? false,
+                    };
+                });
 
                 setLoadedSurvey({
                     id: detail.id,
@@ -181,7 +189,7 @@ const PublicResponsePage = () => {
     // Initialize ranking questions with their options
     useEffect(() => {
         if (!activeSurvey || !activeSurvey.questions) return;
-        
+
         setResponses(prev => {
             const newResponses = { ...prev };
             activeSurvey.questions.forEach(q => {
@@ -299,10 +307,10 @@ const PublicResponsePage = () => {
                 ));
             case "ranking":
                 const rankingOptionIds = responses[q.id] || [];
-                const rankingOptionsList = rankingOptionIds.map(id => 
+                const rankingOptionsList = rankingOptionIds.map(id =>
                     q.options?.find(opt => String(opt.id) === String(id))
                 ).filter(Boolean);
-                
+
                 if (!rankingOptionsList || rankingOptionsList.length === 0) {
                     return <div className="ranking-hint">Chưa có lựa chọn để xếp hạng</div>;
                 }
@@ -318,7 +326,7 @@ const PublicResponsePage = () => {
 
                                 const oldIndex = rankingOptionsList.findIndex(opt => String(opt.id) === String(active.id));
                                 const newIndex = rankingOptionsList.findIndex(opt => String(opt.id) === String(over.id));
-                                
+
                                 const newOrder = arrayMove(rankingOptionsList, oldIndex, newIndex);
                                 handleChange(q.id, newOrder.map(opt => opt.id));
                             }}
@@ -369,13 +377,13 @@ const PublicResponsePage = () => {
             case "date_time":
                 // Parse combined value or separate date/time
                 const dateTimeValue = responses[q.id] || { date: '', time: '' };
-                const dateValue = typeof dateTimeValue === 'string' 
-                    ? (dateTimeValue.match(/(\d{4}-\d{2}-\d{2})/) || ['', ''])[1] 
+                const dateValue = typeof dateTimeValue === 'string'
+                    ? (dateTimeValue.match(/(\d{4}-\d{2}-\d{2})/) || ['', ''])[1]
                     : dateTimeValue.date || '';
                 const timeValue = typeof dateTimeValue === 'string'
                     ? (dateTimeValue.match(/(\d{2}:\d{2})/) || ['', ''])[1]
                     : dateTimeValue.time || '';
-                
+
                 return (
                     <div className="date-time-inputs">
                         <input

@@ -181,6 +181,31 @@
 .recent-list {
     display: grid;
     gap: 12px;
+    max-height: 350px;
+    /* Tương đương khoảng 10 items */
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 8px;
+    /* Tạo khoảng trống cho scrollbar */
+}
+
+/* Custom scrollbar cho recent-list */
+.recent-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.recent-list::-webkit-scrollbar-track {
+    background: rgba(2, 6, 23, 0.04);
+    border-radius: 3px;
+}
+
+.recent-list::-webkit-scrollbar-thumb {
+    background: rgba(2, 6, 23, 0.2);
+    border-radius: 3px;
+}
+
+.recent-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(2, 6, 23, 0.3);
 }
 
 .recent-item {
