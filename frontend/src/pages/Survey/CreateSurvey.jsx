@@ -59,6 +59,11 @@ const mapTypeToBackend = (type) => {
     }
 };
 
+// Helper function để kiểm tra xem question type có cần options không
+const needsOptions = (questionType) => {
+    return ['multiple_choice', 'single_choice', 'boolean_', 'ranking'].includes(questionType);
+};
+
 const createEmptyOption = (text = '') => ({
     id: `temp_option_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     option_text: text
@@ -831,7 +836,8 @@ const CreateSurvey = () => {
 
             for (const question of questionsFromServer) {
                 let options = [];
-                if (question.questionType === 'multiple_choice') {
+                // Load options cho tất cả các loại câu hỏi cần options
+                if (needsOptions(question.questionType)) {
                     try {
                         options = await optionService.getOptionsByQuestion(question.id);
                     } catch (error) {
@@ -839,10 +845,13 @@ const CreateSurvey = () => {
                     }
                 }
 
+                // Normalize questionType từ backend
+                const normalizedType = mapTypeFromBackend(question.questionType);
+                
                 const normalized = normalizeQuestionData({
                     id: question.id,
                     question_text: question.questionText,
-                    question_type: question.questionType,
+                    question_type: normalizedType,
                     is_required: question.isRequired ?? true,
                     options: options.map(opt => ({
                         id: opt.id,
@@ -894,18 +903,10 @@ const CreateSurvey = () => {
                 newErrors[`question_${idx}`] = 'Nội dung câu hỏi là bắt buộc';
             }
             // Validate options for questions that need them
-            if (q.question_type === 'multiple_choice' ||
-                q.question_type === 'single_choice' ||
-                q.question_type === 'ranking') {
-                const validOpts = q.options?.filter(o => o.option_text.trim());
+            if (needsOptions(q.question_type)) {
+                const validOpts = q.options?.filter(o => o.option_text && o.option_text.trim());
                 if (!validOpts || validOpts.length < 2) {
                     newErrors[`question_${idx}_options`] = 'Câu hỏi này cần ít nhất 2 lựa chọn';
-                }
-            }
-            if (q.question_type === 'boolean_' || q.question_type === 'yes_no') {
-                const yesNoOpts = q.options?.filter(o => o.option_text.trim());
-                if (!yesNoOpts || yesNoOpts.length < 2) {
-                    newErrors[`question_${idx}_options`] = 'Câu hỏi Đúng/Sai cần tối thiểu 2 lựa chọn';
                 }
             }
             // rating cố định 5 sao, bỏ validate phạm vi
@@ -976,7 +977,8 @@ const CreateSurvey = () => {
 
                     // Xử lý xóa options trong các câu hỏi còn lại
                     for (const question of questions) {
-                        if (question.id && !question.id.toString().startsWith('temp_') && question.question_type === 'multiple_choice') {
+                        // Kiểm tra tất cả các loại câu hỏi cần options
+                        if (question.id && !question.id.toString().startsWith('temp_') && needsOptions(question.question_type)) {
                             try {
                                 // Lấy options hiện tại từ server
                                 const serverOptions = await optionService.getOptionsByQuestion(question.id);
@@ -1033,11 +1035,11 @@ const CreateSurvey = () => {
                         throw new Error(`Không thể lưu câu hỏi: ${question.question_text}`);
                     }
 
-                    // Tạo/cập nhật options cho multiple choice questions
+                    // Tạo/cập nhật options cho các loại câu hỏi cần options
                     const updatedOptions = [];
-                    if (question.question_type === 'multiple_choice' && question.options?.length > 0) {
+                    if (needsOptions(question.question_type) && question.options?.length > 0) {
                         for (const option of question.options) {
-                            if (option.option_text.trim()) {
+                            if (option.option_text && option.option_text.trim()) {
                                 const optionPayload = {
                                     questionId: savedQuestion.id,
                                     optionText: option.option_text
@@ -1075,9 +1077,8 @@ const CreateSurvey = () => {
                         question_text: savedQuestion.questionText,
                         question_type: savedQuestion.questionType,
                         is_required: savedQuestion.isRequired,
-                        options: question.question_type === 'multiple_choice'
-                            ? updatedOptions
-                            : (question.question_type === 'yes_no' ? question.options : []),
+                        // Giữ lại options cho tất cả các loại câu hỏi cần options
+                        options: needsOptions(question.question_type) ? updatedOptions : [],
                         choice_type: question.choice_type,
                         rating_scale: question.rating_scale
                     });
@@ -1403,10 +1404,10 @@ const CreateSurvey = () => {
                 throw new Error(`Không thể lưu câu hỏi: ${question.question_text}`);
             }
 
-            // Tạo options cho multiple choice questions
-            if (question.question_type === 'multiple_choice' && question.options?.length > 0) {
+            // Tạo options cho tất cả các loại câu hỏi cần options
+            if (needsOptions(question.question_type) && question.options?.length > 0) {
                 for (const option of question.options) {
-                    if (option.option_text.trim()) {
+                    if (option.option_text && option.option_text.trim()) {
                         const optionPayload = {
                             questionId: savedQuestion.id,
                             optionText: option.option_text

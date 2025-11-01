@@ -214,11 +214,33 @@ const PublicResponsePage = () => {
         if (!activeSurvey) return false;
         activeSurvey.questions.forEach((q) => {
             if (q.is_required) {
-                if (
-                    !responses[q.id] ||
-                    (Array.isArray(responses[q.id]) && responses[q.id].length === 0) ||
-                    (typeof responses[q.id] === "string" && responses[q.id].trim() === "")
-                ) {
+                const value = responses[q.id];
+                
+                // Kiểm tra theo từng loại câu hỏi
+                let isValid = false;
+                
+                if (q.type === "file_upload") {
+                    // File upload: kiểm tra xem có File object không
+                    isValid = value instanceof File;
+                } else if (q.type === "date_time") {
+                    // Date/Time: kiểm tra object có date hoặc time
+                    if (typeof value === "object" && value !== null) {
+                        isValid = !!(value.date || value.time);
+                    } else if (typeof value === "string") {
+                        isValid = value.trim() !== "";
+                    }
+                } else if (Array.isArray(value)) {
+                    // Array: kiểm tra length > 0
+                    isValid = value.length > 0;
+                } else if (typeof value === "string") {
+                    // String: kiểm tra không rỗng sau khi trim
+                    isValid = value.trim() !== "";
+                } else if (value !== null && value !== undefined) {
+                    // Các giá trị khác (number, boolean, etc.)
+                    isValid = true;
+                }
+                
+                if (!isValid) {
                     newErrors[q.id] = "Câu hỏi này là bắt buộc";
                 }
             }
@@ -229,7 +251,19 @@ const PublicResponsePage = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!validateForm()) return;
+        e.stopPropagation();
+        
+        if (!activeSurvey) {
+            console.error("❌ No survey loaded");
+            alert("Không tìm thấy khảo sát. Vui lòng làm mới trang và thử lại.");
+            return;
+        }
+        
+        if (!validateForm()) {
+            console.warn("⚠️ Validation failed");
+            return;
+        }
+        
         setLoading(true);
 
         // Debug: Kiểm tra token trước khi submit
@@ -246,9 +280,13 @@ const PublicResponsePage = () => {
             );
             console.log("✅ Submit response result:", apiResult);
             setSuccess(true);
+            // Reset form sau khi submit thành công
+            setResponses({});
         } catch (err) {
             console.error("❌ Submit failed:", err);
             console.error("❌ Error details:", err.response?.data);
+            const errorMessage = err.response?.data?.message || err.message || "Có lỗi xảy ra khi gửi phản hồi. Vui lòng thử lại.";
+            alert(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -501,7 +539,15 @@ const PublicResponsePage = () => {
                         ))}
 
                         <div className="form-footer">
-                            <button type="submit" disabled={loading}>
+                            <button 
+                                type="submit" 
+                                disabled={loading || !activeSurvey}
+                                style={{ 
+                                    pointerEvents: (loading || !activeSurvey) ? "none" : "auto",
+                                    cursor: (loading || !activeSurvey) ? "not-allowed" : "pointer",
+                                    opacity: (loading || !activeSurvey) ? 0.6 : 1
+                                }}
+                            >
                                 {loading ? "Đang gửi..." : "Gửi phản hồi"}
                             </button>
                             <p className="note">

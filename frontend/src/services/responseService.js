@@ -30,10 +30,10 @@ function buildSubmissionPayload(surveyId, responses, survey) {
 
         switch (questionType) {
             case 'multiple-choice-single':
-                // Single choice: send selectedOptionId (not array!)
+                // Single choice: backend dùng optionId (không phải selectedOptionId)
                 const singleVal = Number(value);
                 if (!isNaN(singleVal)) {
-                    answer.selectedOptionId = singleVal;
+                    answer.optionId = singleVal;
                     answers.push(answer);
                 }
                 break;
@@ -57,10 +57,10 @@ function buildSubmissionPayload(surveyId, responses, survey) {
                 break;
 
             case 'boolean':
-                // Boolean: treat as single choice with option ID
+                // Boolean: backend dùng optionId (không phải selectedOptionId)
                 const boolVal = Number(value);
                 if (!isNaN(boolVal)) {
-                    answer.selectedOptionId = boolVal;
+                    answer.optionId = boolVal;
                     answers.push(answer);
                 }
                 break;
@@ -139,14 +139,143 @@ function buildSubmissionPayload(surveyId, responses, survey) {
 
 export const responseService = {
     submitResponses: async (surveyId, responses, survey) => {
-        const payload = buildSubmissionPayload(surveyId, responses, survey);
-        console.log('📦 Payload gửi lên backend:', JSON.stringify(payload, null, 2));
-        try {
-            const response = await apiClient.post('/responses', payload);
-            return response.data;
-        } catch (error) {
-            console.error('❌ Submit responses error:', error);
-            throw error;
+        // Kiểm tra xem có file upload không
+        const hasFiles = survey && Array.isArray(survey.questions) &&
+            survey.questions.some(q => q.type === 'file_upload' && responses[q.id] instanceof File);
+
+        if (hasFiles) {
+            // Nếu có file, sử dụng endpoint với FormData
+            const formData = new FormData();
+            formData.append('surveyId', String(surveyId));
+
+            // Build answers và append files
+            // Sử dụng cùng logic như buildSubmissionPayload nhưng không include file_upload trong answers
+            const answers = [];
+
+            survey.questions.forEach(q => {
+                const value = responses[q.id];
+                if (value === undefined || value === null) return;
+
+                // File upload: chỉ append file vào FormData, không thêm vào answers
+                if (q.type === 'file_upload' && value instanceof File) {
+                    // Append file với key là file_${questionId} (theo format backend yêu cầu)
+                    formData.append(`file_${q.id}`, value);
+                    // Tạo answer object cho file upload với tên file
+                    answers.push({
+                        questionId: q.id,
+                        answerText: value.name // Backend có thể cần tên file trong answer
+                    });
+                    return; // Skip phần xử lý answer phía dưới
+                }
+
+                // Các loại câu hỏi khác: xử lý như bình thường
+                const answer = { questionId: q.id };
+
+                if (q.type === 'multiple-choice-single') {
+                    // Backend dùng optionId (không phải selectedOptionId)
+                    const singleVal = Number(value);
+                    if (!isNaN(singleVal)) {
+                        answer.optionId = singleVal;
+                        answers.push(answer);
+                    }
+                } else if (q.type === 'multiple-choice-multiple') {
+                    if (Array.isArray(value)) {
+                        const optionIds = value.map(v => Number(v)).filter(id => !isNaN(id));
+                        if (optionIds.length > 0) {
+                            answer.selectedOptionIds = optionIds;
+                            answers.push(answer);
+                        }
+                    } else {
+                        const optionId = Number(value);
+                        if (!isNaN(optionId)) {
+                            answer.selectedOptionIds = [optionId];
+                            answers.push(answer);
+                        }
+                    }
+                } else if (q.type === 'boolean') {
+                    // Backend dùng optionId cho boolean
+                    const boolVal = Number(value);
+                    if (!isNaN(boolVal)) {
+                        answer.optionId = boolVal;
+                        answers.push(answer);
+                    }
+                } else if (q.type === 'ranking') {
+                    if (Array.isArray(value)) {
+                        const rankingIds = value.map(v => Number(v)).filter(id => !isNaN(id));
+                        if (rankingIds.length > 0) {
+                            answer.rankingOptionIds = rankingIds;
+                            answers.push(answer);
+                        }
+                    }
+                } else if (q.type === 'date_time') {
+                    if (typeof value === 'object' && value !== null) {
+                        if (value.date) answer.dateValue = value.date;
+                        if (value.time) answer.timeValue = value.time;
+                        if (answer.dateValue || answer.timeValue) {
+                            answers.push(answer);
+                        }
+                    } else if (typeof value === 'string') {
+                        const dateMatch = value.match(/(\d{4}-\d{2}-\d{2})/);
+                        const timeMatch = value.match(/(\d{2}:\d{2})/);
+                        if (dateMatch) answer.dateValue = dateMatch[1];
+                        if (timeMatch) answer.timeValue = timeMatch[1];
+                        if (answer.dateValue || answer.timeValue) {
+                            answers.push(answer);
+                        }
+                    }
+                } else if (q.type === 'open-ended' || q.type === 'rating-scale') {
+                    answer.answerText = String(value);
+                    if (answer.answerText.trim()) {
+                        answers.push(answer);
+                    }
+                }
+            });
+
+            // Append answers as JSON string
+            formData.append('answers', JSON.stringify(answers));
+
+            // Thêm requestToken nếu có (backend có thể không nhận nhưng không sao)
+            const requestToken =
+                (typeof window !== 'undefined' && localStorage.getItem('respondent_request_token')) ||
+                (() => {
+                    const token = generateUniqueToken();
+                    try { localStorage.setItem('respondent_request_token', token); } catch { }
+                    return token;
+                })();
+
+            if (requestToken) {
+                formData.append('requestToken', requestToken);
+            }
+
+            console.log('📦 Submitting with files');
+            console.log('📋 Answers JSON:', JSON.stringify(answers, null, 2));
+            console.log('📁 Files in FormData:', Array.from(formData.keys()).filter(k => k.startsWith('file_')));
+            console.log('🎫 RequestToken:', requestToken);
+
+            try {
+                // Không set Content-Type thủ công, để axios tự động detect multipart/form-data
+                // và set boundary đúng cách
+                const response = await apiClient.post('/responses/with-files', formData);
+                return response.data;
+            } catch (error) {
+                console.error('❌ Submit responses with files error:', error);
+                console.error('❌ Error response:', error.response?.data);
+                console.error('❌ Error status:', error.response?.status);
+                // Log chi tiết request để debug
+                console.error('📤 Request FormData keys:', Array.from(formData.keys()));
+                throw error;
+            }
+        } else {
+            // Không có file, sử dụng endpoint JSON bình thường
+            const payload = buildSubmissionPayload(surveyId, responses, survey);
+            console.log('📦 Payload gửi lên backend:', JSON.stringify(payload, null, 2));
+            try {
+                const response = await apiClient.post('/responses', payload);
+                return response.data;
+            } catch (error) {
+                console.error('❌ Submit responses error:', error);
+                throw error;
+            }
         }
     },
 
