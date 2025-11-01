@@ -349,7 +349,6 @@ def classify_and_log(survey_id: int, question_id: Optional[int], answer_id: Opti
     # Trả nhãn dựa vào external luôn (hoặc NEU nếu lỗi)
     return int(lid if status=="ok" else 1)
 
-
 # ============================================================
 # Endpoints sentiment
 # ============================================================
@@ -381,14 +380,18 @@ def run_sentiment_now(survey_id: int, question_id: Optional[int] = None, db: Ses
                        target_id=rec.sentiment_id, target_table="ai_sentiment",
                        description=f"Recomputed with external API only (Gemini)") )
     db.commit()
-    return { "survey_id": survey_id,
+    det = rec.details or {}
+    return {
+        "survey_id": survey_id,
         "sentiment_id": rec.sentiment_id,
-        "total_responses": aggr["total_responses"],
-        "positive_percent": aggr["positive_percent"],
-        "neutral_percent": aggr["neutral_percent"],
-        "negative_percent": aggr["negative_percent"],
-        "counts": aggr["counts"],
-        "created_at": str(rec.created_at)}
+        "total_responses": rec.total_responses,
+        "positive_percent": float(rec.positive_percent),
+        "neutral_percent": float(rec.neutral_percent),
+        "negative_percent": float(rec.negative_percent),
+        "counts": det.get("counts"),
+        "created_at": str(rec.created_at),
+        "updated_at": str(rec.updated_at) if rec.updated_at else None,
+    }
 
 
 @app.get("/ai/sentiment/{survey_id}")
@@ -401,19 +404,22 @@ def get_latest_sentiment(survey_id: int, db: Session = Depends(get_db)):
     )
     if not rec:
         raise HTTPException(404, "Chưa có bản ghi sentiment.")
+    det = rec.details or {}
     return {
         "survey_id": survey_id,
-        "result": {
-            "id": rec.sentiment_id,
-            "total_responses": rec.total_responses,
-            "positive_percent": float(rec.positive_percent),
-            "neutral_percent": float(rec.neutral_percent),
-            "negative_percent": float(rec.negative_percent),
-            "details": rec.details,
-            "created_at": rec.created_at,
-            "updated_at": rec.updated_at,
-        },
+        "sentiment_id": rec.sentiment_id,
+        "total_responses": rec.total_responses,
+        "positive_percent": float(rec.positive_percent),
+        "neutral_percent": float(rec.neutral_percent),
+        "negative_percent": float(rec.negative_percent),
+        "counts": det.get("counts"),
+        # nếu FE dùng:
+        # "sample_size": det.get("sample_size"),
+        # "question_id": det.get("question_id"),
+        "created_at": str(rec.created_at),
+        "updated_at": str(rec.updated_at) if rec.updated_at else None,
     }
+
 
 # ============================================================
 # Chat (RAG nội bộ đơn giản; không phụ thuộc sentiment model)
@@ -1217,4 +1223,3 @@ def seed_templates():
         """, (ind, ind, json.dumps(tpls, ensure_ascii=False)))
     _cfg_reload(True)
     return {"ok": True, "seeded": list(seeds.keys())}
-
