@@ -81,6 +81,9 @@ public class ResponseService {
 		if (request.getRequestToken() != null && !request.getRequestToken().isBlank()) {
 			response.setRequestToken(request.getRequestToken().trim());
 		}
+		if (request.getDurationSeconds() != null && request.getDurationSeconds() > 0) {
+			response.setDurationSeconds(request.getDurationSeconds());
+		}
 
 		Response savedResponse = responseRepository.save(response);
 

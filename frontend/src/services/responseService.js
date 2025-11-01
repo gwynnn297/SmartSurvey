@@ -307,14 +307,21 @@ export const responseService = {
      */
     getResponseCount: async (surveyId) => {
         try {
-            const response = await apiClient.get(`/responses/${surveyId}/count`);
-            return response.data.totalResponses || 0;
+            // Sử dụng endpoint có sẵn: GET /api/surveys/{surveyId}/responses
+            const response = await apiClient.get(`/api/surveys/${surveyId}/responses`, {
+                params: {
+                    page: 0,
+                    size: 1  // Chỉ cần lấy meta, không cần data
+                }
+            });
+            
+            // Lấy total từ meta
+            return response.data?.meta?.total || 0;
         } catch (error) {
             console.log('📊 Fallback: Using dashboard overview for response count');
             try {
                 // Fallback: sử dụng dashboard overview
                 const overview = await responseService.getDashboardOverview();
-                // Ước tính dựa trên tổng responses chia cho số surveys
                 return Math.floor(overview.totalResponses / Math.max(overview.totalSurveys, 1));
             } catch (fallbackError) {
                 console.error('❌ Get response count fallback error:', fallbackError);

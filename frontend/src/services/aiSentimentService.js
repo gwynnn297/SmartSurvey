@@ -76,19 +76,18 @@ export const aiSentimentService = {
     getLatestSentiment: async (surveyId) => {
         try {
             console.log('📊 Getting latest sentiment for survey:', surveyId);
-
+    
             const response = await apiClient.get(`/ai/sentiment/${surveyId}`);
-
+    
             console.log('✅ Latest sentiment result:', response.data);
             return response.data;
-
+    
         } catch (error) {
-            console.error('❌ Get latest sentiment error:', error);
-
             // Xử lý lỗi 404 - không có dữ liệu sentiment (theo backend implementation)
+            // Đây KHÔNG phải là lỗi, mà là trường hợp chưa có dữ liệu
             if (error.response?.status === 404) {
-                console.log('No sentiment data found for survey:', surveyId);
-
+                console.log('ℹ️ No sentiment data found for survey:', surveyId, '- This is normal for new surveys');
+    
                 // Trả về error response theo format backend SentimentAnalysisResponseDTO
                 return {
                     success: false,
@@ -104,16 +103,19 @@ export const aiSentimentService = {
                     error_details: error.response?.data?.error_details || "Không tìm thấy bản ghi sentiment"
                 };
             }
-
+    
+            // Chỉ log error cho các lỗi thực sự (không phải 404)
+            console.error('❌ Get latest sentiment error:', error);
+    
             // Xử lý các lỗi khác theo backend format
             if (error.response?.data) {
                 const errorData = error.response.data;
                 if (errorData.success === false) {
                     console.log('Backend error response:', errorData);
-                    return errorData;
+                    return errorData; // Trả về error response từ backend
                 }
             }
-
+    
             throw error;
         }
     },
