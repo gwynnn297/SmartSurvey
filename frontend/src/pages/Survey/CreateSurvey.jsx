@@ -22,31 +22,38 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+// ✅ 7 loại câu hỏi chính thức theo backend mới
 const QUESTION_TYPE_OPTIONS = [
-    { value: 'short_text', label: 'Trả lời ngắn' },
-    { value: 'multiple_choice', label: 'Trắc nghiệm' },
-    { value: 'rating', label: 'Xếp hạng' },
-    { value: 'yes_no', label: 'Yes / No' }
+    { value: 'open_ended', label: 'Câu hỏi mở' },
+    { value: 'multiple_choice', label: 'Trắc nghiệm nhiều lựa chọn' },
+    { value: 'single_choice', label: 'Trắc nghiệm một lựa chọn' },
+    { value: 'boolean_', label: 'Đúng / Sai' },
+    { value: 'ranking', label: 'Xếp hạng' },
+    { value: 'date_time', label: 'Ngày / Giờ' },
+    { value: 'rating', label: 'Đánh giá' },
+    { value: 'file_upload', label: 'Tải file lên' }
 ];
 
 const mapTypeFromBackend = (type) => {
     switch (type) {
         case 'open_ended':
-            return 'short_text';
+            return 'open_ended';
         case 'boolean':
         case 'boolean_':
-            return 'yes_no';
+            return 'boolean_';
         default:
-            return type || 'short_text';
+            return type || 'open_ended';
     }
 };
 
 const mapTypeToBackend = (type) => {
     switch (type) {
         case 'short_text':
+        case 'open_ended':
             return 'open_ended';
         case 'yes_no':
-            return 'boolean';
+        case 'boolean_':
+            return 'boolean_';
         default:
             return type;
     }
@@ -67,7 +74,7 @@ const createYesNoOptions = () => [
     createEmptyOption('Không')
 ];
 
-const createEmptyQuestion = (type = 'short_text') => {
+const createEmptyQuestion = (type = 'open_ended') => {
     const base = {
         id: `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         question_text: '',
@@ -76,26 +83,46 @@ const createEmptyQuestion = (type = 'short_text') => {
         is_required: true
     };
 
-    if (type === 'multiple_choice') {
+    if (type === 'multiple_choice' || type === 'single_choice') {
         return {
             ...base,
             options: createDefaultOptions(),
-            choice_type: 'single'
+            choice_type: type === 'multiple_choice' ? 'multiple' : 'single'
         };
     }
 
-    if (type === 'yes_no') {
+    if (type === 'boolean_' || type === 'yes_no') {
         return {
             ...base,
             options: createYesNoOptions()
         };
     }
 
+    if (type === 'ranking') {
+        return {
+            ...base,
+            options: createDefaultOptions()
+        };
+    }
+
     if (type === 'rating') {
         return {
             ...base,
-            // cố định thang điểm 5 sao
             rating_scale: 5
+        };
+    }
+
+    if (type === 'date_time') {
+        return {
+            ...base,
+            // No special config needed
+        };
+    }
+
+    if (type === 'file_upload') {
+        return {
+            ...base,
+            // No special config needed
         };
     }
 
@@ -109,12 +136,15 @@ const cloneQuestion = (question) => {
         options: (question.options || []).map(opt => createEmptyOption(opt.option_text))
     };
 
-    if (question.question_type === 'multiple_choice') {
-        cloned.choice_type = question.choice_type || 'single';
+    // Handle choice_type for multiple_choice and single_choice
+    if (question.question_type === 'multiple_choice' || question.question_type === 'single_choice') {
+        cloned.choice_type = question.choice_type || 
+            (question.question_type === 'multiple_choice' ? 'multiple' : 'single');
     } else {
         delete cloned.choice_type;
     }
 
+    // Handle rating_scale for rating
     if (question.question_type === 'rating') {
         cloned.rating_scale = question.rating_scale || 5;
     } else {
@@ -146,7 +176,8 @@ const normalizeQuestionData = (rawQuestion) => {
         options: []
     };
 
-    if (normalizedType === 'multiple_choice') {
+    // multiple_choice hoặc single_choice cần options
+    if (normalizedType === 'multiple_choice' || normalizedType === 'single_choice') {
         const rawOptions = rawQuestion.options || rawQuestion.optionsList || [];
         const mappedOptions = rawOptions.length > 0
             ? rawOptions.map(ensureOptionShape)
@@ -154,11 +185,13 @@ const normalizeQuestionData = (rawQuestion) => {
         return {
             ...base,
             options: mappedOptions,
-            choice_type: rawQuestion.choice_type || rawQuestion.choiceType || 'single'
+            choice_type: rawQuestion.choice_type || rawQuestion.choiceType || 
+                         (normalizedType === 'multiple_choice' ? 'multiple' : 'single')
         };
     }
 
-    if (normalizedType === 'yes_no') {
+    // boolean_ cần options Yes/No
+    if (normalizedType === 'boolean_' || normalizedType === 'yes_no') {
         const rawOptions = rawQuestion.options || [];
         const mappedOptions = rawOptions.length >= 2
             ? rawOptions.map(ensureOptionShape)
@@ -169,6 +202,19 @@ const normalizeQuestionData = (rawQuestion) => {
         };
     }
 
+    // ranking cần options để xếp hạng
+    if (normalizedType === 'ranking') {
+        const rawOptions = rawQuestion.options || rawQuestion.optionsList || [];
+        const mappedOptions = rawOptions.length > 0
+            ? rawOptions.map(ensureOptionShape)
+            : createDefaultOptions();
+        return {
+            ...base,
+            options: mappedOptions
+        };
+    }
+
+    // rating có thang điểm
     if (normalizedType === 'rating') {
         return {
             ...base,
@@ -176,6 +222,7 @@ const normalizeQuestionData = (rawQuestion) => {
         };
     }
 
+    // open_ended, date_time, file_upload không cần special config
     return base;
 };
 
@@ -239,6 +286,80 @@ function SortableSidebarItem({ id, index, text, isActive, onSelect, onDuplicate,
     );
 }
 
+// 🎯 Sortable Ranking Option Component
+function SortableRankingOption({ id, index, option, error, onTextChange, onDelete, disabled, onMoveUp, onMoveDown, totalCount }) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className={`ranking-option-item ${isDragging ? 'is-dragging' : ''}`}
+        >
+            <div className="ranking-handle" {...attributes} {...listeners}>
+                <i className="fa-solid fa-grip-vertical" aria-hidden="true"></i>
+            </div>
+            <span className="ranking-number">{index + 1}</span>
+            <input
+                className={`option-input ranking-input ${error ? 'error' : ''}`}
+                value={option.option_text}
+                onChange={(e) => onTextChange(e.target.value)}
+                placeholder={`Lựa chọn ${index + 1}`}
+            />
+            <div className="ranking-actions">
+                <button
+                    type="button"
+                    className="ranking-move-btn"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onMoveUp?.();
+                    }}
+                    disabled={index === 0}
+                    aria-label="Di chuyển lên"
+                    title="Di chuyển lên"
+                >
+                    <i className="fa-solid fa-chevron-up" aria-hidden="true"></i>
+                </button>
+                <button
+                    type="button"
+                    className="ranking-move-btn"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onMoveDown?.();
+                    }}
+                    disabled={index === totalCount - 1}
+                    aria-label="Di chuyển xuống"
+                    title="Di chuyển xuống"
+                >
+                    <i className="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </button>
+                <button
+                    type="button"
+                    className="remove-option"
+                    onClick={onDelete}
+                    disabled={disabled}
+                    aria-label="Xóa lựa chọn"
+                >
+                    <i className="fa-solid fa-delete-left" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+    );
+}
+
 const CreateSurvey = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -250,6 +371,9 @@ const CreateSurvey = () => {
     const [editSurveyId, setEditSurveyId] = useState(null);
     const [activeQuestionIndex, setActiveQuestionIndex] = useState(null);
     const [refreshingQuestions, setRefreshingQuestions] = useState(new Set());
+    const [autoSaveStatus, setAutoSaveStatus] = useState('idle'); // idle, saving, saved, error
+    const autoSaveTimeoutRef = React.useRef(null);
+    const [showMobileView, setShowMobileView] = useState(false);
 
     const [surveyData, setSurveyData] = useState({
         title: '',
@@ -268,16 +392,26 @@ const CreateSurvey = () => {
         const total = questions.length;
         const required = questions.filter(q => q.is_required).length;
         const multipleChoice = questions.filter(q => q.question_type === 'multiple_choice').length;
-        const yesNo = questions.filter(q => q.question_type === 'yes_no').length;
+        const singleChoice = questions.filter(q => q.question_type === 'single_choice').length;
+        const booleanQ = questions.filter(q => q.question_type === 'boolean_' || q.question_type === 'yes_no').length;
+        const ranking = questions.filter(q => q.question_type === 'ranking').length;
         const rating = questions.filter(q => q.question_type === 'rating').length;
-        const closed = multipleChoice + yesNo + rating;
+        const dateTime = questions.filter(q => q.question_type === 'date_time').length;
+        const fileUpload = questions.filter(q => q.question_type === 'file_upload').length;
+        const open = questions.filter(q => q.question_type === 'open_ended').length;
+        const closed = multipleChoice + singleChoice + booleanQ + ranking + rating;
         return {
             total,
             required,
             multipleChoice,
-            yesNo,
+            singleChoice,
+            booleanQ,
+            ranking,
             rating,
-            open: total - closed
+            dateTime,
+            fileUpload,
+            open,
+            closed
         };
     }, [questions]);
 
@@ -317,7 +451,7 @@ const CreateSurvey = () => {
         });
     };
 
-    const handleAddQuestion = (type = 'short_text') => {
+    const handleAddQuestion = (type = 'open_ended') => {
         setQuestions(prev => [...prev, createEmptyQuestion(type)]);
         clearError('questions');
         setActiveQuestionIndex(questions.length);
@@ -444,14 +578,21 @@ const CreateSurvey = () => {
             const next = [...prev];
             const current = { ...next[index], question_type: type };
 
-            if (type === 'multiple_choice') {
-                current.choice_type = choiceType || current.choice_type || 'single';
+            if (type === 'multiple_choice' || type === 'single_choice') {
+                current.choice_type = choiceType || current.choice_type || 
+                    (type === 'multiple_choice' ? 'multiple' : 'single');
                 current.options = (current.options && current.options.length > 0)
                     ? current.options
                     : createDefaultOptions();
                 delete current.rating_scale;
-            } else if (type === 'yes_no') {
+            } else if (type === 'boolean_' || type === 'yes_no') {
                 current.options = createYesNoOptions();
+                delete current.choice_type;
+                delete current.rating_scale;
+            } else if (type === 'ranking') {
+                current.options = (current.options && current.options.length > 0)
+                    ? current.options
+                    : createDefaultOptions();
                 delete current.choice_type;
                 delete current.rating_scale;
             } else if (type === 'rating') {
@@ -459,6 +600,7 @@ const CreateSurvey = () => {
                 current.options = [];
                 current.rating_scale = current.rating_scale || 5;
             } else {
+                // open_ended, date_time, file_upload
                 delete current.choice_type;
                 delete current.rating_scale;
                 current.options = [];
@@ -468,7 +610,7 @@ const CreateSurvey = () => {
             return next;
         });
 
-        if (type !== 'multiple_choice') {
+        if (type !== 'multiple_choice' && type !== 'single_choice' && type !== 'ranking') {
             clearError(`question_${index}_options`);
         }
     };
@@ -489,13 +631,46 @@ const CreateSurvey = () => {
     const handleAddOption = (questionIndex) => {
         setQuestions(prev => {
             const currentQuestion = prev[questionIndex];
-            if (!currentQuestion || currentQuestion.question_type !== 'multiple_choice') {
+            // Allow adding options for multiple_choice, single_choice, and ranking
+            if (!currentQuestion || 
+                (currentQuestion.question_type !== 'multiple_choice' && 
+                 currentQuestion.question_type !== 'single_choice' && 
+                 currentQuestion.question_type !== 'ranking')) {
                 return prev;
             }
             const next = [...prev];
             const question = { ...next[questionIndex] };
             const options = [...(question.options || [])];
             options.push(createEmptyOption());
+            question.options = options;
+            next[questionIndex] = question;
+            return next;
+        });
+    };
+
+    // Move option up/down for ranking
+    const handleMoveOptionUp = (questionIndex, optionIndex) => {
+        setQuestions(prev => {
+            const next = [...prev];
+            const question = { ...next[questionIndex] };
+            const options = [...(question.options || [])];
+            if (optionIndex > 0) {
+                [options[optionIndex], options[optionIndex - 1]] = [options[optionIndex - 1], options[optionIndex]];
+            }
+            question.options = options;
+            next[questionIndex] = question;
+            return next;
+        });
+    };
+
+    const handleMoveOptionDown = (questionIndex, optionIndex) => {
+        setQuestions(prev => {
+            const next = [...prev];
+            const question = { ...next[questionIndex] };
+            const options = [...(question.options || [])];
+            if (optionIndex < options.length - 1) {
+                [options[optionIndex], options[optionIndex + 1]] = [options[optionIndex + 1], options[optionIndex]];
+            }
             question.options = options;
             next[questionIndex] = question;
             return next;
@@ -553,7 +728,11 @@ const CreateSurvey = () => {
         try {
             setQuestions(prev => {
                 const currentQuestion = prev[questionIndex];
-                if (!currentQuestion || currentQuestion.question_type !== 'multiple_choice') {
+                // Allow deleting options for multiple_choice, single_choice, and ranking
+                if (!currentQuestion || 
+                    (currentQuestion.question_type !== 'multiple_choice' && 
+                     currentQuestion.question_type !== 'single_choice' && 
+                     currentQuestion.question_type !== 'ranking')) {
                     return prev;
                 }
                 const next = [...prev];
@@ -573,6 +752,49 @@ const CreateSurvey = () => {
             alert('Có lỗi xảy ra khi xóa lựa chọn. Vui lòng thử lại.');
         }
     };
+
+    // Auto-save effect
+    useEffect(() => {
+        // Clear existing timeout
+        if (autoSaveTimeoutRef.current) {
+            clearTimeout(autoSaveTimeoutRef.current);
+        }
+
+        // Only auto-save if we have a survey ID (edit mode) and have data
+        if (!editSurveyId || !surveyData.title.trim()) {
+            return;
+        }
+
+        // Set new timeout for auto-save (3 seconds after last change)
+        autoSaveTimeoutRef.current = setTimeout(async () => {
+            try {
+                setAutoSaveStatus('saving');
+                
+                const payload = {
+                    title: surveyData.title,
+                    description: surveyData.description,
+                    categoryId: surveyData.category_id ? parseInt(surveyData.category_id) : null,
+                    aiPrompt: null
+                };
+
+                await surveyService.updateSurvey(editSurveyId, payload);
+                
+                setAutoSaveStatus('saved');
+                setTimeout(() => setAutoSaveStatus('idle'), 2000);
+            } catch (err) {
+                console.error('Auto-save failed:', err);
+                setAutoSaveStatus('error');
+                setTimeout(() => setAutoSaveStatus('idle'), 2000);
+            }
+        }, 3000);
+
+        // Cleanup
+        return () => {
+            if (autoSaveTimeoutRef.current) {
+                clearTimeout(autoSaveTimeoutRef.current);
+            }
+        };
+    }, [surveyData, editSurveyId, questions]);
 
     useEffect(() => {
         loadCategories();
@@ -671,16 +893,19 @@ const CreateSurvey = () => {
             if (!q.question_text.trim()) {
                 newErrors[`question_${idx}`] = 'Nội dung câu hỏi là bắt buộc';
             }
-            if (q.question_type === 'multiple_choice') {
+            // Validate options for questions that need them
+            if (q.question_type === 'multiple_choice' || 
+                q.question_type === 'single_choice' || 
+                q.question_type === 'ranking') {
                 const validOpts = q.options?.filter(o => o.option_text.trim());
                 if (!validOpts || validOpts.length < 2) {
-                    newErrors[`question_${idx}_options`] = 'Câu hỏi trắc nghiệm cần ít nhất 2 lựa chọn';
+                    newErrors[`question_${idx}_options`] = 'Câu hỏi này cần ít nhất 2 lựa chọn';
                 }
             }
-            if (q.question_type === 'yes_no') {
+            if (q.question_type === 'boolean_' || q.question_type === 'yes_no') {
                 const yesNoOpts = q.options?.filter(o => o.option_text.trim());
                 if (!yesNoOpts || yesNoOpts.length < 2) {
-                    newErrors[`question_${idx}_options`] = 'Câu hỏi Yes/No cần tối thiểu 2 lựa chọn';
+                    newErrors[`question_${idx}_options`] = 'Câu hỏi Đúng/Sai cần tối thiểu 2 lựa chọn';
                 }
             }
             // rating cố định 5 sao, bỏ validate phạm vi
@@ -982,25 +1207,48 @@ const CreateSurvey = () => {
     const activeQuestionOptionError = activeQuestionIndex !== null ? errors[`question_${activeQuestionIndex}_options`] : null;
     const activeQuestionRatingError = activeQuestionIndex !== null ? errors[`question_${activeQuestionIndex}_rating`] : null;
     const isMultipleChoice = activeQuestion?.question_type === 'multiple_choice';
-    const isYesNo = activeQuestion?.question_type === 'yes_no';
+    const isSingleChoice = activeQuestion?.question_type === 'single_choice';
+    const isBoolean = activeQuestion?.question_type === 'boolean_' || activeQuestion?.question_type === 'yes_no';
+    const isRanking = activeQuestion?.question_type === 'ranking';
     const isRating = activeQuestion?.question_type === 'rating';
+    const isDateTime = activeQuestion?.question_type === 'date_time';
+    const isFileUpload = activeQuestion?.question_type === 'file_upload';
+    const isOpenEnded = activeQuestion?.question_type === 'open_ended';
 
     // Build preview survey xem trước khảo sát ResponseFormPage
     const buildPreviewSurvey = () => {
         const mappedQuestions = questions.map(q => {
-            let type = 'open-text';
+            let type = 'open-ended';
             if (q.question_type === 'multiple_choice') {
-                type = q.choice_type === 'multiple' ? 'multiple-choice-multiple' : 'multiple-choice-single';
-            } else if (q.question_type === 'yes_no') {
+                type = 'multiple-choice-multiple';
+            } else if (q.question_type === 'single_choice') {
                 type = 'multiple-choice-single';
+            } else if (q.question_type === 'boolean_' || q.question_type === 'yes_no') {
+                type = 'boolean';
+            } else if (q.question_type === 'ranking') {
+                type = 'ranking';
             } else if (q.question_type === 'rating') {
                 type = 'rating-scale';
+            } else if (q.question_type === 'date_time') {
+                type = 'date_time';
+            } else if (q.question_type === 'file_upload') {
+                type = 'file_upload';
+            } else if (q.question_type === 'open_ended') {
+                type = 'open-ended';
+            }
+            // Map options to {id, text} format for ResponseFormPage
+            let options = undefined;
+            if (q.options && q.options.length > 0) {
+                options = q.options.map((o, idx) => ({
+                    id: o.id || `temp_${q.id}_${idx}`,
+                    text: o.option_text
+                }));
             }
             return {
                 id: q.id,
                 text: q.question_text,
                 type,
-                options: (q.options || []).map(o => o.option_text),
+                options,
                 scale: q.question_type === 'rating' ? [1, 2, 3, 4, 5] : undefined,
                 is_required: !!q.is_required
             };
@@ -1190,6 +1438,29 @@ const CreateSurvey = () => {
                         </button>
                     </div>
                     <div className="survey-toolbar-right">
+                        {/* Auto-save status indicator */}
+                        {editSurveyId && autoSaveStatus !== 'idle' && (
+                            <div className="auto-save-status">
+                                {autoSaveStatus === 'saving' && (
+                                    <>
+                                        <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                                        <span>Đang lưu...</span>
+                                    </>
+                                )}
+                                {autoSaveStatus === 'saved' && (
+                                    <>
+                                        <i className="fa-solid fa-check" aria-hidden="true"></i>
+                                        <span>Đã lưu</span>
+                                    </>
+                                )}
+                                {autoSaveStatus === 'error' && (
+                                    <>
+                                        <i className="fa-solid fa-exclamation-triangle" aria-hidden="true"></i>
+                                        <span>Lỗi lưu</span>
+                                    </>
+                                )}
+                            </div>
+                        )}
                         <button
                             className="btn-view"
                             type="button"
@@ -1199,6 +1470,16 @@ const CreateSurvey = () => {
                         >
                             <i className="fa-regular fa-eye" aria-hidden="true"></i>
                             <span> Xem trước</span>
+                        </button>
+                        <button
+                            className={`btn-mobile-view ${showMobileView ? 'active' : ''}`}
+                            type="button"
+                            onClick={() => setShowMobileView(!showMobileView)}
+                            disabled={questions.length === 0}
+                            title="Xem trước trên Mobile"
+                        >
+                            <i className="fa-solid fa-mobile-screen-button" aria-hidden="true"></i>
+                            <span> Mobile</span>
                         </button>
                         <button
                             className="btn-report"
@@ -1416,9 +1697,56 @@ const CreateSurvey = () => {
                                             <p className="error-message">{activeQuestionError}</p>
                                         )}
 
-                                        {!isMultipleChoice && !isYesNo && !isRating && (
+                                        {isOpenEnded && (
                                             <div className="question-helper">
                                                 Người tham gia sẽ nhập câu trả lời ngắn gọn cho câu hỏi này.
+                                            </div>
+                                        )}
+                                        {isDateTime && (
+                                            <>
+                                                <div className="question-helper">
+                                                    Người tham gia sẽ chọn ngày và giờ.
+                                                </div>
+                                                <div className="editor-section">
+                                                    <div className="editor-section-header">
+                                                        <span className="section-title">Xem trước</span>
+                                                    </div>
+                                                    <div className="date-time-inputs">
+                                                        <input type="date" disabled className="preview-input" />
+                                                        <input type="time" disabled className="preview-input" />
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                        {isFileUpload && (
+                                            <>
+                                                <div className="question-helper">
+                                                    Người tham gia sẽ tải file lên cho câu hỏi này.
+                                                </div>
+                                                <div className="editor-section">
+                                                    <div className="editor-section-header">
+                                                        <span className="section-title">Xem trước</span>
+                                                    </div>
+                                                    <div className="file-upload-preview">
+                                                        <div className="upload-zone-preview">
+                                                            <i className="fa-solid fa-cloud-arrow-up upload-icon"></i>
+                                                            <p className="upload-text">
+                                                                <span>Nhấp hoặc kéo thả file vào đây</span>
+                                                            </p>
+                                                            <p className="upload-hint">Định dạng: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, ZIP, RAR (Tối đa 10MB)</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                        {isRanking && (
+                                            <div className="question-helper">
+                                                Người tham gia sẽ sắp xếp các lựa chọn theo thứ tự ưu tiên.
+                                            </div>
+                                        )}
+                                        {isSingleChoice && (
+                                            <div className="question-helper">
+                                                Người tham gia sẽ chọn một lựa chọn từ danh sách.
                                             </div>
                                         )}
 
@@ -1467,7 +1795,52 @@ const CreateSurvey = () => {
                                             </div>
                                         )}
 
-                                        {isYesNo && (
+                                        {isSingleChoice && (
+                                            <div className="editor-section">
+                                                <div className="editor-section-header">
+                                                    <span className="section-title">Lựa chọn trả lời</span>
+                                                    <button
+                                                        type="button"
+                                                        className="add-option"
+                                                        onClick={() => handleAddOption(activeQuestionIndex)}
+                                                    >
+                                                        + Thêm lựa chọn
+                                                    </button>
+                                                </div>
+                                                <div className="options-list">
+                                                    {activeQuestion.options?.map((opt, oIdx) => (
+                                                        <div key={opt.id || oIdx} className="option-item">
+                                                            <span className="option-index">{oIdx + 1}</span>
+                                                            <input
+                                                                className={`option-input ${activeQuestionOptionError ? 'error' : ''}`}
+                                                                value={opt.option_text}
+                                                                onChange={(e) => handleOptionChange(activeQuestionIndex, oIdx, e.target.value)}
+                                                                placeholder={`Lựa chọn ${oIdx + 1}`}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                className="remove-option"
+                                                                onClick={() => {
+                                                                    if (activeQuestion.options.length <= 2) return;
+                                                                    if (window.confirm('Bạn có chắc muốn xóa lựa chọn này không?')) {
+                                                                        deleteOption(opt.id, activeQuestionIndex, oIdx);
+                                                                    }
+                                                                }}
+                                                                disabled={activeQuestion.options.length <= 2}
+                                                                aria-label="Xóa lựa chọn"
+                                                            >
+                                                                <i className="fa-solid fa-delete-left" aria-hidden="true"></i>
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                {activeQuestionOptionError && (
+                                                    <p className="error-message">{activeQuestionOptionError}</p>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {isBoolean && (
                                             <div className="editor-section">
                                                 <div className="editor-section-header">
                                                     <span className="section-title">Tuỳ chỉnh nhãn</span>
@@ -1485,6 +1858,70 @@ const CreateSurvey = () => {
                                                         </div>
                                                     ))}
                                                 </div>
+                                                {activeQuestionOptionError && (
+                                                    <p className="error-message">{activeQuestionOptionError}</p>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {isRanking && (
+                                            <div className="editor-section">
+                                                <div className="editor-section-header">
+                                                    <span className="section-title">Lựa chọn để xếp hạng</span>
+                                                    <button
+                                                        type="button"
+                                                        className="add-option"
+                                                        onClick={() => handleAddOption(activeQuestionIndex)}
+                                                    >
+                                                        + Thêm lựa chọn
+                                                    </button>
+                                                </div>
+                                                <DndContext
+                                                    sensors={sensors}
+                                                    collisionDetection={closestCenter}
+                                                    onDragEnd={(event) => {
+                                                        const { active, over } = event;
+                                                        if (!over || active.id === over.id) return;
+
+                                                        const oldIndex = activeQuestion.options.findIndex(opt => opt.id === active.id);
+                                                        const newIndex = activeQuestion.options.findIndex(opt => opt.id === over.id);
+                                                        
+                                                        const newOptions = arrayMove(activeQuestion.options, oldIndex, newIndex);
+                                                        setQuestions(prev => {
+                                                            const next = [...prev];
+                                                            next[activeQuestionIndex] = { ...next[activeQuestionIndex], options: newOptions };
+                                                            return next;
+                                                        });
+                                                    }}
+                                                >
+                                                    <SortableContext
+                                                        items={activeQuestion.options?.map(opt => opt.id) || []}
+                                                        strategy={verticalListSortingStrategy}
+                                                    >
+                                                        <div className="ranking-options-list">
+                                                            {activeQuestion.options?.map((opt, oIdx) => (
+                                                                <SortableRankingOption
+                                                                    key={opt.id}
+                                                                    id={opt.id}
+                                                                    index={oIdx}
+                                                                    option={opt}
+                                                                    error={activeQuestionOptionError}
+                                                                    onTextChange={(value) => handleOptionChange(activeQuestionIndex, oIdx, value)}
+                                                                    onDelete={() => {
+                                                                        if (activeQuestion.options.length <= 2) return;
+                                                                        if (window.confirm('Bạn có chắc muốn xóa lựa chọn này không?')) {
+                                                                            deleteOption(opt.id, activeQuestionIndex, oIdx);
+                                                                        }
+                                                                    }}
+                                                                    disabled={activeQuestion.options.length <= 2}
+                                                                    onMoveUp={() => handleMoveOptionUp(activeQuestionIndex, oIdx)}
+                                                                    onMoveDown={() => handleMoveOptionDown(activeQuestionIndex, oIdx)}
+                                                                    totalCount={activeQuestion.options.length}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    </SortableContext>
+                                                </DndContext>
                                                 {activeQuestionOptionError && (
                                                     <p className="error-message">{activeQuestionOptionError}</p>
                                                 )}
@@ -1587,22 +2024,54 @@ const CreateSurvey = () => {
                                             <span className="stat-label">Bắt buộc</span>
                                             <span className="stat-value">{stats.required}</span>
                                         </div>
-                                        <div className="stat-chip">
-                                            <span className="stat-label">Trắc nghiệm</span>
-                                            <span className="stat-value">{stats.multipleChoice}</span>
-                                        </div>
-                                        <div className="stat-chip">
-                                            <span className="stat-label">Yes/No</span>
-                                            <span className="stat-value">{stats.yesNo}</span>
-                                        </div>
-                                        <div className="stat-chip">
-                                            <span className="stat-label">Xếp hạng</span>
-                                            <span className="stat-value">{stats.rating}</span>
-                                        </div>
-                                        <div className="stat-chip">
-                                            <span className="stat-label">Trả lời ngắn</span>
-                                            <span className="stat-value">{stats.open}</span>
-                                        </div>
+                                        {stats.multipleChoice > 0 && (
+                                            <div className="stat-chip">
+                                                <span className="stat-label">Trắc nghiệm nhiều</span>
+                                                <span className="stat-value">{stats.multipleChoice}</span>
+                                            </div>
+                                        )}
+                                        {stats.singleChoice > 0 && (
+                                            <div className="stat-chip">
+                                                <span className="stat-label">Trắc nghiệm một</span>
+                                                <span className="stat-value">{stats.singleChoice}</span>
+                                            </div>
+                                        )}
+                                        {stats.booleanQ > 0 && (
+                                            <div className="stat-chip">
+                                                <span className="stat-label">Đúng/Sai</span>
+                                                <span className="stat-value">{stats.booleanQ}</span>
+                                            </div>
+                                        )}
+                                        {stats.ranking > 0 && (
+                                            <div className="stat-chip">
+                                                <span className="stat-label">Xếp hạng</span>
+                                                <span className="stat-value">{stats.ranking}</span>
+                                            </div>
+                                        )}
+                                        {stats.rating > 0 && (
+                                            <div className="stat-chip">
+                                                <span className="stat-label">Đánh giá</span>
+                                                <span className="stat-value">{stats.rating}</span>
+                                            </div>
+                                        )}
+                                        {stats.open > 0 && (
+                                            <div className="stat-chip">
+                                                <span className="stat-label">Mở</span>
+                                                <span className="stat-value">{stats.open}</span>
+                                            </div>
+                                        )}
+                                        {stats.dateTime > 0 && (
+                                            <div className="stat-chip">
+                                                <span className="stat-label">Ngày/Giờ</span>
+                                                <span className="stat-value">{stats.dateTime}</span>
+                                            </div>
+                                        )}
+                                        {stats.fileUpload > 0 && (
+                                            <div className="stat-chip">
+                                                <span className="stat-label">File</span>
+                                                <span className="stat-value">{stats.fileUpload}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </>
@@ -1615,6 +2084,230 @@ const CreateSurvey = () => {
                     </aside>
                 </div>
             </div>
+
+            {/* Mobile View Preview Panel */}
+            {showMobileView && (
+                <div className="mobile-view-overlay" onClick={() => setShowMobileView(false)}>
+                    <div className="mobile-view-container" onClick={(e) => e.stopPropagation()}>
+                        <div className="mobile-view-header">
+                            <h3>Xem trước trên Mobile</h3>
+                            <button 
+                                className="mobile-view-close" 
+                                onClick={() => setShowMobileView(false)}
+                                aria-label="Đóng xem trước"
+                            >
+                                <i className="fa-solid fa-xmark" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div className="mobile-view-device">
+                            <div className="mobile-view-frame">
+                                <div className="mobile-view-content">
+                                    {(() => {
+                                        const preview = buildPreviewSurvey();
+                                        return (
+                                            <div style={{ padding: '16px', background: '#fff', minHeight: '100vh' }}>
+                                                <div style={{ textAlign: 'center', marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid #e5e7eb' }}>
+                                                    <h2 style={{ fontSize: '20px', fontWeight: '700', margin: '0 0 8px 0', color: '#1e293b' }}>
+                                                        {surveyData.title || 'Tiêu đề khảo sát'}
+                                                    </h2>
+                                                    {surveyData.description && (
+                                                        <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>
+                                                            {surveyData.description}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                
+                                                {preview.questions.map((q, idx) => (
+                                                    <div key={q.id || idx} style={{ 
+                                                        background: '#f8fafc', 
+                                                        border: '1px solid #e2e8f0', 
+                                                        borderRadius: '8px', 
+                                                        padding: '16px', 
+                                                        marginBottom: '16px' 
+                                                    }}>
+                                                        <h3 style={{ 
+                                                            fontSize: '16px', 
+                                                            fontWeight: '600', 
+                                                            margin: '0 0 12px 0',
+                                                            color: '#1e293b' 
+                                                        }}>
+                                                            {q.text || 'Câu hỏi'}
+                                                            {q.is_required && <span style={{ color: '#ef4444', marginLeft: '4px' }}>*</span>}
+                                                        </h3>
+                                                        
+                                                        {/* Render preview of question type */}
+                                                        {q.type === 'open-ended' && (
+                                                            <textarea 
+                                                                disabled 
+                                                                style={{ 
+                                                                    width: '100%', 
+                                                                    padding: '12px', 
+                                                                    border: '1px solid #cbd5e1', 
+                                                                    borderRadius: '6px',
+                                                                    fontSize: '14px',
+                                                                    resize: 'vertical',
+                                                                    minHeight: '80px'
+                                                                }}
+                                                                placeholder="Nhập câu trả lời..."
+                                                            />
+                                                        )}
+                                                        
+                                                        {(q.type === 'multiple-choice-single' || q.type === 'multiple-choice-multiple' || q.type === 'boolean') && q.options && (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                {q.options.map((opt, optIdx) => (
+                                                                    <label key={optIdx} style={{ 
+                                                                        display: 'flex', 
+                                                                        alignItems: 'center', 
+                                                                        gap: '10px',
+                                                                        cursor: 'pointer'
+                                                                    }}>
+                                                                        <input 
+                                                                            type={q.type === 'multiple-choice-multiple' ? 'checkbox' : 'radio'} 
+                                                                            disabled
+                                                                            style={{ width: '18px', height: '18px' }}
+                                                                        />
+                                                                        <span style={{ fontSize: '14px', color: '#1e293b' }}>
+                                                                            {typeof opt === 'string' ? opt : (opt.text || opt.id)}
+                                                                        </span>
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {q.type === 'ranking' && q.options && (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                {q.options.map((opt, optIdx) => (
+                                                                    <div key={optIdx} style={{ 
+                                                                        display: 'flex', 
+                                                                        alignItems: 'center', 
+                                                                        gap: '12px',
+                                                                        padding: '12px',
+                                                                        background: '#fff',
+                                                                        border: '1px solid #e2e8f0',
+                                                                        borderRadius: '6px'
+                                                                    }}>
+                                                                        <div style={{ 
+                                                                            minWidth: '32px', 
+                                                                            height: '32px', 
+                                                                            background: 'linear-gradient(135deg, #6366f1, #7c3aed)', 
+                                                                            borderRadius: '50%', 
+                                                                            display: 'flex', 
+                                                                            alignItems: 'center', 
+                                                                            justifyContent: 'center',
+                                                                            color: '#fff',
+                                                                            fontWeight: '600',
+                                                                            fontSize: '14px'
+                                                                        }}>
+                                                                            {optIdx + 1}
+                                                                        </div>
+                                                                        <span style={{ fontSize: '14px', color: '#1e293b', flex: 1 }}>
+                                                                            {typeof opt === 'string' ? opt : (opt.text || opt.id)}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {q.type === 'rating-scale' && (
+                                                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                                                {[1, 2, 3, 4, 5].map(num => (
+                                                                    <div key={num} style={{
+                                                                        width: '40px',
+                                                                        height: '40px',
+                                                                        borderRadius: '50%',
+                                                                        background: '#f1f5f9',
+                                                                        border: '2px solid #cbd5e1',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        cursor: 'pointer',
+                                                                        fontSize: '16px',
+                                                                        fontWeight: '600',
+                                                                        color: '#475569'
+                                                                    }}>
+                                                                        {num}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {q.type === 'date_time' && (
+                                                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                                <input 
+                                                                    type="date" 
+                                                                    disabled 
+                                                                    style={{ 
+                                                                        flex: 1,
+                                                                        minWidth: '120px',
+                                                                        padding: '12px',
+                                                                        border: '1px solid #cbd5e1',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '14px',
+                                                                        background: '#f8fafc'
+                                                                    }}
+                                                                />
+                                                                <input 
+                                                                    type="time" 
+                                                                    disabled 
+                                                                    style={{ 
+                                                                        flex: 1,
+                                                                        minWidth: '120px',
+                                                                        padding: '12px',
+                                                                        border: '1px solid #cbd5e1',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '14px',
+                                                                        background: '#f8fafc'
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {q.type === 'file_upload' && (
+                                                            <div style={{ 
+                                                                border: '2px dashed #cbd5e1', 
+                                                                borderRadius: '12px',
+                                                                padding: '24px',
+                                                                textAlign: 'center',
+                                                                background: '#f8fafc'
+                                                            }}>
+                                                                <i className="fa-solid fa-cloud-arrow-up" style={{ fontSize: '32px', color: '#94a3b8', marginBottom: '8px' }}></i>
+                                                                <p style={{ fontSize: '14px', color: '#475569', margin: '0 0 4px 0', fontWeight: '600' }}>
+                                                                    Nhấp hoặc kéo thả file vào đây
+                                                                </p>
+                                                                <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
+                                                                    Định dạng: PDF, DOC, XLS, PPT, TXT, ZIP, RAR
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                
+                                                <button 
+                                                    type="button"
+                                                    disabled
+                                                    style={{ 
+                                                        width: '100%',
+                                                        padding: '14px',
+                                                        background: '#e5e7eb',
+                                                        border: 'none',
+                                                        borderRadius: '8px',
+                                                        fontSize: '16px',
+                                                        fontWeight: '600',
+                                                        color: '#9ca3af',
+                                                        cursor: 'not-allowed'
+                                                    }}
+                                                >
+                                                    Gửi phản hồi
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </MainLayout>
     );
 };

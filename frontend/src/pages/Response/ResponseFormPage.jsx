@@ -6,6 +6,37 @@ import { responseService } from '../../services/responseService';
 import { surveyService } from '../../services/surveyService';
 import { questionService, optionService } from '../../services/questionSurvey';
 import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// 🎯 Sortable Ranking Item for Response
+function SortableRankingItem({ id, index, text }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="ranking-response-item">
+      <div className="ranking-handle-response" {...attributes} {...listeners}>
+        <i className="fa-solid fa-grip-vertical" aria-hidden="true"></i>
+      </div>
+      <span className="ranking-position">{index + 1}</span>
+      <span className="ranking-text">{text}</span>
+    </div>
+  );
+}
 
 const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isViewProp }) => {
   const params = useParams();
@@ -17,6 +48,10 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
   const [loadingSurvey, setLoadingSurvey] = useState(false);
   const [loadedSurvey, setLoadedSurvey] = useState(null);
   const isView = typeof isViewProp === 'boolean' ? isViewProp : mode === 'view';
+  
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
 
   const activeSurvey = useMemo(() => surveyProp || loadedSurvey, [surveyProp, loadedSurvey]);
 
@@ -35,26 +70,42 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
         const questions = await questionService.getQuestionsBySurvey(surveyId);
         const mappedQuestions = [];
         for (const q of questions) {
-          let type = 'open-text';
+          let type = 'open-ended';
           const backendType = q.questionType || q.question_type;
           if (backendType === 'multiple_choice') {
-            type = (q.choiceType === 'multiple') ? 'multiple-choice-multiple' : 'multiple-choice-single';
-          } else if (backendType === 'boolean' || backendType === 'boolean_' || backendType === 'yes_no') {
+            type = 'multiple-choice-multiple';
+          } else if (backendType === 'single_choice') {
             type = 'multiple-choice-single';
+          } else if (backendType === 'boolean' || backendType === 'boolean_' || backendType === 'yes_no') {
+            type = 'boolean';
           } else if (backendType === 'rating') {
             type = 'rating-scale';
+          } else if (backendType === 'ranking') {
+            type = 'ranking';
+          } else if (backendType === 'date_time') {
+            type = 'date_time';
+          } else if (backendType === 'file_upload') {
+            type = 'file_upload';
+          } else if (backendType === 'open_ended') {
+            type = 'open-ended';
           }
 
           let options = [];
-          if (type.startsWith('multiple-choice')) {
+          if (type === 'multiple-choice-multiple' || type === 'multiple-choice-single' || type === 'boolean' || type === 'ranking') {
             try {
               const opts = await optionService.getOptionsByQuestion(q.id);
-              options = (opts || []).map(o => o.optionText || o.option_text);
+              options = (opts || []).map(o => ({
+                id: o.id || o.optionId || o.option_id,
+                text: o.optionText || o.option_text
+              }));
             } catch (_) {
-              options = q.options?.map(o => o.optionText || o.option_text) || [];
+              options = (q.options || []).map(o => ({
+                id: o.id || o.optionId || o.option_id,
+                text: o.optionText || o.option_text
+              }));
             }
-            if (options.length === 0 && (backendType === 'boolean' || backendType === 'boolean_' || backendType === 'yes_no')) {
-              options = ['Có', 'Không'];
+            if (options.length === 0 && type === 'boolean') {
+              options = [{ id: 1, text: 'Có' }, { id: 2, text: 'Không' }];
             }
           }
 
@@ -84,6 +135,22 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
     };
     loadSurvey();
   }, [surveyProp, params, location.pathname]);
+
+  // Initialize ranking questions with their options
+  useEffect(() => {
+    if (!activeSurvey || !activeSurvey.questions) return;
+    
+    setResponses(prev => {
+      const newResponses = { ...prev };
+      activeSurvey.questions.forEach(q => {
+        if (q.type === 'ranking' && !newResponses[q.id] && q.options && q.options.length > 0) {
+          // Initialize with option IDs in order
+          newResponses[q.id] = q.options.map(opt => opt.id);
+        }
+      });
+      return newResponses;
+    });
+  }, [activeSurvey]);
 
   // Handle input change
   const handleChange = (questionId, value, multiple = false) => {
@@ -152,45 +219,99 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
 
   // Render question
   const renderQuestion = (q) => {
-    // Debug: Log question data to see what we're getting
-    // console.log('Question data:', {
-    //   id: q.id,
-    //   type: q.type,
-    //   choice_type: q.choice_type,
-    //   options: q.options
-    // });
-
     switch (q.type) {
       case "multiple-choice-single":
-        // Radio: chọn một
+        // Radio: chọn một option ID
         return (q.options || []).map((opt, i) => (
           <label key={i} className="option-label">
             <input
               type="radio"
               name={`question_${q.id}`}
-              value={opt}
-              checked={responses[q.id] === opt}
-              onChange={() => handleChange(q.id, opt)}
+              value={String(opt.id || opt)}
+              checked={String(responses[q.id]) === String(opt.id || opt)}
+              onChange={() => handleChange(q.id, String(opt.id || opt))}
             />
-            <span>{opt}</span>
+            <span>{opt.text || opt}</span>
           </label>
         ));
 
       case "multiple-choice-multiple":
-        // Checkbox: chọn nhiều
+        // Checkbox: chọn nhiều option IDs
         return (q.options || []).map((opt, i) => (
           <label key={i} className="option-label">
             <input
               type="checkbox"
               name={`question_${q.id}`}
-              value={opt}
-              checked={responses[q.id]?.includes(opt) || false}
-              onChange={() => handleChange(q.id, opt, true)}
+              value={String(opt.id || opt)}
+              checked={(responses[q.id] || []).map(String).includes(String(opt.id || opt))}
+              onChange={() => handleChange(q.id, String(opt.id || opt), true)}
             />
-            <span>{opt}</span>
+            <span>{opt.text || opt}</span>
           </label>
         ));
 
+      case "boolean":
+        // Boolean: chọn một option ID
+        return (q.options || []).map((opt, i) => (
+          <label key={i} className="option-label">
+            <input
+              type="radio"
+              name={`question_${q.id}`}
+              value={String(opt.id || opt)}
+              checked={String(responses[q.id]) === String(opt.id || opt)}
+              onChange={() => handleChange(q.id, String(opt.id || opt))}
+            />
+            <span>{opt.text || opt}</span>
+          </label>
+        ));
+
+      case "ranking":
+        // Ranking: drag-drop sắp xếp options
+        // responses[q.id] is array of option IDs
+        const rankingOptionIds = responses[q.id] || [];
+        // Map IDs back to options for display
+        const rankingOptionsList = rankingOptionIds.map(id => 
+          q.options?.find(opt => String(opt.id) === String(id))
+        ).filter(Boolean);
+        
+        if (!rankingOptionsList || rankingOptionsList.length === 0) {
+          return <div className="ranking-hint">Chưa có lựa chọn để xếp hạng</div>;
+        }
+        return (
+          <div className="ranking-list">
+            <p className="ranking-hint">Kéo thả để sắp xếp các lựa chọn theo thứ tự ưu tiên</p>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={(event) => {
+                const { active, over } = event;
+                if (!over || active.id === over.id) return;
+
+                const oldIndex = rankingOptionsList.findIndex(opt => String(opt.id) === String(active.id));
+                const newIndex = rankingOptionsList.findIndex(opt => String(opt.id) === String(over.id));
+                
+                const newOrder = arrayMove(rankingOptionsList, oldIndex, newIndex);
+                handleChange(q.id, newOrder.map(opt => opt.id));
+              }}
+            >
+              <SortableContext
+                items={rankingOptionsList.map(opt => String(opt.id))}
+                strategy={verticalListSortingStrategy}
+              >
+                {rankingOptionsList.map((opt, i) => (
+                  <SortableRankingItem
+                    key={opt.id || i}
+                    id={String(opt.id)}
+                    index={i}
+                    text={opt.text}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
+          </div>
+        );
+
+      case "open-ended":
       case "open-text":
         return (
           <textarea
@@ -216,6 +337,85 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
                 <div>{num}</div>
               </label>
             ))}
+          </div>
+        );
+
+      case "date_time":
+        // Parse combined value or separate date/time
+        const dateTimeValue = responses[q.id] || { date: '', time: '' };
+        const dateValue = typeof dateTimeValue === 'string' 
+          ? (dateTimeValue.match(/(\d{4}-\d{2}-\d{2})/) || ['', ''])[1] 
+          : dateTimeValue.date || '';
+        const timeValue = typeof dateTimeValue === 'string'
+          ? (dateTimeValue.match(/(\d{2}:\d{2})/) || ['', ''])[1]
+          : dateTimeValue.time || '';
+        
+        return (
+          <div className="date-time-inputs">
+            <input
+              type="date"
+              value={dateValue}
+              onChange={(e) => {
+                const newTime = typeof dateTimeValue === 'string'
+                  ? (dateTimeValue.match(/(\d{2}:\d{2})/) || ['', ''])[1]
+                  : dateTimeValue.time || '';
+                handleChange(q.id, { date: e.target.value, time: newTime });
+              }}
+            />
+            <input
+              type="time"
+              value={timeValue}
+              onChange={(e) => {
+                const newDate = typeof dateTimeValue === 'string'
+                  ? (dateTimeValue.match(/(\d{4}-\d{2}-\d{2})/) || ['', ''])[1]
+                  : dateTimeValue.date || '';
+                handleChange(q.id, { date: newDate, time: e.target.value });
+              }}
+            />
+          </div>
+        );
+
+      case "file_upload":
+        const selectedFile = responses[q.id] instanceof File ? responses[q.id] : null;
+        return (
+          <div className="file-upload">
+            <div className="upload-zone">
+              <label htmlFor={`file-upload-${q.id}`}>
+                <i className="fa-solid fa-cloud-arrow-up upload-icon"></i>
+                <p className="upload-text">
+                  <span>Nhấp hoặc kéo thả file vào đây</span>
+                </p>
+                <p className="upload-hint">
+                  Định dạng: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, ZIP, RAR (Tối đa 10MB)
+                </p>
+              </label>
+              <input
+                id={`file-upload-${q.id}`}
+                type="file"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    handleChange(q.id, file);
+                  }
+                }}
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+              />
+            </div>
+            {selectedFile && (
+              <div className="file-preview">
+                <i className="fa-solid fa-file"></i>
+                <span className="file-name">{selectedFile.name}</span>
+                <span className="file-size">({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+                <button
+                  type="button"
+                  className="file-remove"
+                  onClick={() => handleChange(q.id, null)}
+                >
+                  <i className="fa-solid fa-times"></i>
+                </button>
+              </div>
+            )}
           </div>
         );
 

@@ -2,13 +2,23 @@ import { apiClient } from './authService';
 import { generateUniqueToken } from '../utils/tokenGenerator';
 
 /**
- * Chuẩn hoá payload theo backend:
+ * Chuẩn hoá payload theo backend API mới:
  * POST /responses
  * Body: {
  *   surveyId: number,
  *   requestToken?: string,
- *   answers: Array<{ questionId: number, optionId?: number, answerText?: string }>
+ *   answers: Array<AnswerSubmitDTO>
  * }
+ * 
+ * 7 loại câu hỏi chính thức:
+ * - multiple_choice: selectedOptionIds (array of option IDs)
+ * - single_choice: selectedOptionId (single option ID)
+ * - boolean_: selectedOptionId (single option ID) 
+ * - ranking: rankingOptionIds (array of option IDs in preference order)
+ * - date_time: dateValue + timeValue
+ * - open_ended: answerText
+ * - rating: answerText (string number)
+ * - file_upload: answerText + file_upload (via /with-files endpoint)
  */
 function buildSubmissionPayload(surveyId, responses, survey) {
     const answers = [];
@@ -16,36 +26,93 @@ function buildSubmissionPayload(surveyId, responses, survey) {
     const pushAnswer = (questionId, value, questionType) => {
         if (value === undefined || value === null) return;
 
-        // ✅ Fix: xử lý riêng từng loại câu hỏi đúng theo backend
-        if (Array.isArray(value)) {
-            value.forEach(v => pushAnswer(questionId, v, questionType));
-            return;
-        }
+        const answer = { questionId };
 
         switch (questionType) {
             case 'multiple-choice-single':
-            case 'multiple-choice-multiple': {
-                const numVal = Number(value);
-                if (!isNaN(numVal)) {
-                    // ✅ Backend yêu cầu optionId (bắt buộc)
-                    answers.push({ questionId, optionId: numVal });
-                } else {
-                    // fallback — nếu giá trị không phải số
-                    answers.push({ questionId, answerText: String(value) });
+                // Single choice: send selectedOptionId (not array!)
+                const singleVal = Number(value);
+                if (!isNaN(singleVal)) {
+                    answer.selectedOptionId = singleVal;
+                    answers.push(answer);
                 }
                 break;
-            }
-            case 'boolean': {
-                // ✅ Backend cho phép answerText = true/false/yes/no
-                answers.push({ questionId, answerText: String(value).toLowerCase() });
+
+            case 'multiple-choice-multiple':
+                // Multiple choice: send selectedOptionIds (array)
+                if (Array.isArray(value)) {
+                    const optionIds = value.map(v => Number(v)).filter(id => !isNaN(id));
+                    if (optionIds.length > 0) {
+                        answer.selectedOptionIds = optionIds;
+                        answers.push(answer);
+                    }
+                } else {
+                    // Single value but it's multiple choice, convert to array
+                    const optionId = Number(value);
+                    if (!isNaN(optionId)) {
+                        answer.selectedOptionIds = [optionId];
+                        answers.push(answer);
+                    }
+                }
                 break;
-            }
-            case 'open-text':
+
+            case 'boolean':
+                // Boolean: treat as single choice with option ID
+                const boolVal = Number(value);
+                if (!isNaN(boolVal)) {
+                    answer.selectedOptionId = boolVal;
+                    answers.push(answer);
+                }
+                break;
+
+            case 'ranking':
+                // Ranking: send rankingOptionIds (array in preference order)
+                if (Array.isArray(value)) {
+                    const rankingIds = value.map(v => Number(v)).filter(id => !isNaN(id));
+                    if (rankingIds.length > 0) {
+                        answer.rankingOptionIds = rankingIds;
+                        answers.push(answer);
+                    }
+                }
+                break;
+
+            case 'date_time':
+                // Date/Time: parse and send dateValue + timeValue
+                if (typeof value === 'object' && value !== null) {
+                    // Object with date and time properties
+                    if (value.date) answer.dateValue = value.date;
+                    if (value.time) answer.timeValue = value.time;
+                    if (answer.dateValue || answer.timeValue) {
+                        answers.push(answer);
+                    }
+                } else if (typeof value === 'string') {
+                    // Parse ISO datetime string or separate date/time
+                    const dateMatch = value.match(/(\d{4}-\d{2}-\d{2})/);
+                    const timeMatch = value.match(/(\d{2}:\d{2})/);
+                    if (dateMatch) answer.dateValue = dateMatch[1];
+                    if (timeMatch) answer.timeValue = timeMatch[1];
+                    if (answer.dateValue || answer.timeValue) {
+                        answers.push(answer);
+                    }
+                }
+                break;
+
+            case 'open-ended':
+                answer.answerText = String(value);
+                answers.push(answer);
+                break;
+
             case 'rating-scale':
-            default: {
-                answers.push({ questionId, answerText: String(value) });
+                // Rating: send as string number in answerText
+                answer.answerText = String(value);
+                answers.push(answer);
                 break;
-            }
+
+            default:
+                // Fallback: send as answerText
+                answer.answerText = String(value);
+                answers.push(answer);
+                break;
         }
     };
 

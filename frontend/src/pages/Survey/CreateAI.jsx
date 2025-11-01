@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import { surveyService } from '../../services/surveyService';
@@ -8,32 +8,54 @@ import { categoryService } from '../../services/categoryService';
 import './CreateAI.css';
 import '../Survey/CreateSurvey.css';
 
-// Constants from CreateSurvey
+// 🧩 DND Kit
+import {
+    DndContext,
+    closestCenter,
+    PointerSensor,
+    useSensor,
+    useSensors
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    useSortable,
+    verticalListSortingStrategy,
+    arrayMove
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// ✅ 8 loại câu hỏi chính thức theo backend - đồng bộ với CreateSurvey
 const QUESTION_TYPE_OPTIONS = [
-    { value: 'short_text', label: 'Trả lời ngắn' },
-    { value: 'multiple_choice', label: 'Trắc nghiệm' },
-    { value: 'rating', label: 'Xếp hạng' },
-    { value: 'yes_no', label: 'Yes / No' }
+    { value: 'open_ended', label: 'Câu hỏi mở' },
+    { value: 'multiple_choice', label: 'Trắc nghiệm nhiều lựa chọn' },
+    { value: 'single_choice', label: 'Trắc nghiệm một lựa chọn' },
+    { value: 'boolean_', label: 'Đúng / Sai' },
+    { value: 'ranking', label: 'Xếp hạng' },
+    { value: 'date_time', label: 'Ngày / Giờ' },
+    { value: 'rating', label: 'Đánh giá' },
+    { value: 'file_upload', label: 'Tải file lên' }
 ];
 
 const mapTypeFromBackend = (type) => {
     switch (type) {
         case 'open_ended':
-            return 'short_text';
+            return 'open_ended';
         case 'boolean':
         case 'boolean_':
-            return 'yes_no';
+            return 'boolean_';
         default:
-            return type || 'short_text';
+            return type || 'open_ended';
     }
 };
 
 const mapTypeToBackend = (type) => {
     switch (type) {
         case 'short_text':
+        case 'open_ended':
             return 'open_ended';
         case 'yes_no':
-            return 'boolean';
+        case 'boolean_':
+            return 'boolean_';
         default:
             return type;
     }
@@ -54,7 +76,7 @@ const createYesNoOptions = () => [
     createEmptyOption('Không')
 ];
 
-const createEmptyQuestion = (type = 'short_text') => {
+const createEmptyQuestion = (type = 'open_ended') => {
     const base = {
         id: `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         question_text: '',
@@ -63,18 +85,25 @@ const createEmptyQuestion = (type = 'short_text') => {
         is_required: false
     };
 
-    if (type === 'multiple_choice') {
+    if (type === 'multiple_choice' || type === 'single_choice') {
         return {
             ...base,
             options: createDefaultOptions(),
-            choice_type: 'single'
+            choice_type: type === 'multiple_choice' ? 'multiple' : 'single'
         };
     }
 
-    if (type === 'yes_no') {
+    if (type === 'boolean_' || type === 'yes_no') {
         return {
             ...base,
             options: createYesNoOptions()
+        };
+    }
+
+    if (type === 'ranking') {
+        return {
+            ...base,
+            options: createDefaultOptions()
         };
     }
 
@@ -82,6 +111,20 @@ const createEmptyQuestion = (type = 'short_text') => {
         return {
             ...base,
             rating_scale: 5
+        };
+    }
+
+    if (type === 'date_time') {
+        return {
+            ...base,
+            // No special config needed
+        };
+    }
+
+    if (type === 'file_upload') {
+        return {
+            ...base,
+            // No special config needed
         };
     }
 
@@ -105,7 +148,7 @@ const normalizeQuestionData = (rawQuestion) => {
         options: []
     };
 
-    if (normalizedType === 'multiple_choice') {
+    if (normalizedType === 'multiple_choice' || normalizedType === 'single_choice') {
         const rawOptions = rawQuestion.options || rawQuestion.optionsList || [];
         const mappedOptions = rawOptions.length > 0
             ? rawOptions.map(opt => ({
@@ -116,11 +159,11 @@ const normalizeQuestionData = (rawQuestion) => {
         return {
             ...base,
             options: mappedOptions,
-            choice_type: rawQuestion.choice_type || rawQuestion.choiceType || 'single'
+            choice_type: rawQuestion.choice_type || rawQuestion.choiceType || (normalizedType === 'multiple_choice' ? 'multiple' : 'single')
         };
     }
 
-    if (normalizedType === 'yes_no') {
+    if (normalizedType === 'boolean_' || normalizedType === 'yes_no') {
         const rawOptions = rawQuestion.options || [];
         const mappedOptions = rawOptions.length >= 2
             ? rawOptions.map(opt => ({
@@ -134,6 +177,20 @@ const normalizeQuestionData = (rawQuestion) => {
         };
     }
 
+    if (normalizedType === 'ranking') {
+        const rawOptions = rawQuestion.options || rawQuestion.optionsList || [];
+        const mappedOptions = rawOptions.length > 0
+            ? rawOptions.map(opt => ({
+                id: opt?.id || `temp_option_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+                option_text: opt?.option_text ?? opt?.optionText ?? ''
+            }))
+            : createDefaultOptions();
+        return {
+            ...base,
+            options: mappedOptions
+        };
+    }
+
     if (normalizedType === 'rating') {
         return {
             ...base,
@@ -141,8 +198,91 @@ const normalizeQuestionData = (rawQuestion) => {
         };
     }
 
+    if (normalizedType === 'date_time' || normalizedType === 'file_upload') {
+        return base;
+    }
+
     return base;
 };
+
+// 🎯 Sortable Ranking Option Component
+function SortableRankingOption({ id, index, option, error, onTextChange, onDelete, disabled, onMoveUp, onMoveDown, totalCount }) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className={`ranking-option-item ${isDragging ? 'is-dragging' : ''}`}
+        >
+            <div className="ranking-handle" {...attributes} {...listeners}>
+                <i className="fa-solid fa-grip-vertical" aria-hidden="true"></i>
+            </div>
+            <span className="ranking-number">{index + 1}</span>
+            <input
+                className={`option-input ranking-input ${error ? 'error' : ''}`}
+                value={option.option_text}
+                onChange={(e) => onTextChange(e.target.value)}
+                placeholder={`Lựa chọn ${index + 1}`}
+            />
+            <div className="ranking-actions">
+                <button
+                    type="button"
+                    className="ranking-move-btn"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onMoveUp?.();
+                    }}
+                    disabled={index === 0}
+                    aria-label="Di chuyển lên"
+                    title="Di chuyển lên"
+                >
+                    <i className="fa-solid fa-chevron-up" aria-hidden="true"></i>
+                </button>
+                <button
+                    type="button"
+                    className="ranking-move-btn"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onMoveDown?.();
+                    }}
+                    disabled={index === totalCount - 1}
+                    aria-label="Di chuyển xuống"
+                    title="Di chuyển xuống"
+                >
+                    <i className="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </button>
+            </div>
+            <button
+                type="button"
+                className="remove-option"
+                onClick={() => {
+                    if (totalCount <= 2) return;
+                    if (window.confirm('Bạn có chắc muốn xóa lựa chọn này không?')) {
+                        onDelete?.();
+                    }
+                }}
+                disabled={totalCount <= 2 || disabled}
+                aria-label="Xóa lựa chọn"
+            >
+                <i className="fa-solid fa-delete-left" aria-hidden="true"></i>
+            </button>
+        </div>
+    );
+}
 
 export default function CreateAI() {
     const navigate = useNavigate();
@@ -168,6 +308,17 @@ export default function CreateAI() {
     const [currentStep, setCurrentStep] = useState(0);
     const [progress, setProgress] = useState(0);
     const [showForm, setShowForm] = useState(true);
+    const [showMobileView, setShowMobileView] = useState(false);
+    
+    // Ref để ngăn việc lưu nhiều lần
+    const isSavingRef = useRef(false);
+
+    // DND Kit sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: { distance: 8 }
+        })
+    );
 
     useEffect(() => {
         loadCategories();
@@ -291,15 +442,23 @@ export default function CreateAI() {
         const total = questions.length;
         const required = questions.filter(q => q.is_required).length;
         const multipleChoice = questions.filter(q => q.question_type === 'multiple_choice').length;
-        const yesNo = questions.filter(q => q.question_type === 'yes_no').length;
+        const singleChoice = questions.filter(q => q.question_type === 'single_choice').length;
+        const booleanQ = questions.filter(q => q.question_type === 'boolean_' || q.question_type === 'yes_no').length;
+        const ranking = questions.filter(q => q.question_type === 'ranking').length;
         const rating = questions.filter(q => q.question_type === 'rating').length;
-        const closed = multipleChoice + yesNo + rating;
+        const dateTime = questions.filter(q => q.question_type === 'date_time').length;
+        const fileUpload = questions.filter(q => q.question_type === 'file_upload').length;
+        const closed = multipleChoice + singleChoice + booleanQ + ranking + rating;
         return {
             total,
             required,
             multipleChoice,
-            yesNo,
+            singleChoice,
+            booleanQ,
+            ranking,
             rating,
+            dateTime,
+            fileUpload,
             open: total - closed
         };
     }, [questions]);
@@ -364,16 +523,22 @@ export default function CreateAI() {
             if (!q.question_text.trim()) {
                 newErrors[`question_${idx}`] = 'Nội dung câu hỏi là bắt buộc';
             }
-            if (q.question_type === 'multiple_choice') {
+            if (q.question_type === 'multiple_choice' || q.question_type === 'single_choice') {
                 const validOpts = q.options?.filter(o => o.option_text.trim());
                 if (!validOpts || validOpts.length < 2) {
                     newErrors[`question_${idx}_options`] = 'Câu hỏi trắc nghiệm cần ít nhất 2 lựa chọn';
                 }
             }
-            if (q.question_type === 'yes_no') {
+            if (q.question_type === 'boolean_' || q.question_type === 'yes_no') {
                 const yesNoOpts = q.options?.filter(o => o.option_text.trim());
                 if (!yesNoOpts || yesNoOpts.length < 2) {
-                    newErrors[`question_${idx}_options`] = 'Câu hỏi Yes/No cần tối thiểu 2 lựa chọn';
+                    newErrors[`question_${idx}_options`] = 'Câu hỏi Đúng/Sai cần tối thiểu 2 lựa chọn';
+                }
+            }
+            if (q.question_type === 'ranking') {
+                const rankingOpts = q.options?.filter(o => o.option_text.trim());
+                if (!rankingOpts || rankingOpts.length < 2) {
+                    newErrors[`question_${idx}_options`] = 'Câu hỏi xếp hạng cần ít nhất 2 lựa chọn';
                 }
             }
         });
@@ -403,10 +568,9 @@ export default function CreateAI() {
                 setCurrentStep(prev => Math.min(prev + 1, 3));
             }, 300); // Giảm từ 500ms xuống 300ms
 
-            // Tối ưu số lượng câu hỏi - giảm để tăng tốc
+            // Sử dụng đúng số lượng câu hỏi người dùng yêu cầu
             const requestedQuestions = parseInt(form.question_count);
-            const optimizedQuestions = Math.min(requestedQuestions, 8); // Tối đa 8 câu trong lần đầu
-
+            
             // Gọi API backend thật
             const requestData = {
                 title: form.title,
@@ -415,7 +579,7 @@ export default function CreateAI() {
                 categoryName: form.category_name,
                 aiPrompt: form.ai_context,
                 targetAudience: form.target_audience || null,
-                numberOfQuestions: optimizedQuestions
+                numberOfQuestions: requestedQuestions // Sử dụng đúng số lượng người dùng yêu cầu
             };
 
             console.log("🚀 Calling AI backend with:", requestData);
@@ -444,16 +608,51 @@ export default function CreateAI() {
                 console.log("✅ AI generated questions:", mappedQuestions);
 
                 // Kiểm tra xem có cần tạo thêm câu hỏi không
-                const requestedQuestions = parseInt(form.question_count);
                 const currentQuestions = mappedQuestions.length;
+                const requestedQuestions = parseInt(form.question_count);
 
                 if (requestedQuestions > currentQuestions) {
-                    console.log(`📝 Cần tạo thêm ${requestedQuestions - currentQuestions} câu hỏi`);
+                    console.log(`📝 Backend chỉ trả về ${currentQuestions} câu, yêu cầu ${requestedQuestions} câu.`);
+                    console.log(`💡 Sẽ tạo thêm ${requestedQuestions - currentQuestions} câu hỏi...`);
+                    
+                    // Tạo thêm câu hỏi nếu còn thiếu
+                    const remainingQuestions = requestedQuestions - currentQuestions;
+                    const additionalRequestData = {
+                        title: form.title,
+                        description: form.description,
+                        categoryName: form.category_name,
+                        aiPrompt: form.ai_context + ` (Tạo thêm ${remainingQuestions} câu hỏi bổ sung cho khảo sát này)`,
+                        targetAudience: form.target_audience || null,
+                        numberOfQuestions: remainingQuestions
+                    };
 
-                    // Hiển thị thông báo cho người dùng
-                    setTimeout(() => {
-                        alert(`✅ Đã tạo ${currentQuestions} câu hỏi ban đầu.\n\n💡 Bạn có thể sử dụng nút "Tạo lại" để tạo thêm câu hỏi hoặc chỉnh sửa từng câu theo ý muốn.`);
-                    }, 1500);
+                    try {
+                        const additionalResponse = await aiSurveyService.generateSurvey(additionalRequestData);
+                        if (additionalResponse.success && additionalResponse.generated_survey?.questions) {
+                            const additionalMappedQuestions = additionalResponse.generated_survey.questions.map((q, index) => ({
+                                id: `temp_${Date.now()}_${currentQuestions + index}`,
+                                question_text: q.question_text || q.questionText,
+                                question_type: mapTypeFromBackend(q.question_type || q.questionType),
+                                is_required: q.is_required ?? q.isRequired ?? true,
+                                options: q.options ? q.options.map((opt, optIndex) => ({
+                                    id: `temp_option_${Date.now()}_${currentQuestions + index}_${optIndex}`,
+                                    option_text: opt.option_text || opt.optionText
+                                })) : []
+                            }));
+
+                            // Thêm các câu hỏi bổ sung vào danh sách
+                            setQuestions(prev => [...prev, ...additionalMappedQuestions]);
+                            console.log(`✅ Đã tạo thêm ${additionalMappedQuestions.length} câu hỏi bổ sung`);
+                        }
+                    } catch (err) {
+                        console.warn('⚠️ Không thể tạo thêm câu hỏi bổ sung:', err);
+                        // Vẫn hiển thị thông báo nếu không tạo được thêm
+                        setTimeout(() => {
+                            alert(`✅ Đã tạo ${currentQuestions} câu hỏi.\n\n💡 Bạn có thể sử dụng nút "Tạo lại" để tạo thêm câu hỏi hoặc chỉnh sửa từng câu theo ý muốn.`);
+                        }, 1500);
+                    }
+                } else {
+                    console.log(`✅ Đã tạo đủ ${currentQuestions} câu hỏi như yêu cầu`);
                 }
 
                 // Đợi một chút để user thấy 100% rồi mới chuyển
@@ -520,20 +719,30 @@ export default function CreateAI() {
             const next = [...prev];
             const current = { ...next[index], question_type: type };
 
-            if (type === 'multiple_choice') {
-                current.choice_type = choiceType || current.choice_type || 'single';
+            if (type === 'multiple_choice' || type === 'single_choice') {
+                current.choice_type = choiceType || current.choice_type || (type === 'multiple_choice' ? 'multiple' : 'single');
                 current.options = (current.options && current.options.length > 0)
                     ? current.options
                     : createDefaultOptions();
                 delete current.rating_scale;
-            } else if (type === 'yes_no') {
+            } else if (type === 'boolean_' || type === 'yes_no') {
                 current.options = createYesNoOptions();
+                delete current.choice_type;
+                delete current.rating_scale;
+            } else if (type === 'ranking') {
+                current.options = (current.options && current.options.length > 0)
+                    ? current.options
+                    : createDefaultOptions();
                 delete current.choice_type;
                 delete current.rating_scale;
             } else if (type === 'rating') {
                 delete current.choice_type;
                 current.options = [];
                 current.rating_scale = current.rating_scale || 5;
+            } else if (type === 'date_time' || type === 'file_upload') {
+                delete current.choice_type;
+                delete current.rating_scale;
+                current.options = [];
             } else {
                 delete current.choice_type;
                 delete current.rating_scale;
@@ -544,7 +753,7 @@ export default function CreateAI() {
             return next;
         });
 
-        if (type !== 'multiple_choice') {
+        if (type !== 'multiple_choice' && type !== 'single_choice' && type !== 'ranking' && type !== 'boolean_') {
             clearError(`question_${index}_options`);
         }
     };
@@ -565,7 +774,9 @@ export default function CreateAI() {
     const handleDeleteOption = (questionIndex, optionIndex) => {
         setQuestions(prev => {
             const currentQuestion = prev[questionIndex];
-            if (!currentQuestion || currentQuestion.question_type !== 'multiple_choice') {
+            if (!currentQuestion || (currentQuestion.question_type !== 'multiple_choice' && 
+                currentQuestion.question_type !== 'single_choice' && 
+                currentQuestion.question_type !== 'ranking')) {
                 return prev;
             }
             const next = [...prev];
@@ -588,13 +799,44 @@ export default function CreateAI() {
     const handleAddOption = (questionIndex) => {
         setQuestions(prev => {
             const currentQuestion = prev[questionIndex];
-            if (!currentQuestion || currentQuestion.question_type !== 'multiple_choice') {
+            if (!currentQuestion || (currentQuestion.question_type !== 'multiple_choice' && 
+                currentQuestion.question_type !== 'single_choice' && 
+                currentQuestion.question_type !== 'ranking')) {
                 return prev;
             }
             const next = [...prev];
             const question = { ...next[questionIndex] };
             const options = [...(question.options || [])];
             options.push(createEmptyOption());
+            question.options = options;
+            next[questionIndex] = question;
+            return next;
+        });
+    };
+
+    // Move option up/down for ranking
+    const handleMoveOptionUp = (questionIndex, optionIndex) => {
+        setQuestions(prev => {
+            const next = [...prev];
+            const question = { ...next[questionIndex] };
+            const options = [...(question.options || [])];
+            if (optionIndex > 0) {
+                [options[optionIndex], options[optionIndex - 1]] = [options[optionIndex - 1], options[optionIndex]];
+            }
+            question.options = options;
+            next[questionIndex] = question;
+            return next;
+        });
+    };
+
+    const handleMoveOptionDown = (questionIndex, optionIndex) => {
+        setQuestions(prev => {
+            const next = [...prev];
+            const question = { ...next[questionIndex] };
+            const options = [...(question.options || [])];
+            if (optionIndex < options.length - 1) {
+                [options[optionIndex], options[optionIndex + 1]] = [options[optionIndex + 1], options[optionIndex]];
+            }
             question.options = options;
             next[questionIndex] = question;
             return next;
@@ -689,9 +931,21 @@ export default function CreateAI() {
 
                 // Add special handling for question types
                 if (newQuestion.question_type === 'multiple_choice') {
+                    newQuestion.choice_type = 'multiple';
+                    if (newQuestion.options.length === 0) {
+                        newQuestion.options = createDefaultOptions();
+                    }
+                } else if (newQuestion.question_type === 'single_choice') {
                     newQuestion.choice_type = 'single';
-                } else if (newQuestion.question_type === 'yes_no' && newQuestion.options.length === 0) {
+                    if (newQuestion.options.length === 0) {
+                        newQuestion.options = createDefaultOptions();
+                    }
+                } else if ((newQuestion.question_type === 'boolean_' || newQuestion.question_type === 'yes_no') && newQuestion.options.length === 0) {
                     newQuestion.options = createYesNoOptions();
+                } else if (newQuestion.question_type === 'ranking') {
+                    if (newQuestion.options.length === 0) {
+                        newQuestion.options = createDefaultOptions();
+                    }
                 } else if (newQuestion.question_type === 'rating') {
                     newQuestion.rating_scale = 5;
                 }
@@ -730,8 +984,16 @@ export default function CreateAI() {
     };
 
     const handleSaveSurvey = async () => {
+        // Ngăn việc gọi hàm nhiều lần đồng thời
+        if (isSavingRef.current || loading) {
+            console.log('⚠️ Save operation already in progress, ignoring duplicate call');
+            return;
+        }
+
         if (!validateQuestions()) return;
 
+        // Đánh dấu đang lưu
+        isSavingRef.current = true;
         setLoading(true);
 
         try {
@@ -753,45 +1015,58 @@ export default function CreateAI() {
             const surveyId = savedSurvey.id;
             console.log('✅ Survey created with ID:', surveyId);
 
-            // 2. Tạo tất cả questions song song
-            const questionPromises = questions.map(question => {
-                const questionPayload = {
-                    surveyId: surveyId,
-                    questionText: question.question_text,
-                    questionType: mapTypeToBackend(question.question_type),
-                    isRequired: question.is_required || false
-                };
-                return questionService.createQuestion(questionPayload);
-            });
+            // 2. Tạo tất cả questions song song (chỉ tạo những câu hỏi chưa được lưu)
+            const questionPromises = questions
+                .filter(question => {
+                    // Chỉ tạo những câu hỏi có ID temp_ (chưa được lưu) hoặc không có ID
+                    return !question.id || question.id.toString().startsWith('temp_');
+                })
+                .map(question => {
+                    const questionPayload = {
+                        surveyId: surveyId,
+                        questionText: question.question_text,
+                        questionType: mapTypeToBackend(question.question_type),
+                        isRequired: question.is_required || false
+                    };
+                    return questionService.createQuestion(questionPayload);
+                });
 
-            const savedQuestions = await Promise.all(questionPromises);
-            console.log('✅ Questions created:', savedQuestions.length);
+            if (questionPromises.length === 0) {
+                console.log('⚠️ No new questions to create');
+            } else {
+                const savedQuestions = await Promise.all(questionPromises);
+                console.log('✅ Questions created:', savedQuestions.length);
 
-            // 3. Tạo tất cả options song song
-            const optionPromises = [];
-            savedQuestions.forEach((savedQuestion, index) => {
-                const originalQuestion = questions[index];
-                if (originalQuestion.options?.length > 0) {
-                    originalQuestion.options.forEach(option => {
-                        if (option.option_text.trim()) {
-                            optionPromises.push(
-                                optionService.createOption({
-                                    questionId: savedQuestion.id,
-                                    optionText: option.option_text
-                                })
-                            );
-                        }
-                    });
+                // 3. Tạo tất cả options song song (chỉ tạo options mới)
+                const optionPromises = [];
+                savedQuestions.forEach((savedQuestion, savedIndex) => {
+                    // Tìm originalQuestion tương ứng
+                    const originalQuestions = questions.filter(q => !q.id || q.id.toString().startsWith('temp_'));
+                    const originalQuestion = originalQuestions[savedIndex];
+                    
+                    if (originalQuestion && originalQuestion.options?.length > 0) {
+                        originalQuestion.options.forEach(option => {
+                            // Chỉ tạo option mới (có ID temp_ hoặc không có ID)
+                            if ((!option.id || option.id.toString().startsWith('temp_option_')) && option.option_text.trim()) {
+                                optionPromises.push(
+                                    optionService.createOption({
+                                        questionId: savedQuestion.id,
+                                        optionText: option.option_text
+                                    })
+                                );
+                            }
+                        });
+                    }
+                });
+
+                if (optionPromises.length > 0) {
+                    await Promise.all(optionPromises);
+                    console.log('✅ Options created:', optionPromises.length);
                 }
-            });
-
-            if (optionPromises.length > 0) {
-                await Promise.all(optionPromises);
-                console.log('✅ Options created:', optionPromises.length);
             }
 
             // 4. Cập nhật status nếu cần
-            const finalSurvey = await surveyService.updateSurvey(surveyId, { status: 'draft' });
+            await surveyService.updateSurvey(surveyId, { status: 'draft' });
 
             alert('✅ Lưu khảo sát thành công!');
 
@@ -811,6 +1086,7 @@ export default function CreateAI() {
             alert('❌ ' + errorMessage);
         } finally {
             setLoading(false);
+            isSavingRef.current = false; // Reset flag
         }
     };
 
@@ -825,23 +1101,51 @@ export default function CreateAI() {
     // Build preview survey xem trước khảo sát ResponseFormPage
     const buildPreviewSurvey = () => {
         const mappedQuestions = questions.map(q => {
-            let type = 'open-text';
+            let type = 'open-ended';
             if (q.question_type === 'multiple_choice') {
                 type = q.choice_type === 'multiple' ? 'multiple-choice-multiple' : 'multiple-choice-single';
-            } else if (q.question_type === 'yes_no') {
+            } else if (q.question_type === 'single_choice') {
                 type = 'multiple-choice-single';
+            } else if (q.question_type === 'boolean_' || q.question_type === 'yes_no') {
+                type = 'boolean';
+            } else if (q.question_type === 'ranking') {
+                type = 'ranking';
             } else if (q.question_type === 'rating') {
                 type = 'rating-scale';
+            } else if (q.question_type === 'date_time') {
+                type = 'date_time';
+            } else if (q.question_type === 'file_upload') {
+                type = 'file_upload';
+            } else if (q.question_type === 'open_ended') {
+                type = 'open-ended';
+            }
+            // Map options to {id, text} format for ResponseFormPage
+            let options = undefined;
+            if (q.options && q.options.length > 0) {
+                options = q.options.map((o, idx) => {
+                    // Handle both object and string formats
+                    if (typeof o === 'string') {
+                        return {
+                            id: `temp_${q.id}_${idx}`,
+                            text: o
+                        };
+                    }
+                    return {
+                        id: o.id || `temp_${q.id}_${idx}`,
+                        text: o.option_text || o.text || ''
+                    };
+                });
             }
             return {
-                id: q.id,
-                text: q.question_text,
+                id: q.id || `temp_q_${Date.now()}_${Math.random()}`,
+                text: q.question_text || 'Câu hỏi',
                 type,
-                options: (q.options || []).map(o => o.option_text),
+                options,
                 scale: q.question_type === 'rating' ? [1, 2, 3, 4, 5] : undefined,
                 is_required: !!q.is_required
             };
-        });
+        }).filter(q => q.text && q.text.trim() !== ''); // Filter out empty questions
+        
         return {
             id: 'ai-preview',
             title: form.title || 'Xem trước khảo sát AI',
@@ -851,18 +1155,37 @@ export default function CreateAI() {
     };
 
     const handlePreview = () => {
-        const preview = buildPreviewSurvey();
+        try {
+            // Validate before preview
+            if (!questions || questions.length === 0) {
+                alert('Không có câu hỏi nào để xem trước. Vui lòng thêm ít nhất một câu hỏi.');
+                return;
+            }
 
-        // Lưu dữ liệu tạm thời vào localStorage để có thể quay lại
-        const tempData = {
-            form: form,
-            questions: questions,
-            activeQuestionIndex: activeQuestionIndex,
-            timestamp: Date.now()
-        };
-        localStorage.setItem('aiSurveyTempData', JSON.stringify(tempData));
+            const preview = buildPreviewSurvey();
+            
+            // Validate preview data
+            if (!preview || !preview.questions || preview.questions.length === 0) {
+                alert('Không thể tạo xem trước. Vui lòng kiểm tra lại các câu hỏi.');
+                return;
+            }
 
-        navigate('/response-preview', { state: { survey: preview } });
+            console.log('Preview data:', preview); // Debug log
+
+            // Lưu dữ liệu tạm thời vào localStorage để có thể quay lại
+            const tempData = {
+                form: form,
+                questions: questions,
+                activeQuestionIndex: activeQuestionIndex,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('aiSurveyTempData', JSON.stringify(tempData));
+
+            navigate('/response-preview', { state: { survey: preview } });
+        } catch (error) {
+            console.error('Error in handlePreview:', error);
+            alert('Có lỗi xảy ra khi tạo xem trước. Vui lòng thử lại.');
+        }
     };
 
     const activeQuestion = activeQuestionIndex !== null ? questions[activeQuestionIndex] : null;
@@ -870,8 +1193,13 @@ export default function CreateAI() {
     const activeQuestionError = activeQuestionIndex !== null ? errors[`question_${activeQuestionIndex}`] : null;
     const activeQuestionOptionError = activeQuestionIndex !== null ? errors[`question_${activeQuestionIndex}_options`] : null;
     const isMultipleChoice = activeQuestion?.question_type === 'multiple_choice';
-    const isYesNo = activeQuestion?.question_type === 'yes_no';
+    const isSingleChoice = activeQuestion?.question_type === 'single_choice';
+    const isBoolean = activeQuestion?.question_type === 'boolean_' || activeQuestion?.question_type === 'yes_no';
+    const isRanking = activeQuestion?.question_type === 'ranking';
     const isRating = activeQuestion?.question_type === 'rating';
+    const isDateTime = activeQuestion?.question_type === 'date_time';
+    const isFileUpload = activeQuestion?.question_type === 'file_upload';
+    const isOpenEnded = activeQuestion?.question_type === 'open_ended';
 
     return (
         <MainLayout>
@@ -1003,6 +1331,16 @@ export default function CreateAI() {
                             >
                                 <i className="fa-regular fa-eye" aria-hidden="true"></i>
                                 <span> Xem trước</span>
+                            </button>
+                            <button
+                                className={`btn-mobile-view ${showMobileView ? 'active' : ''}`}
+                                type="button"
+                                onClick={() => setShowMobileView(!showMobileView)}
+                                disabled={questions.length === 0}
+                                title="Xem trước trên Mobile"
+                            >
+                                <i className="fa-solid fa-mobile-screen-button" aria-hidden="true"></i>
+                                <span> Mobile</span>
                             </button>
                             <button
                                 className="btn-share"
@@ -1163,9 +1501,60 @@ export default function CreateAI() {
                                                 <p className="error-message">{activeQuestionError}</p>
                                             )}
 
-                                            {!isMultipleChoice && !isYesNo && !isRating && (
+                                            {isOpenEnded && (
                                                 <div className="question-helper">
                                                     Người tham gia sẽ nhập câu trả lời ngắn gọn cho câu hỏi này.
+                                                </div>
+                                            )}
+                                            
+                                            {isDateTime && (
+                                                <>
+                                                    <div className="question-helper">
+                                                        Người tham gia sẽ chọn ngày và giờ.
+                                                    </div>
+                                                    <div className="editor-section">
+                                                        <div className="editor-section-header">
+                                                            <span className="section-title">Xem trước</span>
+                                                        </div>
+                                                        <div className="date-time-inputs">
+                                                            <input type="date" disabled className="preview-input" />
+                                                            <input type="time" disabled className="preview-input" />
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            )}
+                                            
+                                            {isFileUpload && (
+                                                <>
+                                                    <div className="question-helper">
+                                                        Người tham gia sẽ tải file lên cho câu hỏi này.
+                                                    </div>
+                                                    <div className="editor-section">
+                                                        <div className="editor-section-header">
+                                                            <span className="section-title">Xem trước</span>
+                                                        </div>
+                                                        <div className="file-upload-preview">
+                                                            <div className="upload-zone-preview">
+                                                                <i className="fa-solid fa-cloud-arrow-up upload-icon"></i>
+                                                                <p className="upload-text">
+                                                                    <span>Nhấp hoặc kéo thả file vào đây</span>
+                                                                </p>
+                                                                <p className="upload-hint">Định dạng: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, ZIP, RAR (Tối đa 10MB)</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            )}
+                                            
+                                            {isRanking && (
+                                                <div className="question-helper">
+                                                    Người tham gia sẽ sắp xếp các lựa chọn theo thứ tự ưu tiên.
+                                                </div>
+                                            )}
+                                            
+                                            {isSingleChoice && (
+                                                <div className="question-helper">
+                                                    Người tham gia sẽ chọn một lựa chọn từ danh sách.
                                                 </div>
                                             )}
 
@@ -1214,7 +1603,116 @@ export default function CreateAI() {
                                                 </div>
                                             )}
 
-                                            {isYesNo && (
+                                            {isSingleChoice && (
+                                                <div className="editor-section">
+                                                    <div className="editor-section-header">
+                                                        <span className="section-title">Lựa chọn trả lời</span>
+                                                        <button
+                                                            type="button"
+                                                            className="add-option"
+                                                            onClick={() => handleAddOption(activeQuestionIndex)}
+                                                        >
+                                                            + Thêm lựa chọn
+                                                        </button>
+                                                    </div>
+                                                    <div className="options-list">
+                                                        {activeQuestion.options?.map((opt, oIdx) => (
+                                                            <div key={opt.id || oIdx} className="option-item">
+                                                                <span className="option-index">{oIdx + 1}</span>
+                                                                <input
+                                                                    className={`option-input ${activeQuestionOptionError ? 'error' : ''}`}
+                                                                    value={opt.option_text}
+                                                                    onChange={(e) => handleOptionChange(activeQuestionIndex, oIdx, e.target.value)}
+                                                                    placeholder={`Lựa chọn ${oIdx + 1}`}
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    className="remove-option"
+                                                                    onClick={() => {
+                                                                        if (activeQuestion.options.length <= 2) return;
+                                                                        if (window.confirm('Bạn có chắc muốn xóa lựa chọn này không?')) {
+                                                                            handleDeleteOption(activeQuestionIndex, oIdx);
+                                                                        }
+                                                                    }}
+                                                                    disabled={activeQuestion.options.length <= 2}
+                                                                    aria-label="Xóa lựa chọn"
+                                                                >
+                                                                    <i className="fa-solid fa-delete-left" aria-hidden="true"></i>
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    {activeQuestionOptionError && (
+                                                        <p className="error-message">{activeQuestionOptionError}</p>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {isRanking && (
+                                                <div className="editor-section">
+                                                    <div className="editor-section-header">
+                                                        <span className="section-title">Lựa chọn để xếp hạng</span>
+                                                        <button
+                                                            type="button"
+                                                            className="add-option"
+                                                            onClick={() => handleAddOption(activeQuestionIndex)}
+                                                        >
+                                                            + Thêm lựa chọn
+                                                        </button>
+                                                    </div>
+                                                    <DndContext
+                                                        sensors={sensors}
+                                                        collisionDetection={closestCenter}
+                                                        onDragEnd={(event) => {
+                                                            const { active, over } = event;
+                                                            if (!over || active.id === over.id) return;
+
+                                                            const oldIndex = activeQuestion.options.findIndex(opt => opt.id === active.id);
+                                                            const newIndex = activeQuestion.options.findIndex(opt => opt.id === over.id);
+                                                            
+                                                            const newOptions = arrayMove(activeQuestion.options, oldIndex, newIndex);
+                                                            setQuestions(prev => {
+                                                                const next = [...prev];
+                                                                next[activeQuestionIndex] = { ...next[activeQuestionIndex], options: newOptions };
+                                                                return next;
+                                                            });
+                                                        }}
+                                                    >
+                                                        <SortableContext
+                                                            items={activeQuestion.options?.map(opt => opt.id) || []}
+                                                            strategy={verticalListSortingStrategy}
+                                                        >
+                                                            <div className="ranking-options-list">
+                                                                {activeQuestion.options?.map((opt, oIdx) => (
+                                                                    <SortableRankingOption
+                                                                        key={opt.id}
+                                                                        id={opt.id}
+                                                                        index={oIdx}
+                                                                        option={opt}
+                                                                        error={activeQuestionOptionError}
+                                                                        onTextChange={(value) => handleOptionChange(activeQuestionIndex, oIdx, value)}
+                                                                        onDelete={() => {
+                                                                            if (activeQuestion.options.length <= 2) return;
+                                                                            if (window.confirm('Bạn có chắc muốn xóa lựa chọn này không?')) {
+                                                                                handleDeleteOption(activeQuestionIndex, oIdx);
+                                                                            }
+                                                                        }}
+                                                                        disabled={activeQuestion.options.length <= 2}
+                                                                        onMoveUp={() => handleMoveOptionUp(activeQuestionIndex, oIdx)}
+                                                                        onMoveDown={() => handleMoveOptionDown(activeQuestionIndex, oIdx)}
+                                                                        totalCount={activeQuestion.options.length}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        </SortableContext>
+                                                    </DndContext>
+                                                    {activeQuestionOptionError && (
+                                                        <p className="error-message">{activeQuestionOptionError}</p>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {isBoolean && (
                                                 <div className="editor-section">
                                                     <div className="editor-section-header">
                                                         <span className="section-title">Tuỳ chỉnh nhãn</span>
@@ -1278,27 +1776,7 @@ export default function CreateAI() {
                                             </div>
                                         </div>
 
-                                        {isMultipleChoice && (
-                                            <div className="panel-field">
-                                                <label>Chế độ lựa chọn</label>
-                                                <div className="choice-toggle">
-                                                    <button
-                                                        type="button"
-                                                        className={`choice-pill ${activeQuestion.choice_type !== 'multiple' ? 'is-active' : ''}`}
-                                                        onClick={() => handleChoiceTypeChange(activeQuestionIndex, 'single')}
-                                                    >
-                                                        Chọn một
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        className={`choice-pill ${activeQuestion.choice_type === 'multiple' ? 'is-active' : ''}`}
-                                                        onClick={() => handleChoiceTypeChange(activeQuestionIndex, 'multiple')}
-                                                    >
-                                                        Chọn nhiều
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
+                                        {/* Chế độ lựa chọn đã bị ẩn như CreateSurvey */}
 
                                         {isRating && (
                                             <div className="panel-field">
@@ -1335,19 +1813,35 @@ export default function CreateAI() {
                                                 <span className="stat-value">{stats.required}</span>
                                             </div>
                                             <div className="stat-chip">
-                                                <span className="stat-label">Trắc nghiệm</span>
+                                                <span className="stat-label">Trắc nghiệm nhiều</span>
                                                 <span className="stat-value">{stats.multipleChoice}</span>
                                             </div>
                                             <div className="stat-chip">
-                                                <span className="stat-label">Yes/No</span>
-                                                <span className="stat-value">{stats.yesNo}</span>
+                                                <span className="stat-label">Trắc nghiệm một</span>
+                                                <span className="stat-value">{stats.singleChoice}</span>
+                                            </div>
+                                            <div className="stat-chip">
+                                                <span className="stat-label">Đúng/Sai</span>
+                                                <span className="stat-value">{stats.booleanQ}</span>
                                             </div>
                                             <div className="stat-chip">
                                                 <span className="stat-label">Xếp hạng</span>
+                                                <span className="stat-value">{stats.ranking}</span>
+                                            </div>
+                                            <div className="stat-chip">
+                                                <span className="stat-label">Đánh giá</span>
                                                 <span className="stat-value">{stats.rating}</span>
                                             </div>
                                             <div className="stat-chip">
-                                                <span className="stat-label">Trả lời ngắn</span>
+                                                <span className="stat-label">Ngày/Giờ</span>
+                                                <span className="stat-value">{stats.dateTime}</span>
+                                            </div>
+                                            <div className="stat-chip">
+                                                <span className="stat-label">Tải file</span>
+                                                <span className="stat-value">{stats.fileUpload}</span>
+                                            </div>
+                                            <div className="stat-chip">
+                                                <span className="stat-label">Câu hỏi mở</span>
                                                 <span className="stat-value">{stats.open}</span>
                                             </div>
                                         </div>
@@ -1437,6 +1931,238 @@ export default function CreateAI() {
 
                         <div className="ai-footer-note"></div>
                         <em>Lưu ý: Quá trình này có thể mất vài phút tuỳ thuộc vào độ dài ngữ cảnh và số lượng câu hỏi.</em>
+                    </div>
+                </div>
+            )}
+
+            {/* Mobile View Preview Panel */}
+            {showMobileView && (
+                <div className="mobile-view-overlay" onClick={() => setShowMobileView(false)}>
+                    <div className="mobile-view-container" onClick={(e) => e.stopPropagation()}>
+                        <div className="mobile-view-header">
+                            <h3>Xem trước trên Mobile</h3>
+                            <button 
+                                className="mobile-view-close" 
+                                onClick={() => setShowMobileView(false)}
+                                aria-label="Đóng xem trước"
+                            >
+                                <i className="fa-solid fa-xmark" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div className="mobile-view-device">
+                            <div className="mobile-view-frame">
+                                <div className="mobile-view-content">
+                                    {(() => {
+                                        const preview = buildPreviewSurvey();
+                                        return (
+                                            <div style={{ padding: '16px', background: '#fff', minHeight: '100vh' }}>
+                                                <div style={{ textAlign: 'center', marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid #e5e7eb' }}>
+                                                    <h2 style={{ fontSize: '20px', fontWeight: '700', margin: '0 0 8px 0', color: '#1e293b' }}>
+                                                        {form.title || 'Tiêu đề khảo sát'}
+                                                    </h2>
+                                                    {form.description && (
+                                                        <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>
+                                                            {form.description}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                
+                                                {preview.questions.map((q, idx) => (
+                                                    <div key={q.id || idx} style={{ 
+                                                        background: '#f8fafc', 
+                                                        border: '1px solid #e2e8f0', 
+                                                        borderRadius: '8px', 
+                                                        padding: '16px', 
+                                                        marginBottom: '16px' 
+                                                    }}>
+                                                        <h3 style={{ 
+                                                            fontSize: '16px', 
+                                                            fontWeight: '600', 
+                                                            margin: '0 0 12px 0',
+                                                            color: '#1e293b' 
+                                                        }}>
+                                                            {q.text || 'Câu hỏi'}
+                                                            {q.is_required && <span style={{ color: '#ef4444', marginLeft: '4px' }}>*</span>}
+                                                        </h3>
+                                                        
+                                                        {/* Render preview of question type */}
+                                                        {(q.type === 'open-ended' || q.type === 'open-text') && (
+                                                            <textarea 
+                                                                disabled 
+                                                                style={{ 
+                                                                    width: '100%', 
+                                                                    padding: '12px', 
+                                                                    border: '1px solid #cbd5e1', 
+                                                                    borderRadius: '6px',
+                                                                    fontSize: '14px',
+                                                                    resize: 'vertical',
+                                                                    minHeight: '80px'
+                                                                }}
+                                                                placeholder="Nhập câu trả lời..."
+                                                            />
+                                                        )}
+                                                        
+                                                        {(q.type === 'multiple-choice-single' || q.type === 'multiple-choice-multiple' || q.type === 'boolean') && q.options && Array.isArray(q.options) && (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                {q.options.map((opt, optIdx) => {
+                                                                    const optText = typeof opt === 'string' ? opt : (opt?.text || opt?.option_text || opt?.id || '');
+                                                                    const optId = typeof opt === 'object' && opt?.id ? opt.id : optIdx;
+                                                                    return (
+                                                                        <label key={optId || optIdx} style={{ 
+                                                                            display: 'flex', 
+                                                                            alignItems: 'center', 
+                                                                            gap: '10px',
+                                                                            cursor: 'pointer'
+                                                                        }}>
+                                                                            <input 
+                                                                                type={q.type === 'multiple-choice-multiple' ? 'checkbox' : 'radio'} 
+                                                                                disabled
+                                                                                style={{ width: '18px', height: '18px' }}
+                                                                            />
+                                                                            <span style={{ fontSize: '14px', color: '#1e293b' }}>
+                                                                                {optText}
+                                                                            </span>
+                                                                        </label>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {q.type === 'ranking' && q.options && Array.isArray(q.options) && (
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                {q.options.map((opt, optIdx) => {
+                                                                    const optText = typeof opt === 'string' ? opt : (opt?.text || opt?.option_text || opt?.id || '');
+                                                                    const optId = typeof opt === 'object' && opt?.id ? opt.id : optIdx;
+                                                                    return (
+                                                                        <div key={optId || optIdx} style={{ 
+                                                                            display: 'flex', 
+                                                                            alignItems: 'center', 
+                                                                            gap: '12px',
+                                                                            padding: '12px',
+                                                                            background: '#fff',
+                                                                            border: '1px solid #e2e8f0',
+                                                                            borderRadius: '6px'
+                                                                        }}>
+                                                                            <div style={{ 
+                                                                                minWidth: '32px', 
+                                                                                height: '32px', 
+                                                                                background: 'linear-gradient(135deg, #6366f1, #7c3aed)', 
+                                                                                borderRadius: '50%', 
+                                                                                display: 'flex', 
+                                                                                alignItems: 'center', 
+                                                                                justifyContent: 'center',
+                                                                                color: '#fff',
+                                                                                fontWeight: '600',
+                                                                                fontSize: '14px'
+                                                                            }}>
+                                                                                {optIdx + 1}
+                                                                            </div>
+                                                                            <span style={{ fontSize: '14px', color: '#1e293b', flex: 1 }}>
+                                                                                {optText}
+                                                                            </span>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {q.type === 'rating-scale' && (
+                                                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                                                {[1, 2, 3, 4, 5].map(num => (
+                                                                    <div key={num} style={{
+                                                                        width: '40px',
+                                                                        height: '40px',
+                                                                        borderRadius: '50%',
+                                                                        background: '#f1f5f9',
+                                                                        border: '2px solid #cbd5e1',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        cursor: 'pointer',
+                                                                        fontSize: '16px',
+                                                                        fontWeight: '600',
+                                                                        color: '#475569'
+                                                                    }}>
+                                                                        {num}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {(q.type === 'date_time' || q.type === 'date-time') && (
+                                                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                                <input 
+                                                                    type="date" 
+                                                                    disabled 
+                                                                    style={{ 
+                                                                        flex: 1,
+                                                                        minWidth: '120px',
+                                                                        padding: '12px',
+                                                                        border: '1px solid #cbd5e1',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '14px',
+                                                                        background: '#f8fafc'
+                                                                    }}
+                                                                />
+                                                                <input 
+                                                                    type="time" 
+                                                                    disabled 
+                                                                    style={{ 
+                                                                        flex: 1,
+                                                                        minWidth: '120px',
+                                                                        padding: '12px',
+                                                                        border: '1px solid #cbd5e1',
+                                                                        borderRadius: '6px',
+                                                                        fontSize: '14px',
+                                                                        background: '#f8fafc'
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                        
+                                                        {(q.type === 'file_upload' || q.type === 'file-upload') && (
+                                                            <div style={{ 
+                                                                border: '2px dashed #cbd5e1', 
+                                                                borderRadius: '12px',
+                                                                padding: '24px',
+                                                                textAlign: 'center',
+                                                                background: '#f8fafc'
+                                                            }}>
+                                                                <i className="fa-solid fa-cloud-arrow-up" style={{ fontSize: '32px', color: '#94a3b8', marginBottom: '8px' }}></i>
+                                                                <p style={{ fontSize: '14px', color: '#475569', margin: '0 0 4px 0', fontWeight: '600' }}>
+                                                                    Nhấp hoặc kéo thả file vào đây
+                                                                </p>
+                                                                <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
+                                                                    Định dạng: PDF, DOC, XLS, PPT, TXT, ZIP, RAR
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                
+                                                <button 
+                                                    type="button"
+                                                    disabled
+                                                    style={{ 
+                                                        width: '100%',
+                                                        padding: '14px',
+                                                        background: '#e5e7eb',
+                                                        border: 'none',
+                                                        borderRadius: '8px',
+                                                        fontSize: '16px',
+                                                        fontWeight: '600',
+                                                        color: '#9ca3af',
+                                                        cursor: 'not-allowed'
+                                                    }}
+                                                >
+                                                    Gửi khảo sát
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
