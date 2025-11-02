@@ -42,11 +42,11 @@ const ListSurvey = () => {
             setResponseCounts(counts);
         } catch (error) {
             console.error('ListSurvey: Error fetching response counts:', error);
-            // Set fallback counts to 0
+            // Set fallback counts to 0 (normalize ID to string for consistency)
             const fallbackCounts = {};
             surveyList.forEach(survey => {
                 const id = survey.id || survey._id;
-                fallbackCounts[id] = 0;
+                fallbackCounts[String(id)] = 0;
             });
             setResponseCounts(fallbackCounts);
         } finally {
@@ -197,7 +197,7 @@ const ListSurvey = () => {
                                         {loadingResponseCounts ? (
                                             <span style={{ color: '#666' }}>...</span>
                                         ) : (
-                                            responseCounts[s.id || s._id] ?? s.responses ?? s.responseCount ?? 0
+                                            responseCounts[String(s.id || s._id)] ?? s.responses ?? s.responseCount ?? 0
                                         )} phản hồi
                                     </span>
                                     <span>•</span>
@@ -216,7 +216,17 @@ const ListSurvey = () => {
                                     className="action-btn"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        navigate('/report');
+                                        const surveyId = s.id || s._id;
+                                        navigate('/report', {
+                                            state: {
+                                                surveyId: surveyId,
+                                                surveyTitle: s.title || 'Khảo sát không có tiêu đề',
+                                                surveyDescription: s.description || '',
+                                                questions: s.questions || [],
+                                                questionsCount: s.questions?.length || 0,
+                                                isFromCreateSurvey: false
+                                            }
+                                        });
                                     }}
                                     title="Báo cáo"
                                 >
@@ -245,9 +255,9 @@ const ListSurvey = () => {
                                                 localStorage.setItem('userSurveys', JSON.stringify(updatedSurveys));
                                                 setSurveys(updatedSurveys);
 
-                                                // Update response counts by removing deleted survey
+                                                // Update response counts by removing deleted survey (normalize ID to string)
                                                 const updatedCounts = { ...responseCounts };
-                                                delete updatedCounts[surveyId];
+                                                delete updatedCounts[String(surveyId)];
                                                 setResponseCounts(updatedCounts);
 
                                                 if (updatedSurveys.length === 0 && currentPage > 0) {

@@ -71,7 +71,7 @@ const Sidebar = () => {
                     </div>
                 </div>
 
-                {/* <div className="nav-item">
+                <div className="nav-item">
                     <div
                         className={`nav-link ${isActive('/responses') ? 'active' : ''}`}
                         onClick={() => navigate('/responses')}
@@ -81,11 +81,11 @@ const Sidebar = () => {
                         </div>
                         <div className="nav-content">
                             <div className="nav-title">
-                                Phản hồi/Kết quả
+                                Chatbot hỏi đáp
                             </div>
                         </div>
                     </div>
-                </div> */}
+                </div>
 
                 {/* <div className="nav-item">
                     <div

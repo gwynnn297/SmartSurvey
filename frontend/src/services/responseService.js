@@ -314,7 +314,7 @@ export const responseService = {
                     size: 1  // Chỉ cần lấy meta, không cần data
                 }
             });
-            
+
             // Lấy total từ meta
             return response.data?.meta?.total || 0;
         } catch (error) {
@@ -332,46 +332,55 @@ export const responseService = {
 
     /**
      * Lấy số lượng phản hồi cho nhiều khảo sát cùng lúc
-     * Sử dụng API backend mới để gọi từng survey
-     * @param {Array<number>} surveyIds - Mảng ID của các khảo sát
-     * @returns {Promise<Object>} Object với key là surveyId và value là responseCount
+     * Sử dụng API backend với endpoint /api/surveys/{surveyId}/responses để lấy meta.total
+     * @param {Array<number|string>} surveyIds - Mảng ID của các khảo sát
+     * @returns {Promise<Object>} Object với key là surveyId (normalized) và value là responseCount
      */
     getMultipleResponseCounts: async (surveyIds) => {
+        if (!surveyIds || surveyIds.length === 0) {
+            return {};
+        }
+
         try {
-            // Vì backend chưa có endpoint batch, ta gọi từng survey riêng lẻ
+            // Normalize surveyIds (convert to number if possible, keep as string if needed)
+            const normalizedIds = surveyIds.map(id => {
+                const numId = Number(id);
+                return !isNaN(numId) ? numId : id;
+            });
+
             const counts = {};
-            const promises = surveyIds.map(async (surveyId) => {
+            const promises = normalizedIds.map(async (surveyId) => {
                 try {
-                    const response = await apiClient.get(`/responses/${surveyId}/count`);
-                    counts[surveyId] = response.data.totalResponses || 0;
+                    // Sử dụng endpoint /api/surveys/{surveyId}/responses với pagination
+                    // Chỉ cần lấy meta.total, không cần data
+                    const response = await apiClient.get(`/api/surveys/${surveyId}/responses`, {
+                        params: {
+                            page: 0,
+                            size: 1  // Chỉ cần lấy meta, không cần data
+                        }
+                    });
+
+                    // Lấy total từ meta
+                    const total = response.data?.meta?.total || 0;
+                    // Lưu với key là string để đảm bảo consistency khi lookup
+                    counts[String(surveyId)] = total;
                 } catch (error) {
-                    console.log(`📊 Failed to get count for survey ${surveyId}, using fallback`);
-                    counts[surveyId] = 0;
+                    console.log(`📊 Failed to get count for survey ${surveyId}:`, error.response?.status || error.message);
+                    // Set to 0 on error
+                    counts[String(surveyId)] = 0;
                 }
             });
 
             await Promise.all(promises);
             return counts;
         } catch (error) {
-            console.log('📊 Fallback: Using dashboard overview for multiple response counts');
-            try {
-                // Fallback: sử dụng dashboard overview và phân bổ đều
-                const overview = await responseService.getDashboardOverview();
-                const avgResponsesPerSurvey = Math.floor(overview.totalResponses / Math.max(overview.totalSurveys, 1));
-
-                const fallback = {};
-                surveyIds.forEach(id => {
-                    // Có thể randomize một chút để tránh tất cả surveys có cùng số responses
-                    fallback[id] = avgResponsesPerSurvey + Math.floor(Math.random() * 3);
-                });
-                return fallback;
-            } catch (fallbackError) {
-                console.error('❌ Get multiple response counts fallback error:', fallbackError);
-                // Fallback cuối cùng: tất cả = 0
-                const fallback = {};
-                surveyIds.forEach(id => fallback[id] = 0);
-                return fallback;
-            }
+            console.error('❌ Get multiple response counts error:', error);
+            // Fallback cuối cùng: tất cả = 0
+            const fallback = {};
+            surveyIds.forEach(id => {
+                fallback[String(id)] = 0;
+            });
+            return fallback;
         }
     },
 
