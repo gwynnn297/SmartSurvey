@@ -322,45 +322,72 @@ const ListSurvey = () => {
             {/* Modal tạo khảo sát */}
             {showCreateModal && (
                 <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <button className="modal-close-btn" onClick={() => setShowCreateModal(false)}>&times;</button>
-                        <div className="modal-header">
-                            <h3>Bạn muốn bắt đầu như thế nào?</h3>
-                            <p>Chọn phương thức tạo khảo sát phù hợp với nhu cầu của bạn</p>
-                        </div>
-                        <div className="modal-body">
-                            <div className="create-option" onClick={() => { setShowCreateModal(false); navigate('/create-ai'); }}>
-
-                                <i className="fa-brands fa-discord" title="Tạo bằng AI" style={{ fontSize: '50px', marginBottom: '16px', color: '#3b82f6' }}></i>
-
-                                <div className="option-title">Tạo bằng AI</div>
-                                <p className="option-desc">Mô tả ý tưởng của bạn, AI sẽ tự động tạo một bản nháp khảo sát để bạn bắt đầu.</p>
-                                <ul>
-                                    <li>Tiết kiệm thời gian</li>
-                                    <li>Gợi ý câu hỏi thông minh</li>
-                                    <li>Tối ưu mục tiêu</li>
-                                </ul>
-                                <button className="btn-primary small">Bắt đầu ngay</button>
+                <div className="modal" onClick={(e) => e.stopPropagation()}>
+                    <button
+                        className="modal-close-btn"
+                        onClick={() => setShowCreateModal(false)}
+                        aria-label="Đóng"
+                    >
+                        ×
+                    </button>
+                    <div className="modal-header">
+                        <h3>Chọn phương thức tạo khảo sát</h3>
+                        <p>Chọn phương thức tạo khảo sát phù hợp với nhu cầu của bạn</p>
+                    </div>
+                    <div className="modal-body">
+                        <div
+                            className="create-option"
+                            onClick={() => {
+                                setShowCreateModal(false);
+                                navigate('/create-ai');
+                            }}
+                        >
+                            <div className="option-icon ai">
+                                <i className="fa-solid fa-robot" style={{ fontSize: '24px' }}></i>
                             </div>
-                            <div className="create-option" onClick={() => { setShowCreateModal(false); navigate('/create-survey'); }}>
-
-                                <i className="fa-solid fa-square-pen" title="Tạo thủ công" style={{ fontSize: '50px', marginBottom: '16px', color: '#64748b' }}></i>
-
-                                <div className="option-title">Tạo thủ công</div>
-                                <p className="option-desc">Tự tay xây dựng khảo sát từ đầu để toàn quyền kiểm soát mọi câu hỏi và chi tiết.</p>
-                                <ul>
-                                    <li>Kiểm soát hoàn toàn</li>
-                                    <li>Tùy chỉnh chi tiết</li>
-                                    <li>Thiết kế theo ý muốn</li>
-                                </ul>
-                                <button className="btn-primary small">Bắt đầu ngay</button>
-                            </div>
+                            <div className="option-title">Tạo bằng AI</div>
+                            <p className="option-desc">
+                                Sử dụng AI để tự động tạo khảo sát từ mô tả của bạn
+                            </p>
+                            <ul>
+                                <li>Tự động tạo câu hỏi thông minh</li>
+                                <li>Tiết kiệm thời gian</li>
+                                <li>Đề xuất câu hỏi phù hợp</li>
+                            </ul>
+                            <button className="btn-primary small">
+                                Tạo bằng AI
+                            </button>
                         </div>
-                        <div className="modal-footer">
-                            <p className="note">Lưu ý: Bạn có thể chỉnh sửa và tùy chỉnh khảo sát sau khi tạo bằng cả hai phương thức.</p>
+
+                        <div
+                            className="create-option"
+                            onClick={() => {
+                                setShowCreateModal(false);
+                                navigate('/create-survey');
+                            }}
+                        >
+                            <div className="option-icon manual">
+                                <i className="fa-solid fa-pen-to-square" style={{ fontSize: '24px' }}></i>
+                            </div>
+                            <div className="option-title">Tạo thủ công</div>
+                            <p className="option-desc">
+                                Tự thiết kế và chỉnh sửa khảo sát theo ý muốn
+                            </p>
+                            <ul>
+                                <li>Kiểm soát hoàn toàn</li>
+                                <li>Tùy chỉnh chi tiết</li>
+                                <li>Nhiều loại câu hỏi</li>
+                            </ul>
+                            <button className="btn-primary small">
+                                Tạo thủ công
+                            </button>
                         </div>
                     </div>
+                    <div className="modal-footer">
+                        <p className="note">Bạn có thể chuyển đổi giữa hai phương thức bất cứ lúc nào</p>
+                    </div>
                 </div>
+            </div>
             )}
 
             {/* Modal xác nhận chia sẻ khảo sát */}

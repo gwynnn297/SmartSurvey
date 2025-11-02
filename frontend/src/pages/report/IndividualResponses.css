@@ -157,13 +157,15 @@
     background: white;
     border-radius: 12px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: visible;
     margin-bottom: 24px;
 }
 
 .responses-table {
     width: 100%;
     border-collapse: collapse;
+    min-width: fit-content;
 }
 
 .responses-table thead {
@@ -184,7 +186,8 @@
 }
 
 .time-column {
-    width: 140px;
+    width: 100px;
+    min-width: 100px;
 }
 
 .rating-column {
@@ -201,6 +204,33 @@
 
 .nps-column {
     width: 120px;
+}
+
+.question-column {
+    min-width: 280px;
+    width: 280px;
+    max-width: 400px;
+}
+
+.question-header {
+    white-space: normal;
+    word-wrap: break-word;
+    line-height: 1.4;
+    font-weight: 600;
+}
+
+.answer-cell {
+    min-width: 280px;
+    width: 280px;
+    max-width: 400px;
+}
+
+.answer-text {
+    white-space: normal;
+    word-wrap: break-word;
+    line-height: 1.5;
+    font-size: 14px;
+    color: #374151;
 }
 
 /* Table Body */
@@ -228,6 +258,7 @@
 /* Time Cell */
 .time-cell {
     font-size: 14px;
+    width: 100px;
 }
 
 .response-number {
