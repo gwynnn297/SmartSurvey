@@ -11,30 +11,30 @@ import { CSS } from '@dnd-kit/utilities';
 
 // 🎯 Sortable Ranking Item for Preview
 function SortableRankingItem({ id, index, text }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id });
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1
-  };
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1
+    };
 
-  return (
-    <div ref={setNodeRef} style={style} className="ranking-response-item">
-      <div className="ranking-handle-response" {...attributes} {...listeners}>
-        <i className="fa-solid fa-grip-vertical" aria-hidden="true"></i>
-      </div>
-      <span className="ranking-position">{index + 1}</span>
-      <span className="ranking-text">{text}</span>
-    </div>
-  );
+    return (
+        <div ref={setNodeRef} style={style} className="ranking-response-item">
+            <div className="ranking-handle-response" {...attributes} {...listeners}>
+                <i className="fa-solid fa-grip-vertical" aria-hidden="true"></i>
+            </div>
+            <span className="ranking-position">{index + 1}</span>
+            <span className="ranking-text">{text}</span>
+        </div>
+    );
 }
 
 const ViewLinkSharePage = () => {
@@ -238,10 +238,10 @@ const ViewLinkSharePage = () => {
         questions.forEach((q) => {
             if (q.is_required) {
                 const value = responses[q.id];
-                
+
                 // Kiểm tra theo từng loại câu hỏi
                 let isValid = false;
-                
+
                 if (q.type === "file_upload") {
                     // File upload: kiểm tra xem có File object không
                     isValid = value instanceof File;
@@ -262,7 +262,7 @@ const ViewLinkSharePage = () => {
                     // Các giá trị khác (number, boolean, etc.)
                     isValid = true;
                 }
-                
+
                 if (!isValid) {
                     newErrors[q.id] = "Câu hỏi này là bắt buộc";
                 }
@@ -292,7 +292,7 @@ const ViewLinkSharePage = () => {
     // Initialize ranking questions with their options
     useEffect(() => {
         if (!questions || questions.length === 0) return;
-        
+
         setResponses(prev => {
             const newResponses = { ...prev };
             questions.forEach(q => {
@@ -357,10 +357,10 @@ const ViewLinkSharePage = () => {
                 // Ranking: drag-drop sắp xếp options
                 const rankingOptionIds = responses[q.id] || [];
                 // Map IDs back to options for display
-                const rankingOptionsList = rankingOptionIds.map(id => 
+                const rankingOptionsList = rankingOptionIds.map(id =>
                     q.options?.find(opt => String(opt.id) === String(id))
                 ).filter(Boolean);
-                
+
                 if (!rankingOptionsList || rankingOptionsList.length === 0) {
                     return <div className="ranking-hint">Chưa có lựa chọn để xếp hạng</div>;
                 }
@@ -376,7 +376,7 @@ const ViewLinkSharePage = () => {
 
                                 const oldIndex = rankingOptionsList.findIndex(opt => String(opt.id) === String(active.id));
                                 const newIndex = rankingOptionsList.findIndex(opt => String(opt.id) === String(over.id));
-                                
+
                                 const newOrder = arrayMove(rankingOptionsList, oldIndex, newIndex);
                                 handleChange(q.id, newOrder.map(opt => opt.id));
                             }}
@@ -430,13 +430,13 @@ const ViewLinkSharePage = () => {
             case "date_time":
                 // Parse combined value or separate date/time
                 const dateTimeValue = responses[q.id] || { date: '', time: '' };
-                const dateValue = typeof dateTimeValue === 'string' 
-                    ? (dateTimeValue.match(/(\d{4}-\d{2}-\d{2})/) || ['', ''])[1] 
+                const dateValue = typeof dateTimeValue === 'string'
+                    ? (dateTimeValue.match(/(\d{4}-\d{2}-\d{2})/) || ['', ''])[1]
                     : dateTimeValue.date || '';
                 const timeValue = typeof dateTimeValue === 'string'
                     ? (dateTimeValue.match(/(\d{2}:\d{2})/) || ['', ''])[1]
                     : dateTimeValue.time || '';
-                
+
                 return (
                     <div className="date-time-inputs">
                         <input

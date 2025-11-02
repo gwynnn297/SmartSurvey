@@ -49,6 +49,7 @@ const PublicResponsePage = () => {
     const [loadedSurvey, setLoadedSurvey] = useState(null);
     const [alreadySubmitted, setAlreadySubmitted] = useState(false);
     const loadedSurveyIdRef = useRef(null);
+    const surveyStartTimeRef = useRef(null);
 
     const activeSurvey = useMemo(() => loadedSurvey, [loadedSurvey]);
 
@@ -159,6 +160,9 @@ const PublicResponsePage = () => {
                     questions: mappedQuestions,
                 });
 
+                // Lưu thời gian bắt đầu làm khảo sát
+                surveyStartTimeRef.current = Date.now();
+
                 // ✅ Kiểm tra token đã được dùng chưa
                 const currentToken =
                     localStorage.getItem("respondent_request_token") || respondentTokenFromLink;
@@ -223,10 +227,10 @@ const PublicResponsePage = () => {
         activeSurvey.questions.forEach((q) => {
             if (q.is_required) {
                 const value = responses[q.id];
-                
+
                 // Kiểm tra theo từng loại câu hỏi
                 let isValid = false;
-                
+
                 if (q.type === "file_upload") {
                     // File upload: kiểm tra xem có File object không
                     isValid = value instanceof File;
@@ -247,7 +251,7 @@ const PublicResponsePage = () => {
                     // Các giá trị khác (number, boolean, etc.)
                     isValid = true;
                 }
-                
+
                 if (!isValid) {
                     newErrors[q.id] = "Câu hỏi này là bắt buộc";
                 }
@@ -260,31 +264,38 @@ const PublicResponsePage = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        
+
         if (!activeSurvey) {
             console.error("❌ No survey loaded");
             alert("Không tìm thấy khảo sát. Vui lòng làm mới trang và thử lại.");
             return;
         }
-        
+
         if (!validateForm()) {
             console.warn("⚠️ Validation failed");
             return;
         }
-        
+
         setLoading(true);
+
+        // Tính toán durationSeconds từ khi bắt đầu làm khảo sát đến khi submit
+        const durationSeconds = surveyStartTimeRef.current
+            ? Math.floor((Date.now() - surveyStartTimeRef.current) / 1000)
+            : 0;
 
         // Debug: Kiểm tra token trước khi submit
         const currentToken = localStorage.getItem("respondent_request_token");
         console.log('🔍 Current token in localStorage:', currentToken);
         console.log('📝 Responses to submit:', responses);
         console.log('📊 Survey data:', activeSurvey);
+        console.log('⏱️ Duration seconds:', durationSeconds);
 
         try {
             const apiResult = await responseService.submitResponses(
                 activeSurvey.id,
                 responses,
-                activeSurvey
+                activeSurvey,
+                durationSeconds
             );
             console.log("✅ Submit response result:", apiResult);
             setSuccess(true);
@@ -547,10 +558,10 @@ const PublicResponsePage = () => {
                         ))}
 
                         <div className="form-footer">
-                            <button 
-                                type="submit" 
+                            <button
+                                type="submit"
                                 disabled={loading || !activeSurvey}
-                                style={{ 
+                                style={{
                                     pointerEvents: (loading || !activeSurvey) ? "none" : "auto",
                                     cursor: (loading || !activeSurvey) ? "not-allowed" : "pointer",
                                     opacity: (loading || !activeSurvey) ? 0.6 : 1

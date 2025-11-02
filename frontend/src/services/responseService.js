@@ -138,7 +138,7 @@ function buildSubmissionPayload(surveyId, responses, survey) {
 }
 
 export const responseService = {
-    submitResponses: async (surveyId, responses, survey) => {
+    submitResponses: async (surveyId, responses, survey, durationSeconds = 0) => {
         // Kiểm tra xem có file upload không
         const hasFiles = survey && Array.isArray(survey.questions) &&
             survey.questions.some(q => q.type === 'file_upload' && responses[q.id] instanceof File);
@@ -247,10 +247,16 @@ export const responseService = {
                 formData.append('requestToken', requestToken);
             }
 
+            // Thêm durationSeconds vào FormData
+            if (durationSeconds > 0) {
+                formData.append('durationSeconds', String(durationSeconds));
+            }
+
             console.log('📦 Submitting with files');
             console.log('📋 Answers JSON:', JSON.stringify(answers, null, 2));
             console.log('📁 Files in FormData:', Array.from(formData.keys()).filter(k => k.startsWith('file_')));
             console.log('🎫 RequestToken:', requestToken);
+            console.log('⏱️ DurationSeconds:', durationSeconds);
 
             try {
                 // Không set Content-Type thủ công, để axios tự động detect multipart/form-data
@@ -268,7 +274,14 @@ export const responseService = {
         } else {
             // Không có file, sử dụng endpoint JSON bình thường
             const payload = buildSubmissionPayload(surveyId, responses, survey);
+
+            // Thêm durationSeconds vào payload
+            if (durationSeconds > 0) {
+                payload.durationSeconds = durationSeconds;
+            }
+
             console.log('📦 Payload gửi lên backend:', JSON.stringify(payload, null, 2));
+            console.log('⏱️ DurationSeconds:', durationSeconds);
             try {
                 const response = await apiClient.post('/responses', payload);
                 return response.data;

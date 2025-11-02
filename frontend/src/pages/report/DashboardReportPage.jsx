@@ -409,13 +409,10 @@ export default function DashboardReportPage() {
                     <div className="report-header__top">
                         <div className="report-header__titles">
                             <h1>
-                                {isFromCreateSurvey ? `${surveyTitle}` : 'Tổng quan khảo sát'}
+                                {surveyTitle || 'Tổng quan khảo sát'}
                             </h1>
                             <p>
-                                {isFromCreateSurvey && surveyDescription
-                                    ? surveyDescription
-                                    : 'Thống kê tổng thể về phản hồi và kết quả khảo sát của bạn'
-                                }
+                                {surveyDescription || 'Thống kê tổng thể về phản hồi và kết quả khảo sát của bạn'}
                             </p>
                             {/* {isFromCreateSurvey && (
                                 <div style={{ marginTop: '8px', padding: '8px 12px', background: '#f0f9ff', border: '1px solid #0ea5e9', borderRadius: '6px', fontSize: '14px', color: '#0369a1' }}>
