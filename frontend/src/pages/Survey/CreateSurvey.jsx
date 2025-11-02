@@ -379,6 +379,10 @@ const CreateSurvey = () => {
     const [autoSaveStatus, setAutoSaveStatus] = useState('idle'); // idle, saving, saved, error
     const autoSaveTimeoutRef = React.useRef(null);
     const [showMobileView, setShowMobileView] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const draftStorageKey = React.useRef(null); // Key để lưu draft vào localStorage
+    const [showDraftModal, setShowDraftModal] = useState(false);
+    const isNavigatingToPreviewOrShare = React.useRef(false); // Để theo dõi navigation tới preview/share
 
     const [surveyData, setSurveyData] = useState({
         title: '',
@@ -758,34 +762,96 @@ const CreateSurvey = () => {
         }
     };
 
-    // Auto-save effect
+    // Hàm lưu draft vào localStorage
+    const saveDraftToLocalStorage = () => {
+        try {
+            const draftKey = draftStorageKey.current || `survey_draft_${editSurveyId || 'new'}`;
+            if (!draftStorageKey.current) {
+                draftStorageKey.current = draftKey;
+            }
+
+            const draftData = {
+                surveyData,
+                questions,
+                editSurveyId,
+                isEditMode,
+                timestamp: Date.now()
+            };
+
+            localStorage.setItem(draftKey, JSON.stringify(draftData));
+            setHasUnsavedChanges(false);
+            return true;
+        } catch (err) {
+            console.error('Error saving draft to localStorage:', err);
+            return false;
+        }
+    };
+
+    // Hàm khôi phục draft từ localStorage
+    const restoreDraftFromLocalStorage = () => {
+        try {
+            const draftKey = draftStorageKey.current || `survey_draft_${editSurveyId || 'new'}`;
+            const savedDraft = localStorage.getItem(draftKey);
+            
+            if (savedDraft) {
+                const draftData = JSON.parse(savedDraft);
+                // Chỉ khôi phục nếu dữ liệu còn mới (trong vòng 24h)
+                const draftAge = Date.now() - (draftData.timestamp || 0);
+                const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+                
+                if (draftAge < maxAge) {
+                    if (draftData.surveyData) {
+                        setSurveyData(draftData.surveyData);
+                    }
+                    if (draftData.questions) {
+                        setQuestions(draftData.questions);
+                    }
+                    if (draftData.editSurveyId) {
+                        setEditSurveyId(draftData.editSurveyId);
+                    }
+                    if (draftData.isEditMode !== undefined) {
+                        setIsEditMode(draftData.isEditMode);
+                    }
+                    return true;
+                } else {
+                    // Xóa draft cũ
+                    localStorage.removeItem(draftKey);
+                }
+            }
+            return false;
+        } catch (err) {
+            console.error('Error restoring draft from localStorage:', err);
+            return false;
+        }
+    };
+
+    // Auto-save effect - lưu vào localStorage thay vì database
     useEffect(() => {
         // Clear existing timeout
         if (autoSaveTimeoutRef.current) {
             clearTimeout(autoSaveTimeoutRef.current);
         }
 
-        // Only auto-save if we have a survey ID (edit mode) and have data
-        if (!editSurveyId || !surveyData.title.trim()) {
+        // Chỉ auto-save nếu có dữ liệu
+        if (!surveyData.title.trim() && questions.length === 0) {
             return;
         }
 
         // Set new timeout for auto-save (3 seconds after last change)
-        autoSaveTimeoutRef.current = setTimeout(async () => {
+        autoSaveTimeoutRef.current = setTimeout(() => {
             try {
                 setAutoSaveStatus('saving');
-
-                const payload = {
-                    title: surveyData.title,
-                    description: surveyData.description,
-                    categoryId: surveyData.category_id ? parseInt(surveyData.category_id) : null,
-                    aiPrompt: null
-                };
-
-                await surveyService.updateSurvey(editSurveyId, payload);
-
-                setAutoSaveStatus('saved');
-                setTimeout(() => setAutoSaveStatus('idle'), 2000);
+                
+                // Lưu vào localStorage thay vì database
+                const success = saveDraftToLocalStorage();
+                
+                if (success) {
+                    setAutoSaveStatus('saved');
+                    setTimeout(() => setAutoSaveStatus('idle'), 2000);
+                } else {
+                    setAutoSaveStatus('error');
+                    setTimeout(() => setAutoSaveStatus('idle'), 2000);
+                }
             } catch (err) {
                 console.error('Auto-save failed:', err);
                 setAutoSaveStatus('error');
@@ -793,40 +859,144 @@ const CreateSurvey = () => {
             }
         }, 3000);
 
+        // Đánh dấu có thay đổi chưa lưu
+        setHasUnsavedChanges(true);
+
         // Cleanup
         return () => {
             if (autoSaveTimeoutRef.current) {
                 clearTimeout(autoSaveTimeoutRef.current);
             }
         };
-    }, [surveyData, editSurveyId, questions]);
+    }, [surveyData, questions]);
 
     useEffect(() => {
         loadCategories();
+
+        // Kiểm tra xem có đang quay lại từ preview/share không
+        const returningFromPreview = sessionStorage.getItem('returning_from_preview') === 'true';
+        if (returningFromPreview) {
+            sessionStorage.removeItem('returning_from_preview');
+            // Tự động khôi phục draft, không hiển thị modal
+            draftStorageKey.current = 'survey_draft_new';
+            const restored = restoreDraftFromLocalStorage();
+            if (restored) {
+                console.log('✅ Auto-restored draft from localStorage (returning from preview/share)');
+                return; // Không cần xử lý tiếp
+            }
+        }
 
         // Kiểm tra nếu đang edit survey
         const editSurvey = location.state?.editSurvey;
         if (editSurvey) {
             setIsEditMode(true);
-            setEditSurveyId(editSurvey.id);
+            const surveyId = editSurvey.id;
+            setEditSurveyId(surveyId);
+            draftStorageKey.current = `survey_draft_${surveyId || 'new'}`;
 
-            // Load dữ liệu survey
-            setSurveyData({
-                title: editSurvey.title || '',
-                description: editSurvey.description || '',
-                category_id: editSurvey.categoryId || '',
-                status: editSurvey.status || 'draft'
-            });
+            // Thử khôi phục từ localStorage trước (nếu có draft chưa lưu)
+            const restored = restoreDraftFromLocalStorage();
+            
+            if (!restored) {
+                // Load dữ liệu survey từ location.state
+                setSurveyData({
+                    title: editSurvey.title || '',
+                    description: editSurvey.description || '',
+                    category_id: editSurvey.categoryId || '',
+                    status: editSurvey.status || 'draft'
+                });
 
-            // Load questions từ server nếu có surveyId
-            if (editSurvey.id && !editSurvey.id.toString().startsWith('temp_')) {
-                loadQuestionsFromServer(editSurvey.id);
-            } else if (editSurvey.questions && editSurvey.questions.length > 0) {
-                // Fallback: load từ localStorage
-                setQuestions(editSurvey.questions);
+                // Load questions từ server nếu có surveyId
+                if (surveyId && !surveyId.toString().startsWith('temp_')) {
+                    loadQuestionsFromServer(surveyId);
+                } else if (editSurvey.questions && editSurvey.questions.length > 0) {
+                    // Fallback: load từ location.state
+                    setQuestions(editSurvey.questions);
+                }
+            } else {
+                // Đã khôi phục từ localStorage, không cần load từ server
+                console.log('✅ Restored draft from localStorage');
+            }
+        } else {
+            // Không có editSurvey, kiểm tra xem có draft không
+            draftStorageKey.current = 'survey_draft_new';
+            const hasDraft = checkDraftExists();
+            if (hasDraft && !returningFromPreview) {
+                // Hiển thị modal hỏi người dùng (chỉ khi không quay lại từ preview/share)
+                setShowDraftModal(true);
             }
         }
     }, [location.state]);
+
+    // Kiểm tra xem có draft tồn tại không
+    const checkDraftExists = () => {
+        try {
+            const draftKey = draftStorageKey.current || 'survey_draft_new';
+            const savedDraft = localStorage.getItem(draftKey);
+            if (savedDraft) {
+                const draftData = JSON.parse(savedDraft);
+                const draftAge = Date.now() - (draftData.timestamp || 0);
+                const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+                return draftAge < maxAge;
+            }
+            return false;
+        } catch (err) {
+            return false;
+        }
+    };
+
+    // Xử lý khi người dùng chọn tiếp tục chỉnh sửa
+    const handleContinueEditing = () => {
+        setShowDraftModal(false);
+        const restored = restoreDraftFromLocalStorage();
+        if (restored) {
+            console.log('✅ Restored draft from localStorage');
+        }
+    };
+
+    // Xử lý khi người dùng chọn tạo mới
+    const handleCreateNew = () => {
+        setShowDraftModal(false);
+        // Xóa draft
+        if (draftStorageKey.current) {
+            localStorage.removeItem(draftStorageKey.current);
+        }
+        // Reset form
+        setSurveyData({
+            title: '',
+            description: '',
+            category_id: '',
+            status: 'draft'
+        });
+        setQuestions([]);
+        setEditSurveyId(null);
+        setIsEditMode(false);
+        setHasUnsavedChanges(false);
+    };
+
+    // Lưu draft khi rời trang (trừ khi đi tới preview/share)
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            // Lưu draft trước khi đóng tab
+            if (hasUnsavedChanges || (surveyData.title.trim() || questions.length > 0)) {
+                saveDraftToLocalStorage();
+            }
+        };
+
+        // Lưu khi đóng tab/window
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        // Cleanup
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            // Lưu draft khi component unmount (chỉ nếu không đi tới preview/share)
+            if (!isNavigatingToPreviewOrShare.current && (hasUnsavedChanges || (surveyData.title.trim() || questions.length > 0))) {
+                saveDraftToLocalStorage();
+            }
+            // Reset flag
+            isNavigatingToPreviewOrShare.current = false;
+        };
+    }, [hasUnsavedChanges, surveyData, questions]);
 
     // Function để load questions từ server
     const loadQuestionsFromServer = async (surveyId) => {
@@ -1153,6 +1323,19 @@ const CreateSurvey = () => {
 
             alert(message);
 
+            // Xóa draft từ localStorage sau khi đã lưu vào database
+            if (draftStorageKey.current) {
+                localStorage.removeItem(draftStorageKey.current);
+            }
+            setHasUnsavedChanges(false);
+            
+            // Cập nhật draftStorageKey với surveyId mới (nếu có)
+            if (surveyId) {
+                draftStorageKey.current = `survey_draft_${surveyId}`;
+                setEditSurveyId(surveyId);
+                setIsEditMode(true);
+            }
+
             // Điều hướng sau khi lưu
             if (status === 'published') {
                 // Chỉ chuyển hướng khi publish
@@ -1263,6 +1446,11 @@ const CreateSurvey = () => {
     };
 
     const handlePreview = () => {
+        // Đánh dấu là đang điều hướng tới preview (không hiển thị modal khi quay lại)
+        isNavigatingToPreviewOrShare.current = true;
+        sessionStorage.setItem('returning_from_preview', 'true');
+        // Lưu draft vào localStorage trước khi xem trước
+        saveDraftToLocalStorage();
         const preview = buildPreviewSurvey();
         navigate('/response-preview', { state: { survey: preview } });
     };
@@ -1273,8 +1461,17 @@ const CreateSurvey = () => {
             return;
         }
 
+        // Đánh dấu là đang điều hướng tới share (không hiển thị modal khi quay lại)
+        isNavigatingToPreviewOrShare.current = true;
+        sessionStorage.setItem('returning_from_preview', 'true');
+
         setLoading(true);
         try {
+            // Nếu có thay đổi chưa lưu, tự động lưu vào localStorage trước
+            if (hasUnsavedChanges) {
+                saveDraftToLocalStorage();
+            }
+
             // Lưu survey trước (nếu chưa có)
             let surveyId = editSurveyId;
             if (!surveyId || surveyId.toString().startsWith('temp_')) {
@@ -1292,16 +1489,42 @@ const CreateSurvey = () => {
                 }
 
                 surveyId = savedSurvey.id;
+                setEditSurveyId(surveyId);
+                draftStorageKey.current = `survey_draft_${surveyId}`;
 
                 // Cập nhật status thành published
                 await surveyService.updateSurvey(surveyId, { status: 'published' });
 
-                // Lưu questions và options
+                // Lưu questions và options vào database
                 await saveQuestionsAndOptions(surveyId);
             } else {
-                // Cập nhật survey hiện có thành published
-                await surveyService.updateSurvey(surveyId, { status: 'published' });
+                // Cập nhật survey hiện có thành published và lưu questions/options mới nhất
+                await surveyService.updateSurvey(surveyId, { 
+                    status: 'published',
+                    title: surveyData.title,
+                    description: surveyData.description,
+                    categoryId: surveyData.category_id ? parseInt(surveyData.category_id) : null
+                });
+                
+                // Xóa questions cũ và lưu lại questions mới từ state hiện tại
+                const existingQuestions = await questionService.getQuestionsBySurvey(surveyId);
+                for (const q of existingQuestions) {
+                    try {
+                        await questionService.deleteQuestion(q.id);
+                    } catch (err) {
+                        console.warn(`Could not delete question ${q.id}:`, err);
+                    }
+                }
+                
+                // Lưu questions và options mới vào database
+                await saveQuestionsAndOptions(surveyId);
             }
+
+            // Xóa draft từ localStorage sau khi đã lưu vào database
+            if (draftStorageKey.current) {
+                localStorage.removeItem(draftStorageKey.current);
+            }
+            setHasUnsavedChanges(false);
 
             // Chuyển đến trang ViewLinkSharePage để hiển thị link chia sẻ
             navigate(`/view-link-share/${surveyId}`);
@@ -1422,6 +1645,42 @@ const CreateSurvey = () => {
 
     return (
         <MainLayout>
+            {/* Modal hỏi người dùng về draft */}
+            {showDraftModal && (
+                <div className="draft-modal-overlay" onClick={() => setShowDraftModal(false)}>
+                    <div className="draft-modal-content" onClick={(e) => e.stopPropagation()}>
+                        <div className="draft-modal-header">
+                            <h3>Phát hiện bản nháp chưa hoàn thành</h3>
+                            <button 
+                                className="draft-modal-close"
+                                onClick={() => setShowDraftModal(false)}
+                                aria-label="Đóng"
+                            >
+                                <i className="fa-solid fa-times"></i>
+                            </button>
+                        </div>
+                        <div className="draft-modal-body">
+                            <p>Bạn có một bản nháp khảo sát chưa hoàn thành. Bạn muốn:</p>
+                        </div>
+                        <div className="draft-modal-footer">
+                            <button
+                                className="btn-draft-continue"
+                                onClick={handleContinueEditing}
+                            >
+                                <i className="fa-solid fa-edit"></i>
+                                Tiếp tục chỉnh sửa
+                            </button>
+                            <button
+                                className="btn-draft-new"
+                                onClick={handleCreateNew}
+                            >
+                                <i className="fa-solid fa-plus"></i>
+                                Tạo mới
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             <div className="create-survey-wrapper">
                 <div className="survey-toolbar">
                     <div className="survey-toolbar-left">

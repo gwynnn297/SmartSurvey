@@ -5,6 +5,37 @@ import { surveyService } from "../../services/surveyService";
 import { questionService, optionService } from "../../services/questionSurvey";
 import { generateUniqueToken, isValidTokenFormat } from "../../utils/tokenGenerator";
 import logoSmartSurvey from "../../assets/logoSmartSurvey.png";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// 🎯 Sortable Ranking Item for Preview
+function SortableRankingItem({ id, index, text }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="ranking-response-item">
+      <div className="ranking-handle-response" {...attributes} {...listeners}>
+        <i className="fa-solid fa-grip-vertical" aria-hidden="true"></i>
+      </div>
+      <span className="ranking-position">{index + 1}</span>
+      <span className="ranking-text">{text}</span>
+    </div>
+  );
+}
 
 const ViewLinkSharePage = () => {
     const params = useParams();
@@ -18,6 +49,10 @@ const ViewLinkSharePage = () => {
     const [responses, setResponses] = useState({});
     const [errors, setErrors] = useState({});
     const [success, setSuccess] = useState(false);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    );
 
     const surveyId = params.surveyId;
 
@@ -45,14 +80,24 @@ const ViewLinkSharePage = () => {
 
                     if (backendType === "multiple_choice") {
                         type = q.choiceType === "multiple" ? "multiple-choice-multiple" : "multiple-choice-single";
+                    } else if (backendType === "single_choice") {
+                        type = "multiple-choice-single";
                     } else if (backendType === "boolean" || backendType === "boolean_" || backendType === "yes_no") {
                         type = "boolean";
                     } else if (backendType === "rating") {
                         type = "rating-scale";
+                    } else if (backendType === "ranking") {
+                        type = "ranking";
+                    } else if (backendType === "date_time") {
+                        type = "date_time";
+                    } else if (backendType === "file_upload") {
+                        type = "file_upload";
+                    } else if (backendType === "open_ended") {
+                        type = "open-ended";
                     }
 
                     let options = [];
-                    if (type.startsWith("multiple-choice")) {
+                    if (type.startsWith("multiple-choice") || type === "boolean" || type === "ranking") {
                         try {
                             const opts = await optionService.getOptionsByQuestion(q.id);
                             options = (opts || []).map((o) => ({
@@ -67,7 +112,7 @@ const ViewLinkSharePage = () => {
                         }
                     }
 
-                    if (type === "boolean") {
+                    if (type === "boolean" && options.length === 0) {
                         options = [
                             { id: "true", text: "Có" },
                             { id: "false", text: "Không" },
@@ -192,11 +237,33 @@ const ViewLinkSharePage = () => {
         if (!loadedSurvey) return false;
         questions.forEach((q) => {
             if (q.is_required) {
-                if (
-                    !responses[q.id] ||
-                    (Array.isArray(responses[q.id]) && responses[q.id].length === 0) ||
-                    (typeof responses[q.id] === "string" && responses[q.id].trim() === "")
-                ) {
+                const value = responses[q.id];
+                
+                // Kiểm tra theo từng loại câu hỏi
+                let isValid = false;
+                
+                if (q.type === "file_upload") {
+                    // File upload: kiểm tra xem có File object không
+                    isValid = value instanceof File;
+                } else if (q.type === "date_time") {
+                    // Date/Time: kiểm tra object có date hoặc time
+                    if (typeof value === "object" && value !== null) {
+                        isValid = !!(value.date || value.time);
+                    } else if (typeof value === "string") {
+                        isValid = value.trim() !== "";
+                    }
+                } else if (Array.isArray(value)) {
+                    // Array: kiểm tra length > 0
+                    isValid = value.length > 0;
+                } else if (typeof value === "string") {
+                    // String: kiểm tra không rỗng sau khi trim
+                    isValid = value.trim() !== "";
+                } else if (value !== null && value !== undefined) {
+                    // Các giá trị khác (number, boolean, etc.)
+                    isValid = true;
+                }
+                
+                if (!isValid) {
                     newErrors[q.id] = "Câu hỏi này là bắt buộc";
                 }
             }
@@ -222,39 +289,116 @@ const ViewLinkSharePage = () => {
         }
     };
 
+    // Initialize ranking questions with their options
+    useEffect(() => {
+        if (!questions || questions.length === 0) return;
+        
+        setResponses(prev => {
+            const newResponses = { ...prev };
+            questions.forEach(q => {
+                if (q.type === 'ranking' && !newResponses[q.id] && q.options && q.options.length > 0) {
+                    // Initialize with option IDs in order
+                    newResponses[q.id] = q.options.map(opt => opt.id);
+                }
+            });
+            return newResponses;
+        });
+    }, [questions]);
+
     // Render question preview giống ResponseFormPage
     const renderQuestionPreview = (q) => {
         switch (q.type) {
             case "multiple-choice-single":
-                // Radio: chọn một
+                // Radio: chọn một option ID
                 return (q.options || []).map((opt, i) => (
                     <label key={i} className="option-label">
                         <input
                             type="radio"
                             name={`question_${q.id}`}
-                            value={opt.text}
-                            checked={responses[q.id] === opt.text}
-                            onChange={() => handleChange(q.id, opt.text)}
+                            value={String(opt.id || opt)}
+                            checked={String(responses[q.id]) === String(opt.id || opt)}
+                            onChange={() => handleChange(q.id, String(opt.id || opt))}
                         />
-                        <span>{opt.text}</span>
+                        <span>{opt.text || opt}</span>
                     </label>
                 ));
 
             case "multiple-choice-multiple":
-                // Checkbox: chọn nhiều
+                // Checkbox: chọn nhiều option IDs
                 return (q.options || []).map((opt, i) => (
                     <label key={i} className="option-label">
                         <input
                             type="checkbox"
                             name={`question_${q.id}`}
-                            value={opt.text}
-                            checked={responses[q.id]?.includes(opt.text) || false}
-                            onChange={() => handleChange(q.id, opt.text, true)}
+                            value={String(opt.id || opt)}
+                            checked={(responses[q.id] || []).map(String).includes(String(opt.id || opt))}
+                            onChange={() => handleChange(q.id, String(opt.id || opt), true)}
                         />
-                        <span>{opt.text}</span>
+                        <span>{opt.text || opt}</span>
                     </label>
                 ));
 
+            case "boolean":
+                // Boolean: chọn một option ID
+                return (q.options || []).map((opt, i) => (
+                    <label key={i} className="option-label">
+                        <input
+                            type="radio"
+                            name={`question_${q.id}`}
+                            value={String(opt.id || opt)}
+                            checked={String(responses[q.id]) === String(opt.id || opt)}
+                            onChange={() => handleChange(q.id, String(opt.id || opt))}
+                        />
+                        <span>{opt.text || opt}</span>
+                    </label>
+                ));
+
+            case "ranking":
+                // Ranking: drag-drop sắp xếp options
+                const rankingOptionIds = responses[q.id] || [];
+                // Map IDs back to options for display
+                const rankingOptionsList = rankingOptionIds.map(id => 
+                    q.options?.find(opt => String(opt.id) === String(id))
+                ).filter(Boolean);
+                
+                if (!rankingOptionsList || rankingOptionsList.length === 0) {
+                    return <div className="ranking-hint">Chưa có lựa chọn để xếp hạng</div>;
+                }
+                return (
+                    <div className="ranking-list">
+                        <p className="ranking-hint">Kéo thả để sắp xếp các lựa chọn theo thứ tự ưu tiên</p>
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={(event) => {
+                                const { active, over } = event;
+                                if (!over || active.id === over.id) return;
+
+                                const oldIndex = rankingOptionsList.findIndex(opt => String(opt.id) === String(active.id));
+                                const newIndex = rankingOptionsList.findIndex(opt => String(opt.id) === String(over.id));
+                                
+                                const newOrder = arrayMove(rankingOptionsList, oldIndex, newIndex);
+                                handleChange(q.id, newOrder.map(opt => opt.id));
+                            }}
+                        >
+                            <SortableContext
+                                items={rankingOptionsList.map(opt => String(opt.id))}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                {rankingOptionsList.map((opt, i) => (
+                                    <SortableRankingItem
+                                        key={opt.id || i}
+                                        id={String(opt.id)}
+                                        index={i}
+                                        text={opt.text}
+                                    />
+                                ))}
+                            </SortableContext>
+                        </DndContext>
+                    </div>
+                );
+
+            case "open-ended":
             case "open-text":
                 return (
                     <textarea
@@ -280,6 +424,85 @@ const ViewLinkSharePage = () => {
                                 <div>{num}</div>
                             </label>
                         ))}
+                    </div>
+                );
+
+            case "date_time":
+                // Parse combined value or separate date/time
+                const dateTimeValue = responses[q.id] || { date: '', time: '' };
+                const dateValue = typeof dateTimeValue === 'string' 
+                    ? (dateTimeValue.match(/(\d{4}-\d{2}-\d{2})/) || ['', ''])[1] 
+                    : dateTimeValue.date || '';
+                const timeValue = typeof dateTimeValue === 'string'
+                    ? (dateTimeValue.match(/(\d{2}:\d{2})/) || ['', ''])[1]
+                    : dateTimeValue.time || '';
+                
+                return (
+                    <div className="date-time-inputs">
+                        <input
+                            type="date"
+                            value={dateValue}
+                            onChange={(e) => {
+                                const newTime = typeof dateTimeValue === 'string'
+                                    ? (dateTimeValue.match(/(\d{2}:\d{2})/) || ['', ''])[1]
+                                    : dateTimeValue.time || '';
+                                handleChange(q.id, { date: e.target.value, time: newTime });
+                            }}
+                        />
+                        <input
+                            type="time"
+                            value={timeValue}
+                            onChange={(e) => {
+                                const newDate = typeof dateTimeValue === 'string'
+                                    ? (dateTimeValue.match(/(\d{4}-\d{2}-\d{2})/) || ['', ''])[1]
+                                    : dateTimeValue.date || '';
+                                handleChange(q.id, { date: newDate, time: e.target.value });
+                            }}
+                        />
+                    </div>
+                );
+
+            case "file_upload":
+                const selectedFile = responses[q.id] instanceof File ? responses[q.id] : null;
+                return (
+                    <div className="file-upload">
+                        <div className="upload-zone">
+                            <label htmlFor={`file-upload-${q.id}`}>
+                                <i className="fa-solid fa-cloud-arrow-up upload-icon"></i>
+                                <p className="upload-text">
+                                    <span>Nhấp hoặc kéo thả file vào đây</span>
+                                </p>
+                                <p className="upload-hint">
+                                    Định dạng: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, ZIP, RAR (Tối đa 10MB)
+                                </p>
+                            </label>
+                            <input
+                                id={`file-upload-${q.id}`}
+                                type="file"
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                        handleChange(q.id, file);
+                                    }
+                                }}
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+                            />
+                        </div>
+                        {selectedFile && (
+                            <div className="file-preview">
+                                <i className="fa-solid fa-file"></i>
+                                <span className="file-name">{selectedFile.name}</span>
+                                <span className="file-size">({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+                                <button
+                                    type="button"
+                                    className="file-remove"
+                                    onClick={() => handleChange(q.id, null)}
+                                >
+                                    <i className="fa-solid fa-times"></i>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 );
 
