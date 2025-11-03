@@ -856,370 +856,218 @@ def get_latest_analysis(survey_id: int, kind: str):
             continue
     return {"ok": False, "message": f"No analysis with kind={kind}"}
 
-# ============================================================
-# ============ SPRINT 4 (Optimal): Survey Generation =========
-# - Templates/rules in DB tables (no survey_id FK)
-# - Gemini generation + validator (rules from DB)
-# - History into ai_survey_gen_history
-# ============================================================
 
-from pydantic import BaseModel, Field
-from typing import Optional as _Opt, List as _L, Dict as _D
-import json, os, re, time
-import httpx
+#################################################################################
+# ================== Insights Engine (routes minimal) ==================
+#################################################################################
+from fastapi import Query, HTTPException
+import os, json, re
+import pandas as _pd
+import numpy as _np
+from pathlib import Path
+import yaml
 
-# -------- ENV / runtime knobs --------
-GEMINI_URL  = os.getenv("GEMINI_URL") or os.getenv("EXT_SENTI_URL") \
-              or "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-GEMINI_KEY  = os.getenv("GEMINI_KEY") or os.getenv("EXT_SENTI_KEY") or ""
-GEN_TIMEOUT = float(os.getenv("GEN_TIMEOUT", "12.0"))
-GEN_RETRY   = int(os.getenv("GEN_MAX_RETRY", "3"))
-GEN_BACKOFF = float(os.getenv("GEN_BACKOFF_K", "1.4"))
-CFG_TTL_SEC = float(os.getenv("SURVEY_CFG_TTL_SEC", "300"))
-POOL_N      = int(os.getenv("SURVEY_GEN_POOL", "12"))
+def _load_rules_from_file(config_path: str) -> dict:
+    """
+    Đọc YAML luật phân tích từ đường dẫn cho phép tương đối hoặc tuyệt đối.
+    """
+    base = Path(__file__).resolve().parent
+    p = Path(config_path)
+    if not p.is_absolute():
+        p = (base / p).resolve()
 
-# -------- In-memory cache for config --------
-_CFG = {"loaded_at": 0.0, "templates_by_industry": {}, "rules": {"BLOCK": [], "LEADING": []}}
+    if not p.exists():
+        raise FileNotFoundError(f"Rules file not found: {p}")
 
-def _cfg_reload(force=False):
-    now = time.time()
-    if not force and now - _CFG["loaded_at"] < CFG_TTL_SEC:
-        return
+    # MỞ BẰNG CHẾ ĐỘ ĐỌC UTF-8
+    with p.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
 
-    # 1) Load templates từ ai_survey_industry
-    rows = sql_all("""
-        SELECT code AS industry, COALESCE(templates, '[]') AS tpls
-        FROM ai_survey_industry
-        WHERE is_active = 1
-    """, ())
-    tpl_map = {}
-    for r in rows or []:
-        ind = r["industry"] if isinstance(r, dict) else r[0]
-        tpls_json = r["tpls"] if isinstance(r, dict) else r[1]
-        try:
-            tpl_map[ind] = json.loads(tpls_json or "[]")
-        except Exception:
-            tpl_map[ind] = []
+    # defaults nhẹ để tránh None
+    data.setdefault("min_n", 1)
+    data.setdefault("effect_size_min", 0.2)
+    data.setdefault("trend", {"pct_change": 0.05, "monotonic_len": 3})
+    data.setdefault("anomaly", {})
+    return data
 
-    # 2) Load rules từ ai_survey_rule (map rule_type -> kind, pattern -> value)
+# Loader KHỚP schema bạn đã đưa:
+# answers(answer_id, response_id, question_id, option_id, answer_text, created_at, updated_at)
+# responses(response_id, survey_id, user_id, request_token, submitted_at)
+def _load_responses_df_v2(survey_id: int) -> _pd.DataFrame:
     rows = sql_all("""
         SELECT
-          CASE WHEN rule_type = 'LEADING' THEN 'LEADING' ELSE 'BLOCK' END AS kind,
-          pattern AS value,
-          COALESCE(lang, 'vi') AS lang
-        FROM ai_survey_rule
-        WHERE is_active = 1
-    """, ())
-    rules = {"BLOCK": [], "LEADING": []}
-    for r in rows or []:
-        kind = r["kind"] if isinstance(r, dict) else r[0]
-        value = r["value"] if isinstance(r, dict) else r[1]
-        lang  = r["lang"]  if isinstance(r, dict) else r[2]
-        if lang == "vi" and (value or "").strip():
-            rules[kind].append(value.strip())
+          a.answer_id,
+          a.question_id,
+          a.option_id,
+          a.answer_text,
+          a.answer_value,
+          r.response_id,
+          r.created_at,                 -- << dùng created_at từ VIEW responses_ext
+          r.respondent_id,              -- nếu VIEW đặt alias như vậy
+          r.gender, r.age_band, r.region
+        FROM answers a
+        JOIN responses_ext r ON r.response_id = a.response_id
+        WHERE r.survey_id = %s
+    """, (survey_id,))
 
-    _CFG["templates_by_industry"] = tpl_map
-    _CFG["rules"] = rules
-    _CFG["loaded_at"] = now
+    df = _pd.DataFrame(rows or [])
+    if df.empty:
+        return _pd.DataFrame(columns=[
+            "answer_id","question_id","option_id","answer_text","answer_value",
+            "response_id","created_at","respondent_id",
+            "gender","age_band","region","answer_numeric"
+        ])
 
-def _get_templates(industry: str) -> list[str]:
-    _cfg_reload(False)
-    m = _CFG["templates_by_industry"]
-    return m.get(industry) or m.get("general", []) or []
+    if "answer_text" in df.columns:
+        df["answer_text"] = df["answer_text"].astype(str)
+    if "created_at" in df.columns:
+        df["created_at"] = _pd.to_datetime(df["created_at"], errors="coerce")
 
-def _rules():
-    _cfg_reload(False)
-    r = _CFG["rules"]
-    return set(map(str.lower, r.get("BLOCK", []))), list(map(str.lower, r.get("LEADING", [])))
+    num_from_value = _pd.to_numeric(df.get("answer_value"), errors="coerce")
 
-# -------- Schemas --------
-class TemplatePack(BaseModel):
-    industry: str = Field(..., description="e.g., retail, education, fintech, ...")
-    templates: _L[str]
+    def extract_num(s):
+        if not isinstance(s, str):
+            return _np.nan
+        m = re.search(r"(\d+)", s)
+        return float(m.group(1)) if m else _np.nan
 
-class GenReq(BaseModel):
-    topic: str
-    industry: str = "general"
-    n: int = Field(10, ge=3, le=30)
-    language: str = "vi"
-    use_llm: bool = True
-    survey_id: _Opt[int] = Field(None, description="(optional) attach to a real survey when storing history")
-    user_id: _Opt[int] = None
+    num_from_text = df.get("answer_text", _pd.Series(dtype=str)).apply(extract_num)
+    df["answer_numeric"] = num_from_value.where(num_from_value.notna(), num_from_text)
+    return df
 
-class GenResp(BaseModel):
-    topic: str
-    industry: str
-    language: str
-    n: int
-    questions: _L[str]
-    source: str               # gemini | fallback
-    validation: _D[str, int]
-    history_id: _Opt[int] = None
-
-# -------- Validator --------
-def _validate(qs: _L[str]) -> _L[str]:
-    block, leading = _rules()
-    out, seen = [], set()
-    for q in qs:
-        q = re.sub(r"\s+", " ", (q or "").strip())
-        if not q: continue
-        tl = q.lower()
-        if any(p in tl for p in leading):  # loại dẫn dắt
-            continue
-        if any(w in tl for w in block):    # loại cảm tính/cường điệu
-            continue
-        if not q.endswith("?"):
-            q += "?"
-        if len(q) < 8 or len(q) > 300:     # độ dài an toàn
-            continue
-        key = tl
-        if key in seen:  # bỏ trùng
-            continue
-        seen.add(key)
-        out.append(q)
+# ---- modules rút gọn (đã đủ Acceptance) ----
+def _ins_stat(df, rules):
+    from scipy import stats
+    out = []
+    min_n = int(rules.get("min_n", 30))
+    for qid, g in df.groupby("question_id"):
+        s = _pd.to_numeric(g["answer_numeric"], errors="coerce").dropna()
+        if len(s) < min_n: continue
+        mean = float(s.mean())
+        if len(s) > 2 and s.std(ddof=1) > 0:
+            ci_low, ci_high = stats.t.interval(1-rules.get("alpha",0.05), len(s)-1,
+                                               loc=mean, scale=s.std(ddof=1)/len(s)**0.5)
+            ci = [float(ci_low), float(ci_high)]
+        else:
+            ci = [None, None]
+        out.append({"id": f"stat:{qid}","type":"stat","title":f"Điểm TB Q{qid}: {mean:.2f}",
+                    "description":"Mean & khoảng tin cậy (t-CI).",
+                    "metric":{"mean":mean,"ci":ci},"evidence":{"n":int(len(s))},
+                    "significance":{"p":None,"effect":None},"severity":"low"})
     return out
 
-# -------- Fallback (TF-IDF trên templates DB) --------
-def _fallback(topic: str, industry: str, n: int) -> _L[str]:
-    pool = _get_templates(industry)
-    if not pool:
-        pool = [
-            "Bạn đánh giá mức độ hài lòng chung về {topic} như thế nào?",
-            "Những điều cần cải thiện đối với {topic} là gì?",
-            "Bạn có sẵn sàng giới thiệu {topic} cho người khác không?",
-            "Những yếu tố ảnh hưởng lớn nhất đến trải nghiệm với {topic} là gì?",
-            "Góp ý cụ thể để nâng cao chất lượng {topic}."
-        ]
-    try:
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        import numpy as _np
-        vec = TfidfVectorizer(ngram_range=(1,2), max_features=3000)
-        X = vec.fit_transform(pool)
-        qv = vec.transform([topic])
-        sims = (qv @ X.T).A1
-        idx = sims.argsort()[::-1][:max(n, min(POOL_N, len(pool)))]
-        picked = [pool[i].format(topic=topic) for i in idx]
-        return picked[:n]
-    except Exception:
-        # nếu sklearn không có, trả ngẫu nhiên đơn giản
-        return [t.format(topic=topic) for t in pool][:n]
-
-# -------- Gemini caller (JSON array string) --------
-def _gemini_call(payload: dict) -> _L[str]:
-    backoff = 0.0
-    for _try in range(1, GEN_RETRY+1):
-        try:
-            with httpx.Client(timeout=GEN_TIMEOUT) as cli:
-                r = cli.post(f"{GEMINI_URL}?key={GEMINI_KEY}", json=payload)
-            if r.status_code == 429:
-                backoff = backoff * GEN_BACKOFF + 0.7
-                time.sleep(min(3.0, backoff))
-                continue
-            r.raise_for_status()
-            data = r.json()
-            txt = (data.get("candidates") or [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "[]").strip()
-            arr = json.loads(txt) if txt.startswith("[") else []
-            return [str(x) for x in arr]
-        except Exception:
-            time.sleep(0.25 * _try)
-    return []
-
-def _prompt(topic: str, industry: str, n: int, lang: str) -> dict:
-    tpls = _get_templates(industry)[:15]
-    schema = {"type":"array","items":{"type":"string"},"minItems":max(3,n),"maxItems":max(3,n)}
-    guidance = (
-        f"Bạn là chuyên gia thiết kế khảo sát bằng tiếng {'Việt' if lang=='vi' else 'Anh'}.\n"
-        f"Chủ đề: {topic}\nNgành: {industry}\n"
-        f"Yêu cầu: sinh đúng {n} câu hỏi rõ ràng, một ý, tránh dẫn dắt/cường điệu, kết thúc bằng dấu hỏi.\n"
-        f"Tham khảo các pattern (nếu phù hợp, thay {{topic}} đúng ngữ cảnh):\n" +
-        "\n".join(f"- {t}" for t in tpls) +
-        "\nChỉ trả JSON Array các chuỗi câu hỏi, không kèm giải thích."
-    ).strip()
-    return {
-        "contents": [{"parts": [{"text": guidance}]}],
-        "generationConfig": {
-            "temperature": 0.2, "topP": 1, "topK": 1, "candidateCount": 1,
-            "responseMimeType": "application/json",
-            "responseSchema": schema
-        }
-    }
-
-# -------- Endpoints: config (templates/rules) --------
-@app.post("/ai/survey/templates/upsert", tags=["SurveyGen"])
-def upsert_template_pack(pack: TemplatePack):
-    sql_exec("""
-        INSERT INTO ai_survey_industry (code, name, templates, is_active, updated_at)
-        VALUES (%s, %s, %s, 1, NOW())
-        ON DUPLICATE KEY UPDATE
-            templates = VALUES(templates),
-            is_active = 1,
-            updated_at = NOW()
-    """, (pack.industry, pack.industry, json.dumps(pack.templates, ensure_ascii=False)))
-    _cfg_reload(True)
-    return {"ok": True, "industry": pack.industry, "count": len(pack.templates)}
-
-
-@app.get("/ai/survey/templates", tags=["SurveyGen"])
-def list_template_packs():
-    _cfg_reload(True)
-    rows = sql_all("""
-        SELECT code AS industry,
-               JSON_LENGTH(templates) AS size,
-               is_active,
-               updated_at
-        FROM ai_survey_industry
-        ORDER BY code
-    """, ())
+def _ins_trend(df, rules):
     out = []
+    if "created_at" not in df: return out
+    pct_th = float(rules["trend"]["pct_change"]); mono_len = int(rules["trend"]["monotonic_len"])
+    for qid, g in df.groupby("question_id"):
+        s = g.set_index("created_at")["answer_numeric"].dropna().resample("W").mean().dropna()
+        if len(s) < mono_len: continue
+        ma = s.rolling(3, min_periods=2).mean()
+        base = ma.iloc[0] if ma.iloc[0] != 0 else 1.0
+        pct = (ma.iloc[-1]-ma.iloc[0]) / abs(base)
+        if _np.isfinite(pct) and abs(pct) >= pct_th:
+            out.append({"id":f"trend:{qid}","type":"trend",
+                        "title":f"Xu hướng {'tăng' if pct>0 else 'giảm'} điểm Q{qid}",
+                        "description":"Mean theo tuần thay đổi đáng kể (MA-3).",
+                        "metric":{"pct_change":float(pct)},"evidence":{"weeks":int(len(s))},
+                        "significance":{},"severity":"medium"})
+    return out
+
+def _ins_compare(df, rules):
+    out = []
+    from scipy import stats
+    min_n = int(rules.get("min_n", 30)); alpha = float(rules.get("alpha",0.05))
+    # hiện tại DB chưa có gender/age_band/region → bỏ qua; nếu bạn có cột đó, thêm tên vào đây:
+    seg_cols = [c for c in ["gender","age_band","region"] if c in df.columns]
+    if not seg_cols: return out
+    effect_min = float(rules.get("effect_size_min",0.2))
+    for seg in seg_cols:
+        for qid, gq in df.groupby("question_id"):
+            groups = [_pd.to_numeric(x["answer_numeric"], errors="coerce").dropna() for _,x in gq.groupby(seg)]
+            if len(groups) < 2 or any(len(x) < min_n for x in groups): continue
+            if len(groups) == 2:
+                t, p = stats.ttest_ind(groups[0], groups[1], equal_var=False, nan_policy='omit')
+                effect = abs(groups[0].mean() - groups[1].mean())
+            else:
+                f, p = stats.f_oneway(*groups); effect = None
+            if _np.isfinite(p) and p < alpha and (effect is None or effect >= effect_min):
+                out.append({"id":f"cmp:{qid}:{seg}","type":"compare",
+                            "title":f"Khác biệt theo {seg} ở Q{qid}",
+                            "description":f"p={p:.3g} (rule-based).",
+                            "metric":{"segment":seg},
+                            "evidence":{"group_sizes":[int(len(x)) for x in groups]},
+                            "significance":{"p":float(p),"effect":effect},
+                            "severity":"high" if (effect and effect>=0.5) else "medium"})
+    return out
+
+def _ins_anomaly(df, rules):
+    out = []
+    # vì DB hiện chưa có duration_seconds nên bỏ qua speeders;
+    # vẫn kiểm duplicate câu trả lời (xuất hiện >=3 lần)
+    vc = df["answer_text"].str.strip().str.lower().value_counts()
+    dups = vc[vc >= 3]
+    if len(dups) > 0:
+        out.append({"id":"anomaly:duplicates","type":"anomaly",
+                    "title":"Lặp câu trả lời bất thường",
+                    "description":"Có câu trả lời xuất hiện lặp (≥3).",
+                    "metric":{"patterns":int(len(dups))},
+                    "evidence":{"top_example": str(dups.index[0])[:160]},
+                    "significance":{},"severity":"medium"})
+    return out
+
+def _run_engine(df, rules):
+    ins = []
+    ins += _ins_stat(df, rules)
+    ins += _ins_trend(df, rules)
+    ins += _ins_compare(df, rules)
+    ins += _ins_anomaly(df, rules)
+    order = {"anomaly":0,"compare":1,"trend":2,"stat":3}
+    ins.sort(key=lambda x: (order.get(x["type"],9), x.get("severity","zz")))
+    return ins
+
+def _write_reports(insights, survey_id: int):
+    os.makedirs("reports", exist_ok=True)
+    jp = f"reports/{survey_id}_insights.json"
+    mp = f"reports/{survey_id}_insights.md"
+    with open(jp,"w",encoding="utf-8") as f: json.dump({"insights":insights,"count":len(insights)}, f, ensure_ascii=False, indent=2)
+    lines = ["# Survey Insights\n"] + [
+        f"## [{i['type'].upper()}] {i['title']}\n- {i['description']}\n- metric: `{i.get('metric',{})}`\n- evidence: `{i.get('evidence',{})}`\n"
+        for i in insights
+    ]
+    with open(mp,"w",encoding="utf-8") as f: f.write("\n".join(lines))
+    return {"json": jp, "md": mp}
+
+@app.post("/ai/insights/config/validate", tags=["Data Analytics & Insights Engine"])
+def ai_insights_config_validate(config_path: str = Query("config/rules.yml")):
+    rules = _load_rules_from_file(config_path)
+    return {"ok": True, "rules": rules}
+
+@app.post("/ai/insights/run", tags=["Data Analytics & Insights Engine"])
+def ai_insights_run(survey_id: int = Query(...), config_path: str = Query("config/rules.yml")):
+    rules = _load_rules_from_file(config_path)
+    df = _load_responses_df_v2(survey_id)
+    insights = _run_engine(df, rules)
+    payload = {"kind":"INSIGHTS", "survey_id": survey_id, "insights": insights, "count": len(insights)}
+    _save_analysis(survey_id, payload, "INSIGHTS")
+    paths = _write_reports(insights, survey_id)
+    return {"ok": True, **payload, "reports": paths}
+
+@app.get("/ai/insights/{survey_id}/latest", tags=["Data Analytics & Insights Engine"])
+def ai_insights_latest(survey_id: int):
+    rows = sql_all("""
+        SELECT analysis_id, analysis_data, created_at
+        FROM ai_analysis
+        WHERE survey_id=%s
+        ORDER BY created_at DESC, analysis_id DESC
+        LIMIT 100
+    """, (survey_id,))
     for r in rows or []:
-        ind        = r["industry"] if isinstance(r, dict) else r[0]
-        size       = r["size"]     if isinstance(r, dict) else r[1]
-        is_active  = r["is_active"]if isinstance(r, dict) else r[2]
-        updated_at = r["updated_at"] if isinstance(r, dict) else r[3]
-        out.append({
-            "industry": ind,
-            "size": int(size or 0),
-            "is_active": bool(is_active),
-            "updated_at": str(updated_at) if updated_at else None
-        })
-    return {"ok": True, "packs": out}
-
-class RuleReq(BaseModel):
-    rule_type: str = Field(..., pattern="^(BLOCK|LEADING)$")
-    pattern: str
-    lang: str = "vi"
-    is_active: bool = True
-    industry_code: _Opt[str] = None  # nếu không dùng theo ngành, để None
-
-@app.post("/ai/survey/rules/add", tags=["SurveyGen"])
-def add_rule(req: RuleReq):
-    sql_exec("""
-        INSERT INTO ai_survey_rule (industry_code, rule_type, pattern, lang, is_active)
-        VALUES (%s,%s,%s,%s,%s)
-        ON DUPLICATE KEY UPDATE
-            is_active = VALUES(is_active),
-            pattern   = VALUES(pattern),
-            lang      = VALUES(lang)
-    """, (req.industry_code, req.rule_type, req.pattern.strip(), req.lang, 1 if req.is_active else 0))
-    _cfg_reload(True)
-    return {"ok": True}
-
-@app.post("/ai/survey/config/reload", tags=["SurveyGen"])
-def reload_cfg():
-    _cfg_reload(True)
-    m = _CFG.get("templates_by_industry", {})
-    r = _CFG.get("rules", {"BLOCK": [], "LEADING": []})
-    return {
-        "ok": True,
-        "templates_industries": len(m),
-        "rules_block": len(r.get("BLOCK", [])),
-        "rules_leading": len(r.get("LEADING", []))
-    }
-
-# -------- Endpoint: generate --------
-@app.post("/ai/survey/generate", response_model=GenResp, tags=["SurveyGen"])
-def survey_generate(req: GenReq, db: Session = Depends(get_db)):
-    _cfg_reload(False)
-    if req.use_llm and GEMINI_KEY and GEMINI_URL:
-        raw = _gemini_call(_prompt(req.topic, req.industry, req.n, req.language))
-        source = "gemini" if raw else "fallback"
-    else:
-        raw, source = [], "fallback"
-    if not raw:
-        raw = _fallback(req.topic, req.industry, req.n)
-
-    # thay {topic} và validate
-    raw = [q.replace("{topic}", req.topic) for q in raw]
-    cleaned = _validate(raw)
-    if len(cleaned) < req.n:
-        # bù thêm từ pool fallback
-        extra = _validate(_fallback(req.topic, req.industry, POOL_N))
-        merged = []
-        seen = set()
-        for q in cleaned + extra:
-            k = q.casefold()
-            if k in seen: continue
-            seen.add(k); merged.append(q)
-        cleaned = merged[:req.n]
-
-    # lưu lịch sử (không buộc survey_id)
-    payload = {
-        "topic": req.topic, "industry": req.industry, "language": req.language,
-        "n": req.n, "questions": cleaned
-    }
-    sql_exec("""
-        INSERT INTO ai_survey_gen_history (survey_id, topic, industry, language, n, source, payload)
-        VALUES (%s,%s,%s,%s,%s,%s,%s)
-    """, (req.survey_id, req.topic, req.industry, req.language, req.n, source, json.dumps(payload, ensure_ascii=False)))
-    row = sql_one("SELECT LAST_INSERT_ID() AS id")
-    hist_id = int(row["id"]) if row and "id" in row else None
-
-    # (an toàn) ghi activity log nếu bạn đã có model ActivityLog
-    try:
-        db.add(ActivityLog(
-            user_id=req.user_id, action_type="ai_generate",
-            target_id=hist_id, target_table="ai_survey_gen_history",
-            description=f"SurveyGen {req.industry} / {req.topic}"
-        ))
-        db.commit()
-    except Exception:
-        db.rollback()
-
-    return GenResp(
-        topic=req.topic, industry=req.industry, language=req.language, n=req.n,
-        questions=cleaned, source=source,
-        validation={"unique": len({q.casefold() for q in cleaned}), "total": len(cleaned)},
-        history_id=hist_id
-    )
-
-# -------- Optional: quick seed (≥5 industries) --------
-@app.post("/ai/survey/templates/seed", tags=["SurveyGen"])
-def seed_templates():
-    seeds = {
-        "general": [
-            "Bạn đánh giá mức độ hài lòng chung về {topic} như thế nào?",
-            "Những điều cần cải thiện đối với {topic} là gì?",
-            "Bạn có sẵn sàng giới thiệu {topic} cho người khác không?",
-            "Những yếu tố ảnh hưởng lớn nhất đến trải nghiệm với {topic} là gì?",
-            "Góp ý cụ thể để nâng cao chất lượng {topic}."
-        ],
-        "education": [
-            "Nội dung {topic} có rõ ràng và bám sát mục tiêu học tập không?",
-            "Tốc độ và khối lượng bài tập của {topic} có phù hợp không?",
-            "Mức độ hỗ trợ của giảng viên/assistant cho {topic} như thế nào?",
-            "Tài liệu và công cụ cho {topic} có đầy đủ/dễ dùng không?",
-            "Bạn mong muốn cải thiện gì cho {topic}?"
-        ],
-        "retail": [
-            "Bạn hài lòng thế nào với chất lượng sản phẩm liên quan {topic}?",
-            "Giá cả/khuyến mãi cho {topic} có hợp lý?",
-            "Quy trình thanh toán/giao hàng {topic} có thuận tiện?",
-            "Dịch vụ bảo hành/hậu mãi cho {topic} như thế nào?",
-            "Bạn có sẵn sàng mua lại/giới thiệu {topic}?"
-        ],
-        "fintech": [
-            "Trải nghiệm đăng ký/KYC cho {topic} có dễ dàng?",
-            "Tốc độ/độ ổn định giao dịch của {topic} có đáp ứng nhu cầu?",
-            "Thông tin phí và điều khoản của {topic} có minh bạch?",
-            "Bạn đánh giá mức độ an toàn/bảo mật của {topic} như thế nào?",
-            "CSKH của {topic} có phản hồi kịp thời?"
-        ],
-        "healthcare": [
-            "Thời gian chờ và quy trình cho {topic} có hợp lý?",
-            "Thái độ và chuyên môn của nhân viên y tế đối với {topic} như thế nào?",
-            "Cơ sở vật chất/vệ sinh liên quan {topic} có đảm bảo?",
-            "Chi phí cho {topic} có phù hợp với chất lượng nhận được?",
-            "Bạn có yên tâm giới thiệu dịch vụ {topic} cho người khác?"
-        ]
-    }
-    for ind, tpls in seeds.items():
-        sql_exec("""
-            INSERT INTO ai_survey_industry (code, name, templates, is_active, updated_at)
-            VALUES (%s, %s, %s, 1, NOW())
-            ON DUPLICATE KEY UPDATE
-                templates = VALUES(templates),
-                is_active = 1,
-                updated_at = NOW()
-        """, (ind, ind, json.dumps(tpls, ensure_ascii=False)))
-    _cfg_reload(True)
-    return {"ok": True, "seeded": list(seeds.keys())}
+        try:
+            data = json.loads(r["analysis_data"]) if isinstance(r["analysis_data"], str) else r["analysis_data"]
+            if data.get("kind") == "INSIGHTS":
+                return {"ok": True, "data": data, "analysis_id": r["analysis_id"]}
+        except Exception:
+            continue
+    raise HTTPException(status_code=404, detail="No INSIGHTS found")
+# =====================================================================

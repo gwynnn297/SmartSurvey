@@ -1,0 +1,60 @@
+{
+  "insights": [
+    {
+      "id": "anomaly:duplicates",
+      "type": "anomaly",
+      "title": "Lặp câu trả lời bất thường",
+      "description": "Có câu trả lời xuất hiện lặp (≥3).",
+      "metric": {
+        "patterns": 1
+      },
+      "evidence": {
+        "top_example": "none"
+      },
+      "significance": {},
+      "severity": "medium"
+    },
+    {
+      "id": "cmp:1:gender",
+      "type": "compare",
+      "title": "Khác biệt theo gender ở Q1",
+      "description": "p=0.0202 (rule-based).",
+      "metric": {
+        "segment": "gender"
+      },
+      "evidence": {
+        "group_sizes": [
+          3,
+          11
+        ]
+      },
+      "significance": {
+        "p": 0.020171141222118372,
+        "effect": 1.4242424242424239
+      },
+      "severity": "high"
+    },
+    {
+      "id": "stat:1",
+      "type": "stat",
+      "title": "Điểm TB Q1: 3.21",
+      "description": "Mean & khoảng tin cậy (t-CI).",
+      "metric": {
+        "mean": 3.2142857142857144,
+        "ci": [
+          2.5666274716841038,
+          3.861943956887325
+        ]
+      },
+      "evidence": {
+        "n": 14
+      },
+      "significance": {
+        "p": null,
+        "effect": null
+      },
+      "severity": "low"
+    }
+  ],
+  "count": 3
+}

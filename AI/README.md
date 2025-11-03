@@ -92,85 +92,28 @@ POST /ai/themes/{id} (tùy chọn ?k=3)
 POST /ai/summary/{id}
 GET /ai/analysis/{id}/latest/SUMMARY
 
-## TASK AI-Powered Survey Generation Enhancement
-Tổng quan về TASK : 
-Mục tiêu: Sinh câu hỏi khảo sát theo topic + industry một cách động, không set cứng; có validator tránh câu dẫn dắt/cảm tính; lưu lịch sử; hoạt động được cả khi Gemini lỗi (fallback).
-Nguồn dữ liệu cấu hình:
-ai_survey_industry: chứa code, templates (JSON), is_active.
-ai_survey_rule: chứa rule_type (BLOCK|LEADING), pattern, lang, is_active (có thể dùng industry_code nếu muốn áp dụng rule theo ngành).
-Sinh câu hỏi:
-Ưu tiên gọi Gemini (use_llm=true), trả về JSON Array câu hỏi; nếu lỗi/quota → fallback (TF-IDF chọn từ templates).
-Validator: làm sạch khoảng trắng, thêm ? nếu thiếu, loại câu LEADING/BLOCK, loại trùng, lọc độ dài an toàn.
-Lưu lịch sử: bảng ai_survey_gen_history (không ràng buộc FK cứng với surveys; có cột survey_id nullable để bạn gắn khi cần).
-
-API chi tiết (hoạt động & cách dùng)
-## A. POST /ai/survey/templates/seed
-Làm gì: Seed tối thiểu 5 industry (general, education, retail, fintech, healthcare) vào ai_survey_industry.templates.
-Hoạt động: Upsert code=name=industry, templates = mảng câu hỏi mẫu (có {topic}).
-Khi nào dùng: Thiết lập ban đầu môi trường / thêm nhanh các template mặc định.
-Kỳ vọng: Trả { ok: true, seeded: [...industry] }.
-## B. POST /ai/survey/templates/upsert
-Body ví dụ:
-{
-  "industry": "education",
-  "templates": [
-    "Bạn đánh giá mức độ rõ ràng của nội dung {topic} như thế nào?",
-    "Tốc độ/khối lượng bài tập của {topic} có phù hợp không?"
-  ]
-}
-Làm gì: Upsert mảng templates cho 1 industry cụ thể.
-Hoạt động: Ghi vào ai_survey_industry.templates và bật is_active=1.
-Khi nào dùng: Quản trị nội dung template theo ngành.
-
-## C. GET /ai/survey/templates
-Làm gì: Liệt kê các pack hiện có (industry, số câu, trạng thái).
-Hoạt động: Đọc từ ai_survey_industry (đếm JSON_LENGTH(templates)).
-Khi nào dùng: FE trang admin / QA kiểm tra dữ liệu đã seed/upsert.
-
-## D. POST /ai/survey/rules/add
-Body ví dụ:
-{"rule_type":"BLOCK","pattern":"tuyệt đối","lang":"vi","is_active":true} 
-hoặc :
-{"rule_type":"LEADING","pattern":"có phải","lang":"vi","is_active":true}
-
-Làm gì: Thêm rule kiểm duyệt (BLOCK = cấm từ ngữ cảm tính/cường điệu; LEADING = cấm câu dẫn dắt).
-Hoạt động: Upsert vào ai_survey_rule; cache được reload.
-Khi nào dùng: Điều chỉnh chất lượng sinh câu hỏi mà không sửa code.
-
-## E. POST /ai/survey/config/reload
-Làm gì: Reload cache cấu hình trong RAM.
-Hoạt động: Nạp lại templates_by_industry + rules từ DB vào _CFG.
-Khi nào dùng: Sau khi seed/upsert/rule add; hoặc khi muốn áp dụng thay đổi ngay.
-
-## F. POST /ai/survey/generate
-Body ví dụ : 
-{
-  "topic": "Chất lượng lớp học Python",
-  "industry": "education",
-  "n": 8,
-  "language": "vi",
-  "use_llm": true,
-  "survey_id": 1,      // optional: gắn lịch sử vào survey thực tế
-  "user_id": 12        // optional: ghi activity log
-}
-Làm gì: Sinh n câu hỏi cho topic/ngành.
-Hoạt động:
-Nếu use_llm=true và GEMINI_KEY hợp lệ → gọi Gemini (schema JSON array), lấy danh sách câu hỏi.
-Nếu Gemini lỗi/quota/timeout → fallback TF-IDF từ templates của industry.
-Áp validator (chống LEADING/BLOCK, thêm ?, loại trùng, lọc độ dài).
-Nếu sau khi lọc chưa đủ n, tự bù thêm bằng fallback đến đủ n.
-Lưu lịch sử vào ai_survey_gen_history (có source = gemini|fallback) + tùy survey_id.
-Khi nào dùng: FE click “Generate” trên màn hình tạo/sửa khảo sát.
-Response mẫu:
-{
-  "topic": "Chất lượng lớp học Python",
-  "industry": "education",
-  "language": "vi",
-  "n": 8,
-  "questions": ["...?", "...?"],
-  "source": "gemini",
-  "validation": {"unique": 8, "total": 8},
-  "history_id": 123
-}
+## Data Analytics & Insights Engine
+1) POST /ai/insights/config/validate
+Dùng để làm gì: Kiểm tra file cấu hình rule (ví dụ config/rules.yml) trước khi chạy thật.
+Bạn nhận được: OK/ERR + thông tin khóa nào thiếu/sai kiểu (như lỗi trend.pct_change/monotonic_len bạn gặp trước đó).
+Khi nào dùng:
+Sau khi sửa rules.yml (bật/tắt compare, đổi ngưỡng alpha, effect_size_min, trend.pct_change, v.v.).
+Trước khi commit để đảm bảo teammate pull về là chạy được ngay.
+## Ví dụ (PowerShell):
+Invoke-RestMethod -Method POST "http://127.0.0.1:8000/ai/insights/config/validate?config_path=config/rules.yml"
+2) POST /ai/insights/run
+Dùng để làm gì: Thực thi engine để sinh insights theo rule trên dữ liệu khảo sát.
+Bạn nhận được: JSON tóm tắt (ok/kind/count) + đường dẫn report (vd. reports/1_insights.json, reports/1_insights.md).
+Khi nào dùng:
+Sau khi đã chuẩn bị dữ liệu (hoặc bảng materialized answers_analytical) & rules.yml hợp lệ.
+Mỗi lần muốn refresh insight cho một survey.
+## Ví dụ (PowerShell):
+Invoke-RestMethod -Method POST `
+  "http://127.0.0.1:8000/ai/insights/run?survey_id=1&config_path=config/rules.yml"
+3) GET /ai/insights/{survey_id}/latest
+Dùng để làm gì: Lấy lại kết quả mới nhất đã chạy cho survey (không cần chạy lại).
+Bạn nhận được: Điều kiện & danh sách insight đã lưu lần gần nhất (giúp hiển thị/dối chiếu nhanh).
+## Ví dụ (PowerShell):
+Invoke-RestMethod "http://127.0.0.1:8000/ai/insights/1/latest"
 
 
