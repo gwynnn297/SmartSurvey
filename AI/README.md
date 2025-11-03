@@ -108,8 +108,7 @@ Khi nào dùng:
 Sau khi đã chuẩn bị dữ liệu (hoặc bảng materialized answers_analytical) & rules.yml hợp lệ.
 Mỗi lần muốn refresh insight cho một survey.
 ## Ví dụ (PowerShell):
-Invoke-RestMethod -Method POST `
-  "http://127.0.0.1:8000/ai/insights/run?survey_id=1&config_path=config/rules.yml"
+Invoke-RestMethod -Method POST "http://127.0.0.1:8000/ai/insights/run?survey_id=1&config_path=config/rules.yml"
 3) GET /ai/insights/{survey_id}/latest
 Dùng để làm gì: Lấy lại kết quả mới nhất đã chạy cho survey (không cần chạy lại).
 Bạn nhận được: Điều kiện & danh sách insight đã lưu lần gần nhất (giúp hiển thị/dối chiếu nhanh).
