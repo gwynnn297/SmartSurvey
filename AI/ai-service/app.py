@@ -365,6 +365,7 @@ def run_sentiment_now(survey_id: int, question_id: Optional[int] = None, db: Ses
         final_labels.append(lab)
 
     aggr = aggregate_percent(final_labels)
+
     rec = AiSentiment(
         survey_id=survey_id,
         total_responses=aggr["total_responses"],
@@ -374,28 +375,38 @@ def run_sentiment_now(survey_id: int, question_id: Optional[int] = None, db: Ses
         details={"counts": aggr["counts"], "sample_size": aggr["sample_size"], "question_id": question_id},
         created_at=datetime.utcnow(),
     )
-    db.add(rec); db.commit(); db.refresh(rec)
+    db.add(rec)
+    db.flush()  # có ngay rec.sentiment_id
 
-    db.add(ActivityLog(user_id=None, action_type="ai_generate",
-                       target_id=rec.sentiment_id, target_table="ai_sentiment",
-                       description=f"Recomputed with external API only (Gemini)") )
+    db.add(ActivityLog(
+        user_id=None, action_type="ai_generate",
+        target_id=rec.sentiment_id, target_table="ai_sentiment",
+        description="Recomputed with external API only (Gemini)"
+    ))
     db.commit()
-    det = rec.details or {}
+    db.refresh(rec)
+
+    # Giữ payload đầy đủ để FE cũ không gãy
     return {
         "survey_id": survey_id,
         "sentiment_id": rec.sentiment_id,
-        "total_responses": rec.total_responses,
-        "positive_percent": float(rec.positive_percent),
-        "neutral_percent": float(rec.neutral_percent),
-        "negative_percent": float(rec.negative_percent),
-        "counts": det.get("counts"),
+        "total_responses": aggr["total_responses"],
+        "positive_percent": aggr["positive_percent"],
+        "neutral_percent": aggr["neutral_percent"],
+        "negative_percent": aggr["negative_percent"],
+        "counts": aggr["counts"],
         "created_at": str(rec.created_at),
-        "updated_at": str(rec.updated_at) if rec.updated_at else None,
     }
 
 
+from fastapi import Query
+
 @app.get("/ai/sentiment/{survey_id}")
-def get_latest_sentiment(survey_id: int, db: Session = Depends(get_db)):
+def get_latest_sentiment(
+    survey_id: int,
+    compact: int = Query(default=0, ge=0, le=1),   # ?compact=1 => chỉ trả 3 %
+    db: Session = Depends(get_db),
+):
     rec = (
         db.query(AiSentiment)
         .filter(AiSentiment.survey_id == survey_id)
@@ -404,6 +415,16 @@ def get_latest_sentiment(survey_id: int, db: Session = Depends(get_db)):
     )
     if not rec:
         raise HTTPException(404, "Chưa có bản ghi sentiment.")
+
+    if compact == 1:
+        # ✅ ĐÚNG yêu cầu Acceptance: chỉ trả % cho FE mới
+        return {
+            "positive_percent": float(rec.positive_percent),
+            "neutral_percent": float(rec.neutral_percent),
+            "negative_percent": float(rec.negative_percent),
+        }
+
+    # Giữ payload đầy đủ (tương thích FE cũ)
     det = rec.details or {}
     return {
         "survey_id": survey_id,
@@ -413,12 +434,10 @@ def get_latest_sentiment(survey_id: int, db: Session = Depends(get_db)):
         "neutral_percent": float(rec.neutral_percent),
         "negative_percent": float(rec.negative_percent),
         "counts": det.get("counts"),
-        # nếu FE dùng:
-        # "sample_size": det.get("sample_size"),
-        # "question_id": det.get("question_id"),
         "created_at": str(rec.created_at),
         "updated_at": str(rec.updated_at) if rec.updated_at else None,
     }
+
 
 
 # ============================================================
