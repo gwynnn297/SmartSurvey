@@ -84,38 +84,38 @@ Content-Type: application/json
   "answers": [
     {
       "questionId": 1,
-      "questionType": "multiple_choice",
+      
       "selectedOptionIds": [1, 3, 5]
     },
     {
       "questionId": 2, 
-      "questionType": "single_choice",
+      
       "selectedOptionId": 2
     },
     {
       "questionId": 3,
-      "questionType": "boolean_",
+      
       "selectedOptionId": 1
     },
     {
       "questionId": 4,
-      "questionType": "ranking",
+     
       "rankingOptionIds": [2, 1, 3]
     },
     {
       "questionId": 5,
-      "questionType": "date_time",
+    
       "dateValue": "2025-10-27",
       "timeValue": "14:30"
     },
     {
       "questionId": 6,
-      "questionType": "open_ended",
+     
       "answerText": "Đây là câu trả lời dạng text"
     },
     {
       "questionId": 7,
-      "questionType": "rating",
+     
       "answerText": "4"
     }
   ]
@@ -170,7 +170,7 @@ file_9: [File object cho question ID 9]
 ```json
 {
   "questionId": 1,
-  "questionType": "multiple_choice",
+  
   "selectedOptionIds": [1, 3, 5]
 }
 ```
@@ -179,7 +179,7 @@ file_9: [File object cho question ID 9]
 ```json
 {
   "questionId": 2,
-  "questionType": "single_choice", 
+  
   "selectedOptionId": 2
 }
 ```
@@ -188,7 +188,7 @@ file_9: [File object cho question ID 9]
 ```json
 {
   "questionId": 3,
-  "questionType": "boolean_",
+  
   "selectedOptionId": 1  // 1 = Yes/Có, 2 = No/Không
 }
 ```
@@ -197,18 +197,13 @@ file_9: [File object cho question ID 9]
 ```json
 {
   "questionId": 4,
-  "questionType": "ranking",
+  
   "rankingOptionIds": [3, 1, 2]  // Option IDs in ranking order (best to worst)
 }
 ```
 
 **Hoặc legacy format (backward compatibility):**
 ```json
-{
-  "questionId": 4,
-  "questionType": "ranking", 
-  "rankingOrder": ["Option C", "Option A", "Option B"]  // Text values in ranking order
-}
 ```
 
 ### 3.5 Date Time Response

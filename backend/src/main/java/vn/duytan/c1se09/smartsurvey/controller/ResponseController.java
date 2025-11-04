@@ -43,6 +43,30 @@ public class ResponseController {
 		return ResponseEntity.ok(responseService.submitResponseWithFiles(surveyId, answersJson, files));
 	}
 
+	/**
+	 * Public submit survey response với files (không cần authentication)
+	 */
+	@PostMapping("/api/public/responses/with-files")
+	@ApiMessage("Public submit survey response with files")
+	public ResponseEntity<ResponseWithAnswersDTO> submitPublicResponseWithFiles(
+			@RequestParam("surveyId") Long surveyId,
+			@RequestParam("answers") String answersJson,
+			@RequestParam(value = "durationSeconds", required = false, defaultValue = "0") Integer durationSeconds,
+			@RequestParam Map<String, MultipartFile> files) throws IdInvalidException {
+		return ResponseEntity.ok(responseService.submitResponseWithFiles(surveyId, answersJson, files));
+	}
+
+	/**
+	 * Public submit survey response (không có files, không cần authentication)
+	 */
+	@PostMapping("/api/public/responses")
+	@ApiMessage("Public submit survey response")
+	public ResponseEntity<ResponseWithAnswersDTO> submitPublicResponse(
+			@Valid @RequestBody ResponseSubmitRequestDTO request)
+			throws IdInvalidException {
+		return ResponseEntity.ok(responseService.submitResponse(request));
+	}
+
 	// Responses APIs (standardized URLs)
 	/**
 	 * List responses with pagination + filtering + search
@@ -60,7 +84,8 @@ public class ResponseController {
 	 */
 	@GetMapping("/api/responses/{responseId}")
 	@ApiMessage("Get response detail")
-	public ResponseEntity<ResponseWithAnswersDTO> getResponseDetail(@PathVariable Long responseId) throws IdInvalidException {
+	public ResponseEntity<ResponseWithAnswersDTO> getResponseDetail(@PathVariable Long responseId)
+			throws IdInvalidException {
 		return ResponseEntity.ok(responseService.getResponseDetail(responseId));
 	}
 
@@ -91,6 +116,5 @@ public class ResponseController {
 		resp.put("requested", responseIds != null ? responseIds.size() : 0);
 		return ResponseEntity.ok(resp);
 	}
-
 
 }

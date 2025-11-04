@@ -6,6 +6,7 @@ import { getSurveyPublicInfo } from "../../services/dashboardReportService";
 import { isValidTokenFormat } from "../../utils/tokenGenerator";
 import logoSmartSurvey from "../../assets/logoSmartSurvey.png";
 import { apiClient } from "../../services/authService";
+import { publicApiClient } from "../../services/publicApiClient";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -163,20 +164,22 @@ const PublicResponsePage = () => {
                 // Lưu thời gian bắt đầu làm khảo sát
                 surveyStartTimeRef.current = Date.now();
 
-                // ✅ Kiểm tra token đã được dùng chưa
+                // ✅ Kiểm tra token đã được dùng chưa (tạm thời disable để tránh lỗi auth)
                 const currentToken =
                     localStorage.getItem("respondent_request_token") || respondentTokenFromLink;
                 if (currentToken) {
                     try {
-                        const res = await apiClient.get(`/responses/${surveyId}`);
-                        const responsesData = res.data || [];
-                        const found = responsesData.some(
-                            (r) => r.requestToken === currentToken
-                        );
-                        if (found) {
-                            console.log("Token already used for this survey.");
-                            setAlreadySubmitted(true);
-                        }
+                        // TODO: Tạo API public để check token đã dùng chưa
+                        // const res = await apiClient.get(`/responses/${surveyId}`);
+                        // const responsesData = res.data || [];
+                        // const found = responsesData.some(
+                        //     (r) => r.requestToken === currentToken
+                        // );
+                        // if (found) {
+                        //     console.log("Token already used for this survey.");
+                        //     setAlreadySubmitted(true);
+                        // }
+                        console.log("Token check disabled temporarily");
                     } catch (checkErr) {
                         console.warn("Cannot verify token usage:", checkErr);
                     }
@@ -261,6 +264,162 @@ const PublicResponsePage = () => {
         return Object.keys(newErrors).length === 0;
     };
 
+    // Public submit function (không cần authentication)
+    const submitPublicResponse = async (surveyId, responses, survey, durationSeconds = 0) => {
+        // Kiểm tra có file upload không
+        const hasFiles = survey && Array.isArray(survey.questions) &&
+            survey.questions.some(q => q.type === 'file_upload' && responses[q.id] instanceof File);
+
+        if (hasFiles) {
+            // Submit với files sử dụng FormData qua public endpoint
+            const formData = new FormData();
+            formData.append('surveyId', String(surveyId));
+
+            const answers = [];
+            survey.questions.forEach(q => {
+                const value = responses[q.id];
+                if (value === undefined || value === null) return;
+
+                if (q.type === 'file_upload' && value instanceof File) {
+                    formData.append(`file_${q.id}`, value);
+                    answers.push({
+                        questionId: q.id,
+                        answerText: value.name
+                    });
+                    return;
+                }
+
+                // Xử lý các loại câu hỏi khác
+                const answer = { questionId: q.id };
+                if (q.type === 'multiple-choice-single' || q.type === 'boolean') {
+                    const val = Number(value);
+                    if (!isNaN(val)) {
+                        answer.optionId = val;
+                        answers.push(answer);
+                    }
+                } else if (q.type === 'multiple-choice-multiple') {
+                    if (Array.isArray(value)) {
+                        const optionIds = value.map(v => Number(v)).filter(id => !isNaN(id));
+                        if (optionIds.length > 0) {
+                            answer.selectedOptionIds = optionIds;
+                            answers.push(answer);
+                        }
+                    }
+                } else if (q.type === 'ranking') {
+                    if (Array.isArray(value)) {
+                        const rankingIds = value.map(v => Number(v)).filter(id => !isNaN(id));
+                        if (rankingIds.length > 0) {
+                            answer.rankingOptionIds = rankingIds;
+                            answers.push(answer);
+                        }
+                    }
+                } else if (q.type === 'date_time') {
+                    // Xử lý datetime question
+                    if (typeof value === 'object' && value !== null) {
+                        // Object with date and time properties
+                        if (value.date) answer.dateValue = value.date;
+                        if (value.time) answer.timeValue = value.time;
+                        if (answer.dateValue || answer.timeValue) {
+                            answers.push(answer);
+                        }
+                    } else if (typeof value === 'string') {
+                        // Parse ISO datetime string or separate date/time
+                        const dateMatch = value.match(/(\d{4}-\d{2}-\d{2})/);
+                        const timeMatch = value.match(/(\d{2}:\d{2})/);
+                        if (dateMatch) answer.dateValue = dateMatch[1];
+                        if (timeMatch) answer.timeValue = timeMatch[1];
+                        if (answer.dateValue || answer.timeValue) {
+                            answers.push(answer);
+                        }
+                    }
+                } else if (q.type === 'open-ended' || q.type === 'rating-scale') {
+                    answer.answerText = String(value);
+                    if (answer.answerText.trim()) {
+                        answers.push(answer);
+                    }
+                }
+            });
+
+            formData.append('answers', JSON.stringify(answers));
+
+            if (durationSeconds > 0) {
+                formData.append('durationSeconds', String(durationSeconds));
+            }
+
+            const response = await publicApiClient.post('/api/public/responses/with-files', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+            return response.data;
+        } else {
+            // Submit thông thường không có files qua public endpoint
+            const payload = {
+                surveyId,
+                answers: [],
+                durationSeconds
+            };
+
+            // Xử lý answers tương tự như trên nhưng không có file
+            survey.questions.forEach(q => {
+                const value = responses[q.id];
+                if (value === undefined || value === null) return;
+
+                const answer = { questionId: q.id };
+                if (q.type === 'multiple-choice-single' || q.type === 'boolean') {
+                    const val = Number(value);
+                    if (!isNaN(val)) {
+                        answer.optionId = val;
+                        payload.answers.push(answer);
+                    }
+                } else if (q.type === 'multiple-choice-multiple') {
+                    if (Array.isArray(value)) {
+                        const optionIds = value.map(v => Number(v)).filter(id => !isNaN(id));
+                        if (optionIds.length > 0) {
+                            answer.selectedOptionIds = optionIds;
+                            payload.answers.push(answer);
+                        }
+                    }
+                } else if (q.type === 'ranking') {
+                    if (Array.isArray(value)) {
+                        const rankingIds = value.map(v => Number(v)).filter(id => !isNaN(id));
+                        if (rankingIds.length > 0) {
+                            answer.rankingOptionIds = rankingIds;
+                            payload.answers.push(answer);
+                        }
+                    }
+                } else if (q.type === 'date_time') {
+                    // Xử lý datetime question
+                    if (typeof value === 'object' && value !== null) {
+                        // Object with date and time properties
+                        if (value.date) answer.dateValue = value.date;
+                        if (value.time) answer.timeValue = value.time;
+                        if (answer.dateValue || answer.timeValue) {
+                            payload.answers.push(answer);
+                        }
+                    } else if (typeof value === 'string') {
+                        // Parse ISO datetime string or separate date/time
+                        const dateMatch = value.match(/(\d{4}-\d{2}-\d{2})/);
+                        const timeMatch = value.match(/(\d{2}:\d{2})/);
+                        if (dateMatch) answer.dateValue = dateMatch[1];
+                        if (timeMatch) answer.timeValue = timeMatch[1];
+                        if (answer.dateValue || answer.timeValue) {
+                            payload.answers.push(answer);
+                        }
+                    }
+                } else if (q.type === 'open-ended' || q.type === 'rating-scale') {
+                    answer.answerText = String(value);
+                    if (answer.answerText.trim()) {
+                        payload.answers.push(answer);
+                    }
+                }
+            });
+
+            const response = await publicApiClient.post('/api/public/responses', payload);
+            return response.data;
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -288,16 +447,25 @@ const PublicResponsePage = () => {
         console.log('🔍 Current token in localStorage:', currentToken);
         console.log('📝 Responses to submit:', responses);
         console.log('📊 Survey data:', activeSurvey);
+        console.log('🆔 Survey ID:', activeSurvey?.id);
         console.log('⏱️ Duration seconds:', durationSeconds);
 
+        // Validation: Check if survey ID exists
+        if (!activeSurvey?.id) {
+            console.error('❌ Survey ID is missing!');
+            setErrors({ submit: "Không tìm thấy thông tin khảo sát. Vui lòng tải lại trang." });
+            return;
+        }
+
         try {
-            const apiResult = await responseService.submitResponses(
+            // Sử dụng public API thay vì responseService
+            const apiResult = await submitPublicResponse(
                 activeSurvey.id,
                 responses,
                 activeSurvey,
                 durationSeconds
             );
-            console.log("✅ Submit response result:", apiResult);
+            console.log("✅ Submit public response result:", apiResult);
             setSuccess(true);
             // Reset form sau khi submit thành công
             setResponses({});

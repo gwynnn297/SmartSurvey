@@ -174,11 +174,7 @@ function App() {
         />
         <Route
           path="/view-link-share/:surveyId"
-          element={
-            <PrivateRoute>
-              <ViewLinkSharePage />
-            </PrivateRoute>
-          }
+          element={<ViewLinkSharePage />}
         />
         {/* Public response routes for participants */}
         <Route path="/response/:id" element={<PublicResponsePage />} />
