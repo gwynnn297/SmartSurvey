@@ -7,14 +7,18 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
+from datetime import datetime
+from pydantic import BaseModel
 load_dotenv()
 
 from .models.survey_schemas import (
     SurveyGenerationRequest, 
     SurveyGenerationResponse,
     SurveyGenerationError,
+    QuestionSchema,
+    GeneratedSurveyResponse,
     CATEGORY_MAPPING
 )
 from .core.gemini_client import create_gemini_client, GeminiClient
@@ -30,6 +34,134 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# 1) Prompt templates (5+ industry templates) + DEFAULT
+DEFAULT_TEMPLATE = """Bạn là chuyên gia nghiên cứu thị trường.
+Hãy tạo {n} câu hỏi khảo sát chất lượng cao cho chủ đề: "{title}".
+Loại câu hỏi có thể dùng: {types}.
+Yêu cầu:
+- Rõ ràng, một ý hỏi một điều
+- Không dẫn dắt, không thiên kiến
+- Các lựa chọn (với câu multiple-choice/single-choice) cân bằng, không trùng lặp
+- Với câu ranking: cung cấp 5-7 mục để xếp hạng, không trùng ý
+- Với rating: nêu rõ thang điểm (1-5)
+- Với open-ended: tránh câu hỏi quá rộng, có gợi ý phạm vi trả lời
+
+Trả về JSON theo schema đã được mô tả (questions: text, type, options nếu có)."""
+
+INDUSTRY_TEMPLATES: Dict[str, str] = {
+    "ecommerce": """Bạn là chuyên gia CX cho sàn thương mại điện tử.
+Tạo {n} câu hỏi cho survey "{title}".
+Loại: {types}.
+Nhấn mạnh: trải nghiệm mua hàng, thanh toán, giao hàng, đổi trả, CSKH, lòng trung thành.
+Đảm bảo rõ ràng, không leading, phù hợp ngữ cảnh eCommerce.
+Trả về JSON theo schema.""",
+
+    "saas": """Bạn là chuyên gia Product cho SaaS B2B.
+Tạo {n} câu hỏi cho survey "{title}".
+Loại: {types}.
+Nhấn mạnh: onboarding, feature usability, pricing, support, performance, ROI.
+Trả về JSON theo schema.""",
+
+    "education": """Bạn là chuyên gia khảo thí trong giáo dục.
+Tạo {n} câu hỏi cho survey "{title}".
+Loại: {types}.
+Nhấn mạnh: chất lượng giảng dạy, tài liệu, LMS, đánh giá, hỗ trợ học tập.
+Trả về JSON theo schema.""",
+
+    "healthcare": """Bạn là chuyên gia trải nghiệm bệnh nhân (PX).
+Tạo {n} câu hỏi cho survey "{title}".
+Loại: {types}.
+Nhấn mạnh: đặt lịch, tiếp đón, chẩn đoán, điều trị, chăm sóc, thông tin rõ ràng.
+Trả về JSON theo schema.""",
+
+    "finance": """Bạn là chuyên gia trải nghiệm khách hàng cho dịch vụ tài chính.
+Tạo {n} câu hỏi cho survey "{title}".
+Loại: {types}.
+Nhấn mạnh: mở tài khoản, giao dịch, phí, bảo mật, hỗ trợ, app/mobile banking.
+Trả về JSON theo schema.""",
+}
+SUPPORTED_TYPES = ["multiple_choice","single_choice","ranking","rating","open_ended","boolean_"]
+
+# 2) Helpers: chuẩn hoá category, build prompt, validate + score
+def normalize_category(cat) -> str:
+    from app.models.survey_schemas import CATEGORY_MAPPING
+    if cat is None:
+        return "general"
+    if isinstance(cat, int) and cat in CATEGORY_MAPPING:
+        return str(CATEGORY_MAPPING[cat]).strip().lower()
+    return str(cat).strip().lower()
+
+
+def validate_question_text(q: str) -> List[str]:
+    """Rule-based validation: phát hiện lỗi phổ biến."""
+    issues: List[str] = []
+    if not q or len(q.strip()) < 8:
+        issues.append("Câu hỏi quá ngắn/không rõ.")
+    low = q.lower()
+    if "tại sao bạn không" in low or "có phải" in low or "đồng ý rằng" in low:
+        issues.append("Câu hỏi có thể dẫn dắt/thiên kiến.")
+    if "và tại sao" in low and len(q) > 180:
+        issues.append("Câu hỏi quá dài hoặc gộp nhiều ý.")
+    return issues
+
+def score_question(q: str) -> int:
+    """Chấm điểm chất lượng [0..100] theo quy tắc đơn giản + chiều dài hợp lý."""
+    if not q:
+        return 0
+    score = 60
+    ln = len(q.strip())
+    if 40 <= ln <= 140:
+        score += 20
+    elif 20 <= ln < 40 or 140 < ln <= 220:
+        score += 10
+    penalty_words = ["có phải", "rõ ràng là", "chắc chắn", "ai cũng biết"]
+    for w in penalty_words:
+        if w in q.lower():
+            score -= 10
+    return max(0, min(100, score))
+
+def build_prompt(req: SurveyGenerationRequest) -> str:
+    category = normalize_category(getattr(req, "category_name", None))
+    tmpl = INDUSTRY_TEMPLATES.get(category, DEFAULT_TEMPLATE)
+    types_text = ", ".join(SUPPORTED_TYPES)
+    extra = []
+    if getattr(req, "ai_prompt", None):
+        extra.append(req.ai_prompt.strip())
+    if getattr(req, "description", None):
+        extra.append(req.description.strip())
+    context = "\nNgữ cảnh bổ sung từ người dùng:\n" + "\n".join(extra) if extra else ""
+
+    final_prompt = tmpl.format(
+        n=req.number_of_questions,
+        title=req.title,
+        types=types_text
+    ) + context
+    return final_prompt
+
+def _coerce_option_list(opts: Any) -> List[str]:
+    """Chuẩn hoá options về list[str]."""
+    if not opts:
+        return []
+    if isinstance(opts, list):
+        return [str(x).strip() for x in opts if str(x).strip()]
+    # đôi khi model trả string "A;B;C"
+    if isinstance(opts, str):
+        parts = [p.strip() for p in opts.split(";")]
+        return [p for p in parts if p]
+    return []
+
+def _normalize_type(t: str) -> str:
+    t = (t or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if t in SUPPORTED_TYPES:
+        return t
+    if t in ["singlechoice", "single", "radio"]:
+        return "single_choice"
+    if t in ["mcq", "multiple", "multi_choice", "multi"]:
+        return "multiple_choice"
+    if t in ["boolean", "yes_no"]:
+        return "boolean_"
+    return t or "open_ended"
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -38,6 +170,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Global Gemini client
 _gemini_client: GeminiClient = None
@@ -73,95 +206,94 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "survey-generator",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "ok" : True
+    }
+
+@app.get("/templates")
+def list_templates():
+    return {
+        "default": True,
+        "supported_types": SUPPORTED_TYPES,
+        "industries": list(INDUSTRY_TEMPLATES.keys())
     }
 
 @app.post("/generate", response_model=SurveyGenerationResponse)
-async def generate_survey(
-    request: SurveyGenerationRequest,
-    gemini_client: GeminiClient = Depends(get_gemini_client)
-):
-    """
-    Tạo khảo sát sử dụng Gemini API
-    
-    Args:
-        request: Yêu cầu tạo khảo sát chứa prompt và metadata
-        
-    Returns:
-        SurveyGenerationResponse với dữ liệu khảo sát đã tạo
-    """
+def generate_survey(request: SurveyGenerationRequest):
     try:
-        logger.info(f"Đang tạo khảo sát cho prompt: {request.ai_prompt[:100]}...")
-        
-        # Xây dựng context từ request
-        # Xử lý category: ưu tiên category_id, fallback sang category_name
-        category_text = "General"
-        if request.category_id and request.category_id in CATEGORY_MAPPING:
-            category_text = CATEGORY_MAPPING[request.category_id]
-        elif request.category_name:
-            category_text = request.category_name
-        
-        context = {
-            "category": category_text,
-            "target_audience": request.target_audience,
-            "title_hint": request.title,
-            "description_hint": request.description,
-            "number_of_questions": request.number_of_questions
-        }
-        
-        # Tạo khảo sát sử dụng Gemini
-        generated_survey = gemini_client.generate_survey(
-            prompt=request.ai_prompt,
-            context=context
+        prompt = build_prompt(request)
+
+        client: GeminiClient = get_gemini_client()
+        gem_res = client.generate_survey( prompt=prompt, context=request.description or "" )
+
+        if not gem_res or not getattr(gem_res, "questions", None):
+            return SurveyGenerationResponse(
+                success=False,
+                message="AI không trả về câu hỏi nào.",
+                error_details={"raw": gem_res.dict() if hasattr(gem_res, "dict") else str(gem_res)}
+            )
+
+        normalized_questions: List[Dict[str, Any]] = []
+        low_quality: List[Dict[str, Any]] = []
+
+        for q in gem_res.questions:
+            q_type = _normalize_type(getattr(q, "type", "open_ended"))
+            q_text = getattr(q, "question_text", "").strip()
+
+            options = getattr(q, "options", None)
+            if q_type in ("multiple_choice", "single_choice", "ranking"):
+                opts = _coerce_option_list(options)
+                if q_type == "ranking" and len(opts) < 5:
+                    opts = opts + [f"Mục {i}" for i in range(1, max(6 - len(opts), 0) + 1)]
+                options = opts
+            else:
+                options = None
+
+            issues = validate_question_text(q_text)
+            q_score = score_question(q_text)
+
+            record = {
+                "question_text": q_text,
+                "type": q_type,
+                "options": options,
+                "score": q_score,
+                "issues": issues
+            }
+            normalized_questions.append(record)
+
+            if issues or q_score < 70:
+                low_quality.append({"text": q_text, "score": q_score, "issues": issues})
+
+        if low_quality:
+            return SurveyGenerationResponse(
+                success=False,
+                message="Một số câu hỏi chưa đạt chất lượng tối thiểu.",
+                error_details={"low_quality": low_quality, "generated": normalized_questions}
+            )
+        gen = GeneratedSurveyResponse(
+            title=request.title,
+            description=request.description,
+            questions=[
+                QuestionSchema(
+                    question_text=it["question_text"],
+                    question_type=it["type"],
+                    is_required=True,
+                    display_order=i+1,
+                    options=[{"option_text": o, "display_order": j+1} for j, o in enumerate(it["options"] or [])]
+                )
+                for i, it in enumerate(normalized_questions)
+            ]
         )
-        
-        if generated_survey is None:
-            logger.error("Không thể tạo khảo sát từ Gemini API")
-            return SurveyGenerationResponse(
-                success=False,
-                message="Không thể tạo khảo sát. Vui lòng thử lại với prompt khác.",
-                error_details={
-                    "error_type": "generation_failed",
-                    "suggestion": "Hãy thử cung cấp prompt chi tiết hơn hoặc cụ thể hơn"
-                }
-            )
-        
-        # Kiểm tra số lượng câu hỏi có đúng với yêu cầu không
-        actual_questions = len(generated_survey.questions)
-        expected_questions = request.number_of_questions
-        
-        if actual_questions != expected_questions:
-            logger.warning(f"AI tạo {actual_questions} câu hỏi nhưng yêu cầu {expected_questions} câu hỏi")
-            return SurveyGenerationResponse(
-                success=False,
-                message=f"AI tạo {actual_questions} câu hỏi nhưng bạn yêu cầu {expected_questions} câu hỏi. Vui lòng thử lại.",
-                error_details={
-                    "error_type": "question_count_mismatch",
-                    "actual_count": actual_questions,
-                    "expected_count": expected_questions,
-                    "suggestion": "Thử lại hoặc điều chỉnh prompt để rõ ràng hơn"
-                }
-            )
-        
-        logger.info(f"Tạo khảo sát thành công với {actual_questions} câu hỏi đúng như yêu cầu")
-        
         return SurveyGenerationResponse(
             success=True,
-            message="Tạo khảo sát thành công",
-            generated_survey=generated_survey
+            survey_id=None,
+            message="Tạo câu hỏi thành công",
+            generated_survey=gen
         )
-        
+
     except Exception as e:
-        logger.error(f"Lỗi trong generate_survey: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "success": False,
-                "message": "Lỗi hệ thống khi tạo khảo sát",
-                "error_code": "internal_error",
-                "error_details": {"exception": str(e)}
-            }
-        )
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/categories")
 async def get_categories():
@@ -188,7 +320,6 @@ async def validate_prompt(prompt: str):
                 "message": "Prompt quá dài. Vui lòng rút gọn lại."
             }
         
-        # Kiểm tra các từ khóa liên quan đến khảo sát
         survey_keywords = [
             "khảo sát", "survey", "câu hỏi", "phản hồi", "đánh giá", 
             "ý kiến", "thống kê", "phỏng vấn", "nghiên cứu"
@@ -219,6 +350,92 @@ async def validate_prompt(prompt: str):
             "valid": False,
             "message": "Lỗi khi kiểm tra prompt"
         }
+
+# Cải thiện thời gian resfresh 1 question 
+class RefreshQuestionRequest(BaseModel):
+    title: str
+    category: str | None = None
+    question_type: str  # "single_choice" | "multiple_choice" | "ranking" | "rating" | "open_ended" | "boolean"
+    ai_prompt: str | None = None          # gợi ý thêm của user
+    previous_question: str | None = None  # câu cũ để “rephrase/refresh” (optional)
+    previous_options: list[str] | None = None  # options cũ (nếu có), để model tránh lặp (optional)
+
+class RefreshQuestionResponse(BaseModel):
+    success: bool
+    question_text: str | None = None
+    question_type: str | None = None
+    options: list[str] | None = None
+    message: str | None = None
+
+def build_single_question_prompt(req: RefreshQuestionRequest) -> str:
+    cat = normalize_category(req.category)
+    base = INDUSTRY_TEMPLATES.get(cat, DEFAULT_TEMPLATE)
+
+    guide = f"""
+    Chỉ tạo 1 câu hỏi loại: {req.question_type}.
+    Yêu cầu:
+    - Rõ ràng, không dẫn dắt
+    - Nếu là single_choice/multiple_choice: sinh 5-7 lựa chọn, không trùng lặp
+    - Nếu là ranking: sinh 5-7 mục để xếp hạng
+    - Nếu là rating: dùng thang 1-5
+    - Trả về JSON tối giản: question_text, type, options (nếu có)
+
+    Ngữ cảnh survey: "{req.title}"
+    """
+    if req.previous_question:
+        guide += f"\nTránh lặp lại/diễn đạt lại quá giống câu trước: \"{req.previous_question}\""
+    if req.previous_options:
+        joined = "; ".join(req.previous_options)
+        guide += f"\nKhông lặp lại các lựa chọn trước: {joined}"
+
+    if req.ai_prompt:
+        guide += f"\nGợi ý bổ sung: {req.ai_prompt.strip()}"
+
+    return f"Tạo 1 câu hỏi chất lượng cao cho survey \"{req.title}\".\n{guide}\nChỉ trả JSON."
+
+@app.post("/refresh_question", response_model=RefreshQuestionResponse)
+def refresh_question(req: RefreshQuestionRequest):
+    try:
+        prompt = build_single_question_prompt(req)
+
+        client: GeminiClient = get_gemini_client()
+        gem = getattr(client, "generate_one_question", None)
+        if callable(gem):
+            gem = client.generate_one_question(prompt=prompt, question_type=req.question_type)
+        else:
+            gem = client.generate_survey(prompt=prompt, context="", n=1)
+
+        if not gem or (hasattr(gem, "questions") and not gem.questions):
+            return RefreshQuestionResponse(success=False, message="AI không trả về câu hỏi.")
+
+        if hasattr(gem, "question"): 
+            q = gem.question
+        else:
+            q = gem.questions[0]
+
+        q_type = _normalize_type(getattr(q, "type", req.question_type))
+        q_text = getattr(q, "question_text", "").strip()
+        options = getattr(q, "options", None)
+
+        if q_type in ("multiple_choice", "single_choice", "ranking"):
+            opts = _coerce_option_list(options)
+            if q_type == "ranking" and len(opts) < 5:
+                opts += [f"Mục {i}" for i in range(1, max(6 - len(opts), 0) + 1)]
+            options = opts
+        else:
+            options = None
+
+        if not q_text:
+            return RefreshQuestionResponse(success=False, message="Câu hỏi rỗng.")
+
+        return RefreshQuestionResponse(
+            success=True,
+            question_text=q_text,
+            question_type=q_type,
+            options=options
+        )
+    except Exception as e:
+        return RefreshQuestionResponse(success=False, message=str(e))
 
 if __name__ == "__main__":
     import uvicorn

@@ -396,6 +396,16 @@ Nếu gặp vấn đề:
 
 ---
 
+## Endpoints
+
+- POST /generate — tạo N câu hỏi: body theo SurveyGenerationRequest. Trả success=true + data.questions[] đã chuẩn hoá (type/options/score). Low-quality sẽ trả success=false + error_details.low_quality.
+- POST /refresh_question — làm mới 1 câu hỏi nhanh với question_type, có thể truyền previous_question/previous_options để tránh trùng lặp.
+- GET /templates — xem danh sách templates & supported types.
+- GET /validate-prompt?prompt=... — check prompt nhanh (optional).
+- GET /health — healthcheck.
+multiple_choice, single_choice, ranking, rating, open_ended, boolean_
+
+
 **Version**: 1.0.0  
 **Last Updated**: October 2025  
 **Maintainer**: SmartSurvey Development Team

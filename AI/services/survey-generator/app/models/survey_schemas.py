@@ -12,6 +12,8 @@ class QuestionType(str, Enum):
     open_ended = "open_ended"            # Câu hỏi mở  
     rating = "rating"                    # Đánh giá
     boolean_ = "boolean_"                # Đúng/Sai
+    single_choice   = "single_choice"    # Trắc Nghiệm Chọn 1
+    ranking         = "ranking"          # Xêp hạng
 
 class SurveyGenerationRequest(BaseModel):
     """Mô hình request cho tạo khảo sát"""
@@ -21,7 +23,7 @@ class SurveyGenerationRequest(BaseModel):
     category_name: Optional[str] = Field(default=None, max_length=100, description="Tên danh mục (text)")
     ai_prompt: str = Field(..., max_length=1000, description="AI prompt để tạo khảo sát")
     target_audience: Optional[str] = Field(None, max_length=200, description="Đối tượng mục tiêu")
-    number_of_questions: int = Field(..., ge=2, le=20, description="Số lượng câu hỏi cần tạo")
+    number_of_questions: int = Field(..., ge=3, le=20, description="Số lượng câu hỏi cần tạo")
     
     @validator('ai_prompt')
     def validate_prompt(cls, v):
@@ -57,7 +59,12 @@ class QuestionSchema(BaseModel):
                 raise ValueError(f"Câu hỏi {question_type} phải có ít nhất 2 lựa chọn")
             if len(v) > 10:
                 raise ValueError(f"Câu hỏi {question_type} không thể có quá 10 lựa chọn")
-        
+        elif question_type == QuestionType.ranking:
+            if not v or len(v) < 3:
+                raise ValueError("Câu hỏi ranking phải có ≥ 3 lựa chọn để sắp hạng")
+            if len(v) > 10:
+                raise ValueError("Câu hỏi ranking không thể có quá 10 lựa chọn")
+            
         # Câu hỏi mở, đánh giá và boolean không nên có options
         elif question_type in [QuestionType.open_ended, QuestionType.rating, QuestionType.boolean_]:
             if v and len(v) > 0:
