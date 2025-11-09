@@ -116,3 +116,22 @@ Bạn nhận được: Điều kiện & danh sách insight đã lưu lần gần
 Invoke-RestMethod "http://127.0.0.1:8000/ai/insights/1/latest"
 
 
+## Smart Response Processing giúp hệ thống hiểu và chuẩn hóa câu trả lời thô từ người dùng trước khi phân tích sâu hơn.
+Pipeline xử lý từng câu gồm:
+Text Cleaning – Chuẩn hóa tiếng Việt, bỏ ký tự thừa, emoji, link, dấu câu lộn xộn.
+Language Detection – Phát hiện tiếng Việt / tiếng Anh / câu trộn (mixed).
+Quality Scoring – Chấm điểm chất lượng câu trả lời (1–10) theo độ dài, rõ ràng, cụ thể, sạch.
+Auto-categorization – Tự động gán tags theo chủ đề (bug, performance, pricing, auth, ios, android, …).
+Duplicate Detection – Phát hiện câu trùng hoặc gần trùng (không dấu, sai chính tả nhẹ, viết khác cách)
+
+## POST /ai/srp/process → test từng câu (VN, EN, mixed, duplicate).
+{
+  "items": [
+    {
+      "id": "m1",
+      "text": "Mình ko mở được app, load mãi. Using iPhone 12 iOS 17"
+    }
+  ],
+  "tag_rules_yaml": "config/rules.yml"
+}
+## POST /ai/srp/process/{survey_id} → xử lý batch thực tế.

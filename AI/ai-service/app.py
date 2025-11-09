@@ -1090,3 +1090,34 @@ def ai_insights_latest(survey_id: int):
             continue
     raise HTTPException(status_code=404, detail="No INSIGHTS found")
 # =====================================================================
+
+
+# === SRP integration routes (dùng core tách riêng) ===
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from srp_core import SRPItem, SRPBatchRequest, SRPResult, srp_process_one, sha256
+
+@app.post("/ai/srp/process", tags=["SRP"])
+def ai_srp_process(req: SRPBatchRequest):
+    known: dict[str, str] = {}
+    out: list[SRPResult] = []
+    for it in req.items:
+        r = srp_process_one(it.text, known_hashes=known, tag_yaml=req.tag_rules_yaml)
+        r.id = it.id
+        out.append(r)
+        known[sha256(r.text_clean)] = r.text_clean
+    return {"ok": True, "results": [r.model_dump() for r in out]}
+
+@app.post("/ai/srp/process/{survey_id}", tags=["SRP"])
+def ai_srp_process_survey(survey_id: int, rules_yaml: str = "rules.yml", db: Session = Depends(get_db)):
+    rows = fetch_answer_rows(db, survey_id)
+    known: dict[str, str] = {}
+    results = []
+    for r in rows:
+        res = srp_process_one(r.answer_text or "", known_hashes=known, rules_yaml=rules_yaml)
+        res.id = str(r.answer_id)
+        results.append(res.model_dump())
+        known[sha256(res.text_clean)] = res.text_clean
+    _save_analysis(survey_id, {"kind":"SRP","items":results,"count":len(results)}, "SRP")
+    return {"ok": True, "survey_id": survey_id, "count": len(results), "results": results}
+

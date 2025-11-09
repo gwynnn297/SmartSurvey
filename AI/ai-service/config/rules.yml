@@ -27,3 +27,55 @@ anomaly:
   min_duration_seconds: 120
   min_dup_count: 3
 
+# ---------- SRP CONFIG (thêm mới) ----------
+srp:
+  thresholds:
+    code_mix_en_min: 0.20      # >= 20% EN và có VI -> mixed
+    code_mix_en_max: 0.80
+    near_dup_jaccard: 0.80    # ngưỡng trùng gần
+    seq_ratio_thresh: 0.86
+  scoring_weights:
+    length: 3
+    clarity: 3
+    relevance: 2
+    specificity: 1
+    cleanliness: 1
+  tag_rules:
+    bug:
+      - "\\blỗi\\b"
+      - "\\bbug\\b"
+      - "\\bcrash\\b"
+      - "\\bđơ\\b"
+      - "\\bkhông (mở|login|đăng nhập|chạy)\\b"
+    performance:
+      - "\\bchậm\\b"
+      - "\\blag\\b"
+      - "\\bload mãi\\b"
+      - "\\btreo\\b"
+    pricing:
+      - "\\bgiá\\b"
+      - "\\bđắt\\b"
+      - "\\bpricing\\b"
+      - "\\bchi phí\\b"
+    auth:
+      - "\\bđăng nhập\\b"
+      - "\\blogin\\b"
+      - "\\b2fa\\b"
+      - "\\bxác thực\\b"
+    ios:
+      - "\\bios\\b"
+      - "\\biphone\\b"
+    android:
+      - "\\bandroid\\b"
+    ux:
+      - "\\bgiao diện\\b"
+      - "\\bkhó dùng\\b"
+      - "\\btrải nghiệm\\b"
+    feature-request:
+      - "\\b(nên|muốn|cần) thêm\\b"
+      - "\\btính năng\\b"
+      - "\\bfeature\\b"
+    mobile:
+      - "\\biphone\\b"
+      - "\\bios\\b"
+      - "\\bandroid\\b"
