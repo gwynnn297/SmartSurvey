@@ -478,80 +478,76 @@ const CreateSurvey = () => {
 
     const handleRefreshQuestion = async (questionIndex) => {
         try {
-            // Kiểm tra xem có đủ thông tin để tạo AI context không
-            const hasTitle = surveyData.title && surveyData.title.trim().length > 0;
-            const hasDescription = surveyData.description && surveyData.description.trim().length > 0;
+            const hasTitle = surveyData.title?.trim().length > 0;
+            const hasDescription = surveyData.description?.trim().length > 0;
 
             if (!hasTitle && !hasDescription) {
                 alert('⚠️ Không thể tạo lại câu hỏi!\n\nĐể sử dụng tính năng này, vui lòng:\n1. Thêm tiêu đề cho khảo sát\n2. Thêm mô tả cho khảo sát\n\nSau đó thử lại.');
                 return;
             }
 
-            // Thêm questionIndex vào set đang refresh
             setRefreshingQuestions(prev => new Set([...prev, questionIndex]));
 
             const currentQuestion = questions[questionIndex];
             if (!currentQuestion) return;
 
-            // Tạo AI context từ thông tin có sẵn
-            const surveyTitle = hasTitle ? surveyData.title : "Khảo sát";
-            const surveyDesc = hasDescription ? surveyData.description : "Khảo sát không có mô tả cụ thể";
-            const categoryName = categories.find(cat => cat.id === parseInt(surveyData.category_id))?.category_name || "General";
+            const surveyTitle = hasTitle ? surveyData.title : 'Khảo sát';
+            const surveyDesc = hasDescription ? surveyData.description : 'Khảo sát không có mô tả cụ thể';
+            const categoryName =
+                categories.find(cat => cat.id === parseInt(surveyData.category_id))?.category_name || 'General';
 
-            // Tạo prompt dựa trên thông tin survey và câu hỏi hiện tại
             const requestData = {
-                title: `Câu hỏi thay thế`,
-                description: `Tạo lại câu hỏi cho khảo sát: ${surveyTitle}`,
-                categoryName: categoryName,
-                aiPrompt: `Tạo khảo sát về "${surveyTitle}". Mô tả: "${surveyDesc}". Tạo câu hỏi thay thế tương tự nhưng khác biệt cho câu hỏi hiện tại: "${currentQuestion.question_text}"`,
-                targetAudience: "Người tham gia khảo sát",
-                numberOfQuestions: 3 // Tạo 3 câu ổn định, lấy câu đầu để thay thế
+                originalPrompt: surveyData.aiPrompt || surveyTitle,
+                contextHint: currentQuestion.question_text,
+                targetAudience: 'Người tham gia khảo sát',
+                categoryName,
+                description: `Tạo lại câu hỏi cho khảo sát "${surveyTitle}". Mô tả: "${surveyDesc}".`
             };
 
-            console.log("🔄 Regenerating question in CreateSurvey:", requestData);
+            console.log('🔄 Regenerating question in CreateSurvey:', requestData);
 
-            const response = await aiSurveyService.generateSurvey(requestData);
+            const response = await aiSurveyService.regenerateQuestion(requestData);
 
-            if (response.success && response.generated_survey && response.generated_survey.questions && response.generated_survey.questions.length > 0) {
-                // Lấy câu hỏi đầu tiên từ response
-                const aiQuestion = response.generated_survey.questions[0];
+            if (response.success && response.question) {
+                const aiQuestion = response.question;
 
-                // Map response về format frontend tương tự như CreateAI
                 const newQuestion = {
-                    id: currentQuestion.id, // Giữ nguyên ID để không bị conflict
-                    question_text: aiQuestion.question_text,
-                    question_type: mapTypeFromBackend(aiQuestion.question_type),
-                    is_required: true, // Mặc định bắt buộc
-                    options: aiQuestion.options ? aiQuestion.options.map((opt, optIndex) => ({
+                    id: currentQuestion.id,
+                    question_text: aiQuestion.questionText || aiQuestion.question_text || '',
+                    question_type: mapTypeFromBackend(aiQuestion.questionType || aiQuestion.question_type),
+                    is_required: aiQuestion.isRequired ?? aiQuestion.is_required ?? true,
+                    options: (aiQuestion.options || []).map((opt, optIndex) => ({
                         id: `temp_option_${Date.now()}_${optIndex}`,
-                        option_text: opt.option_text
-                    })) : []
+                        option_text: opt.optionText || opt.option_text || ''
+                    }))
                 };
 
-                // Add special handling for question types
                 if (newQuestion.question_type === 'multiple_choice') {
                     newQuestion.choice_type = 'single';
-                    if (newQuestion.options.length === 0) {
+                    if (!newQuestion.options.length) {
                         newQuestion.options = createDefaultOptions();
                     }
-                } else if (newQuestion.question_type === 'yes_no' && newQuestion.options.length === 0) {
-                    newQuestion.options = createYesNoOptions();
+                } else if (newQuestion.question_type === 'boolean_' || newQuestion.question_type === 'yes_no') {
+                    if (!newQuestion.options.length) {
+                        newQuestion.options = createYesNoOptions();
+                    }
                 } else if (newQuestion.question_type === 'rating') {
                     newQuestion.rating_scale = 5;
+                    newQuestion.options = [];
+                } else if (!needsOptions(newQuestion.question_type)) {
+                    newQuestion.options = [];
                 }
 
-                // Update the question in the questions array
                 setQuestions(prev => {
                     const next = [...prev];
                     next[questionIndex] = newQuestion;
                     return next;
                 });
 
-                console.log("✅ Question regenerated in CreateSurvey:", newQuestion);
+                console.log('✅ Question regenerated in CreateSurvey:', newQuestion);
             } else {
                 throw new Error(response.message || 'Không thể tạo câu hỏi mới');
             }
-
         } catch (error) {
             console.error('❌ Error refreshing question in CreateSurvey:', error);
 
@@ -564,7 +560,6 @@ const CreateSurvey = () => {
 
             alert(errorMessage);
         } finally {
-            // Xóa questionIndex khỏi set đang refresh
             setRefreshingQuestions(prev => {
                 const next = new Set(prev);
                 next.delete(questionIndex);
@@ -792,13 +787,11 @@ const CreateSurvey = () => {
         try {
             const draftKey = draftStorageKey.current || `survey_draft_${editSurveyId || 'new'}`;
             const savedDraft = localStorage.getItem(draftKey);
-            
             if (savedDraft) {
                 const draftData = JSON.parse(savedDraft);
                 // Chỉ khôi phục nếu dữ liệu còn mới (trong vòng 24h)
                 const draftAge = Date.now() - (draftData.timestamp || 0);
                 const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-                
                 if (draftAge < maxAge) {
                     if (draftData.surveyData) {
                         setSurveyData(draftData.surveyData);
@@ -841,10 +834,8 @@ const CreateSurvey = () => {
         autoSaveTimeoutRef.current = setTimeout(() => {
             try {
                 setAutoSaveStatus('saving');
-                
                 // Lưu vào localStorage thay vì database
                 const success = saveDraftToLocalStorage();
-                
                 if (success) {
                     setAutoSaveStatus('saved');
                     setTimeout(() => setAutoSaveStatus('idle'), 2000);
@@ -896,7 +887,6 @@ const CreateSurvey = () => {
 
             // Thử khôi phục từ localStorage trước (nếu có draft chưa lưu)
             const restored = restoreDraftFromLocalStorage();
-            
             if (!restored) {
                 // Load dữ liệu survey từ location.state
                 setSurveyData({
@@ -1017,7 +1007,6 @@ const CreateSurvey = () => {
 
                 // Normalize questionType từ backend
                 const normalizedType = mapTypeFromBackend(question.questionType);
-                
                 const normalized = normalizeQuestionData({
                     id: question.id,
                     question_text: question.questionText,
@@ -1328,7 +1317,7 @@ const CreateSurvey = () => {
                 localStorage.removeItem(draftStorageKey.current);
             }
             setHasUnsavedChanges(false);
-            
+
             // Cập nhật draftStorageKey với surveyId mới (nếu có)
             if (surveyId) {
                 draftStorageKey.current = `survey_draft_${surveyId}`;
@@ -1499,25 +1488,103 @@ const CreateSurvey = () => {
                 await saveQuestionsAndOptions(surveyId);
             } else {
                 // Cập nhật survey hiện có thành published và lưu questions/options mới nhất
-                await surveyService.updateSurvey(surveyId, { 
+                await surveyService.updateSurvey(surveyId, {
                     status: 'published',
                     title: surveyData.title,
                     description: surveyData.description,
                     categoryId: surveyData.category_id ? parseInt(surveyData.category_id) : null
                 });
-                
-                // Xóa questions cũ và lưu lại questions mới từ state hiện tại
-                const existingQuestions = await questionService.getQuestionsBySurvey(surveyId);
-                for (const q of existingQuestions) {
-                    try {
-                        await questionService.deleteQuestion(q.id);
-                    } catch (err) {
-                        console.warn(`Could not delete question ${q.id}:`, err);
+
+                try {
+                    const serverQuestions = await questionService.getQuestionsBySurvey(surveyId);
+                    const currentQuestionIds = questions.map(q => q.id).filter(id => id && !id.toString().startsWith('temp_'));
+                    const deletedQuestions = serverQuestions.filter(sq => !currentQuestionIds.includes(sq.id));
+                    for (const deletedQuestion of deletedQuestions) {
+                        try {
+                            const options = await optionService.getOptionsByQuestion(deletedQuestion.id);
+                            for (const option of options) {
+                                await optionService.deleteOption(option.id);
+                            }
+                            await questionService.deleteQuestion(deletedQuestion.id);
+                        } catch (error) {
+                            console.warn(`Could not delete question ${deletedQuestion.id} (may have responses):`, error);
+                        }
+                    }
+
+                    for (const question of questions) {
+                        if (question.id && !question.id.toString().startsWith('temp_') && needsOptions(question.question_type)) {
+                            try {
+                                const serverOptions = await optionService.getOptionsByQuestion(question.id);
+                                const currentOptionIds = question.options?.map(o => o.id).filter(id => id && !id.toString().startsWith('temp_option_')) || [];
+                                const deletedOptions = serverOptions.filter(so => !currentOptionIds.includes(so.id));
+                                for (const deletedOption of deletedOptions) {
+                                    await optionService.deleteOption(deletedOption.id);
+                                }
+                            } catch (error) {
+                                console.error(`Error processing options for question ${question.id}:`, error);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error processing deletions:', error);
+                }
+
+                for (const question of questions) {
+                    const backendType = mapTypeToBackend(question.question_type);
+                    const questionPayload = {
+                        surveyId: surveyId,
+                        questionText: question.question_text,
+                        questionType: backendType,
+                        isRequired: question.is_required ?? true
+                    };
+
+                    let savedQuestion;
+                    if (question.id && question.id.toString().startsWith('temp_')) {
+                        // Tạo question mới
+                        savedQuestion = await questionService.createQuestion(questionPayload);
+                    } else if (question.id && !question.id.toString().startsWith('temp_')) {
+                        // Cập nhật question hiện có (không tạo mới) - ĐÂY LÀ KEY FIX
+                        savedQuestion = await questionService.updateQuestion(question.id, {
+                            questionText: question.question_text,
+                            questionType: backendType,
+                            isRequired: question.is_required ?? true
+                        });
+                    } else {
+                        // Nếu không có ID, tạo question mới
+                        savedQuestion = await questionService.createQuestion(questionPayload);
+                    }
+
+                    if (!savedQuestion || !savedQuestion.id) {
+                        console.error('Failed to save question:', question);
+                        throw new Error(`Không thể lưu câu hỏi: ${question.question_text}`);
+                    }
+
+                    // Tạo/cập nhật options cho các loại câu hỏi cần options
+                    if (needsOptions(question.question_type) && question.options?.length > 0) {
+                        for (const option of question.options) {
+                            if (option.option_text && option.option_text.trim()) {
+                                const optionPayload = {
+                                    questionId: savedQuestion.id,
+                                    optionText: option.option_text
+                                };
+
+                                let savedOption;
+                                if (option.id && option.id.toString().startsWith('temp_option_')) {
+                                    // Tạo option mới
+                                    savedOption = await optionService.createOption(optionPayload);
+                                } else if (option.id && !option.id.toString().startsWith('temp_option_')) {
+                                    // Cập nhật option hiện có (không tạo mới)
+                                    savedOption = await optionService.updateOption(option.id, {
+                                        optionText: option.option_text
+                                    });
+                                } else {
+                                    // Nếu không có ID, tạo option mới
+                                    savedOption = await optionService.createOption(optionPayload);
+                                }
+                            }
+                        }
                     }
                 }
-                
-                // Lưu questions và options mới vào database
-                await saveQuestionsAndOptions(surveyId);
             }
 
             // Xóa draft từ localStorage sau khi đã lưu vào database
@@ -1651,7 +1718,7 @@ const CreateSurvey = () => {
                     <div className="draft-modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="draft-modal-header">
                             <h3>Phát hiện bản nháp chưa hoàn thành</h3>
-                            <button 
+                            <button
                                 className="draft-modal-close"
                                 onClick={() => setShowDraftModal(false)}
                                 aria-label="Đóng"

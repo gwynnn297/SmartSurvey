@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import "./ViewLinkSharePage.css";
 import { surveyService } from "../../services/surveyService";
 import { questionService, optionService } from "../../services/questionSurvey";
-import { generateUniqueToken, isValidTokenFormat } from "../../utils/tokenGenerator";
 import logoSmartSurvey from "../../assets/logoSmartSurvey.png";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
@@ -133,13 +132,24 @@ const ViewLinkSharePage = () => {
 
                 setQuestions(mappedQuestions);
 
-                // Tạo link chia sẻ với token như ShareSurveyPage
-                const token = generateUniqueToken();
-                const responseUrl = `${window.location.origin}/response/${surveyId}?respondentToken=${token}`;
-                console.log('🔗 Generated share URL:', responseUrl);
-                console.log('🎫 Generated token:', token);
-                console.log('🔍 Token format valid:', isValidTokenFormat(token));
+                // ... sau khi setQuestions(mappedQuestions)
+
+                const existingLink = (detail.shareLink || '').trim();
+                const fallbackUrl = `${window.location.origin}/response/${surveyId}`;
+                const responseUrl = existingLink || fallbackUrl;
+
                 setShareUrl(responseUrl);
+
+                try {
+                    if (!existingLink) {
+                        await surveyService.updateSurvey(surveyId, { shareLink: fallbackUrl });
+                        console.log('✅ Saved default shareLink:', fallbackUrl);
+                    } else {
+                        console.log('ℹ️ Using existing shareLink:', responseUrl);
+                    }
+                } catch (error) {
+                    console.warn("Could not update shareLink on backend:", error);
+                }
 
                 // Cập nhật shareLink trong database nếu chưa có
                 try {
@@ -194,22 +204,13 @@ const ViewLinkSharePage = () => {
     const handleGenerateNewLink = async () => {
         try {
             setLoading(true);
-            const newToken = generateUniqueToken();
-            const newShareUrl = `${window.location.origin}/response/${surveyId}?respondentToken=${newToken}`;
-
+            const newShareUrl = `${window.location.origin}/response/${surveyId}`;
             setShareUrl(newShareUrl);
-
-            // Cập nhật shareLink trong database
-            try {
-                await surveyService.updateSurvey(surveyId, { shareLink: newShareUrl });
-            } catch (error) {
-                console.warn("Could not update shareLink on backend:", error);
-            }
-
-            alert("Đã tạo liên kết mới với token khác!");
+            await surveyService.updateSurvey(surveyId, { shareLink: newShareUrl });
+            alert("Liên kết đã được đặt lại về mặc định.");
         } catch (error) {
-            console.error("Error generating new link:", error);
-            alert("Có lỗi khi tạo liên kết mới!");
+            console.error("Error resetting share link:", error);
+            alert("Có lỗi khi đặt lại liên kết!");
         } finally {
             setLoading(false);
         }

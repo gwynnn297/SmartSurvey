@@ -24,6 +24,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+
 // ✅ 8 loại câu hỏi chính thức theo backend - đồng bộ với CreateSurvey
 const QUESTION_TYPE_OPTIONS = [
     { value: 'open_ended', label: 'Câu hỏi mở' },
@@ -60,6 +61,10 @@ const mapTypeToBackend = (type) => {
             return type;
     }
 };
+const needsOptions = (questionType) => {
+    return ['multiple_choice', 'single_choice', 'boolean_', 'ranking'].includes(questionType);
+};
+
 
 const createEmptyOption = (text = '') => ({
     id: `temp_option_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -137,14 +142,14 @@ const normalizeQuestionData = (rawQuestion) => {
     }
 
     const questionId = rawQuestion.id || `temp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const backendType = rawQuestion.question_type || rawQuestion.questionType || 'open_ended';
+    const backendType = rawQuestion.question_type || rawQuestion.questionType || rawQuestion.type || 'open_ended';
     const normalizedType = mapTypeFromBackend(backendType);
 
     const base = {
         id: questionId,
-        question_text: rawQuestion.question_text || rawQuestion.questionText || '',
+        question_text: rawQuestion.question_text || rawQuestion.questionText || rawQuestion.text || '',
         question_type: normalizedType,
-        is_required: rawQuestion.is_required ?? rawQuestion.isRequired ?? false,
+        is_required: rawQuestion.is_required ?? rawQuestion.isRequired ?? rawQuestion.required ?? false,
         options: []
     };
 
@@ -153,7 +158,7 @@ const normalizeQuestionData = (rawQuestion) => {
         const mappedOptions = rawOptions.length > 0
             ? rawOptions.map(opt => ({
                 id: opt?.id || `temp_option_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                option_text: opt?.option_text ?? opt?.optionText ?? ''
+                option_text: opt?.option_text ?? opt?.optionText ?? opt?.text ?? ''
             }))
             : createDefaultOptions();
         return {
@@ -168,7 +173,7 @@ const normalizeQuestionData = (rawQuestion) => {
         const mappedOptions = rawOptions.length >= 2
             ? rawOptions.map(opt => ({
                 id: opt?.id || `temp_option_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                option_text: opt?.option_text ?? opt?.optionText ?? ''
+                option_text: opt?.option_text ?? opt?.optionText ?? opt?.text ?? ''
             }))
             : createYesNoOptions();
         return {
@@ -182,7 +187,7 @@ const normalizeQuestionData = (rawQuestion) => {
         const mappedOptions = rawOptions.length > 0
             ? rawOptions.map(opt => ({
                 id: opt?.id || `temp_option_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                option_text: opt?.option_text ?? opt?.optionText ?? ''
+                option_text: opt?.option_text ?? opt?.optionText ?? opt?.text ?? ''
             }))
             : createDefaultOptions();
         return {
@@ -286,6 +291,8 @@ function SortableRankingOption({ id, index, option, error, onTextChange, onDelet
 
 export default function CreateAI() {
     const navigate = useNavigate();
+    const [savedSurveyId, setSavedSurveyId] = useState(null);
+    const [isEditMode, setIsEditMode] = useState(false);
     const [form, setForm] = useState({
         title: '',
         category_name: '', // Đổi từ category_id thành category_name để có thể nhập tự do
@@ -309,7 +316,7 @@ export default function CreateAI() {
     const [progress, setProgress] = useState(0);
     const [showForm, setShowForm] = useState(true);
     const [showMobileView, setShowMobileView] = useState(false);
-    
+
     // Ref để ngăn việc lưu nhiều lần
     const isSavingRef = useRef(false);
 
@@ -370,6 +377,58 @@ export default function CreateAI() {
             setCategories([]);
         } finally {
             setCategoriesLoading(false);
+        }
+    };
+
+    const syncSurveyFromServer = async (surveyId) => {
+        if (!surveyId) {
+            return false;
+        }
+
+        try {
+            const detail = await surveyService.getSurveyDetail(surveyId);
+            if (!detail) {
+                return false;
+            }
+
+            setForm(prev => {
+                const next = { ...prev };
+                if (detail.title !== undefined && detail.title !== null) {
+                    next.title = detail.title;
+                }
+                if (detail.description !== undefined && detail.description !== null) {
+                    next.description = detail.description;
+                }
+                if (detail.categoryName) {
+                    next.category_name = detail.categoryName;
+                }
+                if (detail.aiPrompt) {
+                    next.ai_context = detail.aiPrompt;
+                }
+                if (Array.isArray(detail.questions)) {
+                    next.question_count = detail.questions.length;
+                }
+                return next;
+            });
+
+            if (Array.isArray(detail.questions)) {
+                const normalizedQuestions = detail.questions.map(question => normalizeQuestionData({
+                    id: question.id,
+                    question_text: question.question_text || question.questionText || question.text,
+                    question_type: question.question_type || question.questionType || question.type,
+                    is_required: question.is_required ?? question.isRequired ?? question.required,
+                    options: question.options?.map(option => ({
+                        id: option.id,
+                        option_text: option.option_text ?? option.optionText ?? option.text
+                    }))
+                }));
+                setQuestions(normalizedQuestions);
+            }
+
+            return true;
+        } catch (error) {
+            console.warn('⚠️ Không thể đồng bộ khảo sát AI từ server:', error);
+            return false;
         }
     };
 
@@ -570,7 +629,7 @@ export default function CreateAI() {
 
             // Sử dụng đúng số lượng câu hỏi người dùng yêu cầu
             const requestedQuestions = parseInt(form.question_count);
-            
+
             // Gọi API backend thật
             const requestData = {
                 title: form.title,
@@ -607,6 +666,20 @@ export default function CreateAI() {
                 setQuestions(mappedQuestions);
                 console.log("✅ AI generated questions:", mappedQuestions);
 
+                const generatedSurveyId = aiResponse.surveyId ?? aiResponse.survey_id;
+                if (generatedSurveyId !== undefined && generatedSurveyId !== null) {
+                    const numericSurveyId = Number(generatedSurveyId);
+                    if (!Number.isNaN(numericSurveyId)) {
+                        setSavedSurveyId(numericSurveyId);
+                        setIsEditMode(true);
+                        await syncSurveyFromServer(numericSurveyId);
+                    } else {
+                        console.warn('⚠️ Survey ID từ AI không hợp lệ:', generatedSurveyId);
+                    }
+                } else {
+                    console.warn('⚠️ Không tìm thấy survey_id trong phản hồi AI - sẽ tạo mới khi lưu.');
+                }
+
                 // Kiểm tra xem có cần tạo thêm câu hỏi không
                 const currentQuestions = mappedQuestions.length;
                 const requestedQuestions = parseInt(form.question_count);
@@ -614,7 +687,7 @@ export default function CreateAI() {
                 if (requestedQuestions > currentQuestions) {
                     console.log(`📝 Backend chỉ trả về ${currentQuestions} câu, yêu cầu ${requestedQuestions} câu.`);
                     console.log(`💡 Sẽ tạo thêm ${requestedQuestions - currentQuestions} câu hỏi...`);
-                    
+
                     // Tạo thêm câu hỏi nếu còn thiếu
                     const remainingQuestions = requestedQuestions - currentQuestions;
                     const additionalRequestData = {
@@ -774,20 +847,20 @@ export default function CreateAI() {
     const handleDeleteOption = (questionIndex, optionIndex) => {
         setQuestions(prev => {
             const currentQuestion = prev[questionIndex];
-            if (!currentQuestion || (currentQuestion.question_type !== 'multiple_choice' && 
-                currentQuestion.question_type !== 'single_choice' && 
+            if (!currentQuestion || (currentQuestion.question_type !== 'multiple_choice' &&
+                currentQuestion.question_type !== 'single_choice' &&
                 currentQuestion.question_type !== 'ranking')) {
                 return prev;
             }
             const next = [...prev];
             const question = { ...next[questionIndex] };
             const currentOptions = [...(question.options || [])];
-            
+
             // Không cho phép xóa nếu chỉ còn 2 option
             if (currentOptions.length <= 2) {
                 return prev;
             }
-            
+
             const options = currentOptions.filter((_, idx) => idx !== optionIndex);
             question.options = options;
             next[questionIndex] = question;
@@ -799,8 +872,8 @@ export default function CreateAI() {
     const handleAddOption = (questionIndex) => {
         setQuestions(prev => {
             const currentQuestion = prev[questionIndex];
-            if (!currentQuestion || (currentQuestion.question_type !== 'multiple_choice' && 
-                currentQuestion.question_type !== 'single_choice' && 
+            if (!currentQuestion || (currentQuestion.question_type !== 'multiple_choice' &&
+                currentQuestion.question_type !== 'single_choice' &&
                 currentQuestion.question_type !== 'ranking')) {
                 return prev;
             }
@@ -881,7 +954,13 @@ export default function CreateAI() {
         setActiveQuestionIndex(index + 1);
         clearError('questions');
     };
-
+    const handleAddQuestion = (type = 'open_ended') => {
+        const newIndex = questions.length;
+        setQuestions(prev => [...prev, createEmptyQuestion(type)]);
+        setActiveQuestionIndex(newIndex);
+        clearError('questions');
+        clearQuestionErrors();
+    };
     const handleDeleteQuestion = (index) => {
         setQuestions(prev => prev.filter((_, i) => i !== index));
         setActiveQuestionIndex(prev => {
@@ -896,68 +975,57 @@ export default function CreateAI() {
 
     const handleRefreshQuestion = async (questionIndex) => {
         try {
-            // Thêm questionIndex vào set đang refresh
             setRefreshingQuestions(prev => new Set([...prev, questionIndex]));
 
-            // Tối ưu: Tạo 3 câu hỏi nhanh, lấy câu đầu (Gemini hoạt động ổn định với 3+ câu)
+            const currentQuestion = questions[questionIndex];
+            if (!currentQuestion) return;
+
             const requestData = {
-                title: `Câu hỏi thay thế`,
-                description: `Tạo lại câu hỏi về ${form.category_name || "chủ đề này"}`,
-                categoryName: form.category_name || "General",
-                aiPrompt: `Tạo khảo sát về ${form.ai_context}, tập trung vào ${form.category_name || "chủ đề này"} dành cho ${form.target_audience || "khách hàng"}, bao gồm câu hỏi đánh giá và ý kiến phản hồi`,
-                targetAudience: form.target_audience || "Khách hàng",
-                numberOfQuestions: 3 // Tạo 3 câu ổn định, lấy câu đầu để thay thế
+                originalPrompt: form.ai_context || form.title || 'Khảo sát',
+                contextHint: currentQuestion.question_text || '',
+                targetAudience: form.target_audience || 'Người tham gia khảo sát',
+                categoryName: form.category_name || 'General',
+                description: `Tạo lại câu hỏi cho khảo sát "${form.title || 'AI Survey'}".`
             };
 
-            console.log("🔄 Regenerating question:", requestData);
+            const response = await aiSurveyService.regenerateQuestion(requestData);
 
-            const response = await aiSurveyService.generateSurvey(requestData);
+            if (response.success && response.question) {
+                const aiQuestion = response.question;
 
-            if (response.success && response.generated_survey && response.generated_survey.questions && response.generated_survey.questions.length > 0) {
-                // Lấy câu hỏi đầu tiên từ response
-                const aiQuestion = response.generated_survey.questions[0];
-
-                // Map response về format frontend
                 const newQuestion = {
-                    id: `temp_${Date.now()}_${questionIndex}`,
-                    question_text: aiQuestion.question_text,
-                    question_type: mapTypeFromBackend(aiQuestion.question_type),
-                    is_required: aiQuestion.is_required ?? true,
-                    options: aiQuestion.options ? aiQuestion.options.map((opt, optIndex) => ({
+                    id: currentQuestion.id,
+                    question_text: aiQuestion.question_text || aiQuestion.questionText || '',
+                    question_type: mapTypeFromBackend(aiQuestion.question_type || aiQuestion.questionType),
+                    is_required: aiQuestion.is_required ?? aiQuestion.isRequired ?? true,
+                    options: (aiQuestion.options || []).map((opt, optIndex) => ({
                         id: `temp_option_${Date.now()}_${optIndex}`,
-                        option_text: opt.option_text
-                    })) : []
+                        option_text: opt.option_text || opt.optionText || ''
+                    }))
                 };
 
-                // Add special handling for question types
                 if (newQuestion.question_type === 'multiple_choice') {
                     newQuestion.choice_type = 'multiple';
-                    if (newQuestion.options.length === 0) {
-                        newQuestion.options = createDefaultOptions();
-                    }
+                    if (!newQuestion.options.length) newQuestion.options = createDefaultOptions();
                 } else if (newQuestion.question_type === 'single_choice') {
                     newQuestion.choice_type = 'single';
-                    if (newQuestion.options.length === 0) {
-                        newQuestion.options = createDefaultOptions();
-                    }
-                } else if ((newQuestion.question_type === 'boolean_' || newQuestion.question_type === 'yes_no') && newQuestion.options.length === 0) {
-                    newQuestion.options = createYesNoOptions();
+                    if (!newQuestion.options.length) newQuestion.options = createDefaultOptions();
+                } else if (newQuestion.question_type === 'boolean_' || newQuestion.question_type === 'yes_no') {
+                    if (!newQuestion.options.length) newQuestion.options = createYesNoOptions();
                 } else if (newQuestion.question_type === 'ranking') {
-                    if (newQuestion.options.length === 0) {
-                        newQuestion.options = createDefaultOptions();
-                    }
+                    if (!newQuestion.options.length) newQuestion.options = createDefaultOptions();
                 } else if (newQuestion.question_type === 'rating') {
                     newQuestion.rating_scale = 5;
+                    newQuestion.options = [];
+                } else if (!needsOptions(newQuestion.question_type)) {
+                    newQuestion.options = [];
                 }
 
-                // Update the question in the questions array
                 setQuestions(prev => {
                     const next = [...prev];
                     next[questionIndex] = newQuestion;
                     return next;
                 });
-
-                console.log("✅ Question regenerated:", newQuestion);
             } else {
                 throw new Error(response.message || 'Không thể tạo câu hỏi mới');
             }
@@ -984,7 +1052,6 @@ export default function CreateAI() {
     };
 
     const handleSaveSurvey = async () => {
-        // Ngăn việc gọi hàm nhiều lần đồng thời
         if (isSavingRef.current || loading) {
             console.log('⚠️ Save operation already in progress, ignoring duplicate call');
             return;
@@ -992,86 +1059,154 @@ export default function CreateAI() {
 
         if (!validateQuestions()) return;
 
-        // Đánh dấu đang lưu
         isSavingRef.current = true;
         setLoading(true);
 
         try {
-            // 1. Tạo survey trước
             const surveyPayload = {
                 title: form.title,
                 description: form.description,
-                categoryId: 1, // Tạm thời dùng default category
+                categoryId: 1, // tạm dùng category mặc định hoặc map từ category_name nếu cần
                 aiPrompt: form.ai_context
             };
 
-            console.log('🔄 Creating survey:', surveyPayload);
-            const savedSurvey = await surveyService.createSurvey(surveyPayload);
+            let surveyId = savedSurveyId;
+            let savedSurvey;
 
-            if (!savedSurvey || !savedSurvey.id) {
-                throw new Error('Không thể lưu khảo sát');
+            if (surveyId) {
+                console.log('🔄 Updating AI survey:', surveyId, surveyPayload);
+                savedSurvey = await surveyService.updateSurvey(surveyId, {
+                    ...surveyPayload,
+                    status: 'draft'
+                });
+            } else {
+                console.log('🔄 Creating AI survey draft:', surveyPayload);
+                savedSurvey = await surveyService.createSurvey(surveyPayload);
+                if (!savedSurvey || !savedSurvey.id) {
+                    throw new Error('Không thể lưu khảo sát');
+                }
+                surveyId = savedSurvey.id;
+                // đưa survey về trạng thái draft
+                await surveyService.updateSurvey(surveyId, { status: 'draft' });
             }
 
-            const surveyId = savedSurvey.id;
-            console.log('✅ Survey created with ID:', surveyId);
+            setSavedSurveyId(surveyId);
+            setIsEditMode(true);
 
-            // 2. Tạo tất cả questions song song (chỉ tạo những câu hỏi chưa được lưu)
-            const questionPromises = questions
-                .filter(question => {
-                    // Chỉ tạo những câu hỏi có ID temp_ (chưa được lưu) hoặc không có ID
-                    return !question.id || question.id.toString().startsWith('temp_');
-                })
-                .map(question => {
-                    const questionPayload = {
-                        surveyId: surveyId,
-                        questionText: question.question_text,
-                        questionType: mapTypeToBackend(question.question_type),
-                        isRequired: question.is_required || false
-                    };
-                    return questionService.createQuestion(questionPayload);
-                });
+            // Xoá câu hỏi cũ trên server nếu người dùng đã xoá ở UI
+            let existingQuestions = [];
+            try {
+                existingQuestions = await questionService.getQuestionsBySurvey(surveyId);
+            } catch (error) {
+                console.warn('⚠️ Không thể tải danh sách câu hỏi hiện có:', error);
+            }
 
-            if (questionPromises.length === 0) {
-                console.log('⚠️ No new questions to create');
-            } else {
-                const savedQuestions = await Promise.all(questionPromises);
-                console.log('✅ Questions created:', savedQuestions.length);
+            const currentRealQuestionIds = new Set(
+                questions
+                    .map(q => q.id)
+                    .filter(id => id && !id.toString().startsWith('temp_'))
+            );
 
-                // 3. Tạo tất cả options song song (chỉ tạo options mới)
-                const optionPromises = [];
-                savedQuestions.forEach((savedQuestion, savedIndex) => {
-                    // Tìm originalQuestion tương ứng
-                    const originalQuestions = questions.filter(q => !q.id || q.id.toString().startsWith('temp_'));
-                    const originalQuestion = originalQuestions[savedIndex];
-                    
-                    if (originalQuestion && originalQuestion.options?.length > 0) {
-                        originalQuestion.options.forEach(option => {
-                            // Chỉ tạo option mới (có ID temp_ hoặc không có ID)
-                            if ((!option.id || option.id.toString().startsWith('temp_option_')) && option.option_text.trim()) {
-                                optionPromises.push(
-                                    optionService.createOption({
-                                        questionId: savedQuestion.id,
-                                        optionText: option.option_text
-                                    })
-                                );
+            for (const serverQuestion of existingQuestions) {
+                if (!currentRealQuestionIds.has(serverQuestion.id)) {
+                    try {
+                        const serverOptions = await optionService.getOptionsByQuestion(serverQuestion.id);
+                        for (const option of serverOptions) {
+                            try {
+                                await optionService.deleteOption(option.id);
+                            } catch (error) {
+                                console.warn(`⚠️ Không thể xóa option ${option.id}:`, error);
                             }
-                        });
+                        }
+                    } catch (error) {
+                        console.warn(`⚠️ Không thể lấy options để xóa cho câu hỏi ${serverQuestion.id}:`, error);
                     }
-                });
 
-                if (optionPromises.length > 0) {
-                    await Promise.all(optionPromises);
-                    console.log('✅ Options created:', optionPromises.length);
+                    try {
+                        await questionService.deleteQuestion(serverQuestion.id);
+                    } catch (error) {
+                        console.warn(`⚠️ Không thể xóa câu hỏi ${serverQuestion.id}:`, error);
+                    }
                 }
             }
 
-            // 4. Cập nhật status nếu cần
-            await surveyService.updateSurvey(surveyId, { status: 'draft' });
+            // tạo / cập nhật câu hỏi hiện có
+            for (const question of questions) {
+                const backendType = mapTypeToBackend(question.question_type);
+                const questionPayload = {
+                    questionText: question.question_text,
+                    questionType: backendType,
+                    isRequired: question.is_required ?? false
+                };
 
-            alert('✅ Lưu khảo sát thành công!');
+                let savedQuestion;
+                if (question.id && !question.id.toString().startsWith('temp_')) {
+                    savedQuestion = await questionService.updateQuestion(question.id, questionPayload);
+                } else {
+                    savedQuestion = await questionService.createQuestion({
+                        surveyId,
+                        ...questionPayload
+                    });
+                }
 
-            // Redirect về dashboard hoặc survey list
-            navigate('/dashboard');
+                const questionId = savedQuestion?.id || question.id;
+
+                if (needsOptions(question.question_type) && questionId) {
+                    let serverOptions = [];
+                    try {
+                        serverOptions = await optionService.getOptionsByQuestion(questionId);
+                    } catch (error) {
+                        console.warn(`⚠️ Không thể lấy options hiện có cho câu hỏi ${questionId}:`, error);
+                    }
+
+                    const currentOptionRealIds = new Set(
+                        (question.options || [])
+                            .map(opt => opt.id)
+                            .filter(id => id && !id.toString().startsWith('temp_option_'))
+                    );
+
+                    for (const serverOption of serverOptions) {
+                        if (!currentOptionRealIds.has(serverOption.id)) {
+                            try {
+                                await optionService.deleteOption(serverOption.id);
+                            } catch (error) {
+                                console.warn(`⚠️ Không thể xóa option ${serverOption.id}:`, error);
+                            }
+                        }
+                    }
+
+                    for (const option of question.options || []) {
+                        if (!option.option_text || !option.option_text.trim()) continue;
+
+                        if (option.id && !option.id.toString().startsWith('temp_option_')) {
+                            try {
+                                await optionService.updateOption(option.id, {
+                                    optionText: option.option_text
+                                });
+                            } catch (error) {
+                                console.warn(`⚠️ Không thể cập nhật option ${option.id}:`, error);
+                            }
+                        } else {
+                            try {
+                                await optionService.createOption({
+                                    questionId,
+                                    optionText: option.option_text
+                                });
+                            } catch (error) {
+                                console.warn('⚠️ Không thể tạo mới option:', error);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (surveyId) {
+                await syncSurveyFromServer(surveyId);
+            }
+
+            alert(isEditMode ? '✅ Đã cập nhật khảo sát thành công!' : '✅ Lưu khảo sát thành công!');
+            // bỏ navigate nếu muốn ở lại trang
+            // navigate('/dashboard');
 
         } catch (error) {
             console.error('❌ Error saving survey:', error);
@@ -1086,7 +1221,157 @@ export default function CreateAI() {
             alert('❌ ' + errorMessage);
         } finally {
             setLoading(false);
-            isSavingRef.current = false; // Reset flag
+            isSavingRef.current = false;
+        }
+    };
+
+    const handleShareSurvey = async () => {
+        if (!validateQuestions()) {
+            alert('Vui lòng hoàn thành tất cả thông tin bắt buộc trước khi chia sẻ khảo sát.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            let surveyId = savedSurveyId;
+
+            if (!surveyId) {
+                const payload = {
+                    title: form.title,
+                    description: form.description,
+                    categoryId: 1, // nếu muốn map từ form.category_name, bạn có thể xử lý ở đây
+                    aiPrompt: form.ai_context
+                };
+
+                const savedSurvey = await surveyService.createSurvey(payload);
+                if (!savedSurvey || !savedSurvey.id) {
+                    throw new Error('Không thể tạo khảo sát. Vui lòng thử lại.');
+                }
+
+                surveyId = savedSurvey.id;
+                setSavedSurveyId(surveyId);
+                setIsEditMode(true);
+            } else {
+                await surveyService.updateSurvey(surveyId, {
+                    title: form.title,
+                    description: form.description,
+                    categoryId: 1,
+                    status: 'published',
+                    aiPrompt: form.ai_context
+                });
+            }
+
+            // Đồng bộ câu hỏi giống trong handleSaveSurvey
+            let existingQuestions = [];
+            try {
+                existingQuestions = await questionService.getQuestionsBySurvey(surveyId);
+            } catch (error) {
+                console.warn('⚠️ Không thể tải danh sách câu hỏi hiện có:', error);
+            }
+
+            const currentRealQuestionIds = new Set(
+                questions
+                    .map(q => q.id)
+                    .filter(id => id && !id.toString().startsWith('temp_'))
+            );
+
+            for (const serverQuestion of existingQuestions) {
+                if (!currentRealQuestionIds.has(serverQuestion.id)) {
+                    try {
+                        const serverOptions = await optionService.getOptionsByQuestion(serverQuestion.id);
+                        for (const option of serverOptions) {
+                            await optionService.deleteOption(option.id);
+                        }
+                    } catch (error) {
+                        console.warn(`⚠️ Không thể lấy options để xóa cho câu hỏi ${serverQuestion.id}:`, error);
+                    }
+
+                    try {
+                        await questionService.deleteQuestion(serverQuestion.id);
+                    } catch (error) {
+                        console.warn(`⚠️ Không thể xóa câu hỏi ${serverQuestion.id}:`, error);
+                    }
+                }
+            }
+
+            for (const question of questions) {
+                const backendType = mapTypeToBackend(question.question_type);
+                const questionPayload = {
+                    questionText: question.question_text,
+                    questionType: backendType,
+                    isRequired: question.is_required ?? true
+                };
+
+                let savedQuestion;
+                if (question.id && !question.id.toString().startsWith('temp_')) {
+                    savedQuestion = await questionService.updateQuestion(question.id, questionPayload);
+                } else {
+                    savedQuestion = await questionService.createQuestion({
+                        surveyId,
+                        ...questionPayload
+                    });
+                }
+
+                const questionId = savedQuestion?.id || question.id;
+
+                if (needsOptions(question.question_type) && questionId) {
+                    let serverOptions = [];
+                    try {
+                        serverOptions = await optionService.getOptionsByQuestion(questionId);
+                    } catch (error) {
+                        console.warn(`⚠️ Không thể lấy options hiện có cho câu hỏi ${questionId}:`, error);
+                    }
+
+                    const currentOptionRealIds = new Set(
+                        (question.options || [])
+                            .map(opt => opt.id)
+                            .filter(id => id && !id.toString().startsWith('temp_option_'))
+                    );
+
+                    for (const serverOption of serverOptions) {
+                        if (!currentOptionRealIds.has(serverOption.id)) {
+                            await optionService.deleteOption(serverOption.id);
+                        }
+                    }
+
+                    for (const option of question.options || []) {
+                        if (!option.option_text || !option.option_text.trim()) continue;
+
+                        if (option.id && !option.id.toString().startsWith('temp_option_')) {
+                            await optionService.updateOption(option.id, {
+                                optionText: option.option_text
+                            });
+                        } else {
+                            await optionService.createOption({
+                                questionId,
+                                optionText: option.option_text
+                            });
+                        }
+                    }
+                }
+            }
+
+            await surveyService.updateSurvey(surveyId, { status: 'published' });
+
+            if (surveyId) {
+                await syncSurveyFromServer(surveyId);
+            }
+            // điều hướng tới trang share 
+            navigate(`/view-link-share/${surveyId}`);
+
+        } catch (error) {
+            console.error('Lỗi khi chia sẻ khảo sát:', error);
+            let errorMessage = 'Có lỗi xảy ra khi chia sẻ khảo sát. Vui lòng thử lại.';
+
+            if (error.response?.data?.message) {
+                errorMessage = error.response.data.message;
+            } else if (error.message) {
+                errorMessage = error.message;
+            }
+
+            alert(errorMessage);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -1145,7 +1430,7 @@ export default function CreateAI() {
                 is_required: !!q.is_required
             };
         }).filter(q => q.text && q.text.trim() !== ''); // Filter out empty questions
-        
+
         return {
             id: 'ai-preview',
             title: form.title || 'Xem trước khảo sát AI',
@@ -1163,7 +1448,7 @@ export default function CreateAI() {
             }
 
             const preview = buildPreviewSurvey();
-            
+
             // Validate preview data
             if (!preview || !preview.questions || preview.questions.length === 0) {
                 alert('Không thể tạo xem trước. Vui lòng kiểm tra lại các câu hỏi.');
@@ -1343,13 +1628,28 @@ export default function CreateAI() {
                                 <span> Mobile</span>
                             </button>
                             <button
-                                className="btn-share"
+                                className="btn-save"
                                 type="button"
                                 onClick={handleSaveSurvey}
                                 disabled={loading}
                             >
+                                {loading ? (
+                                    'Đang xử lý…'
+                                ) : (
+                                    <>
+                                        <i className="fa-solid fa-save" aria-hidden="true"></i>
+                                        <span>{isEditMode ? 'Cập nhật' : 'Lưu'}</span>
+                                    </>
+                                )}
+                            </button>
+                            <button
+                                className="btn-share"
+                                type="button"
+                                onClick={handleShareSurvey}
+                                disabled={loading}
+                            >
                                 <i className="fa-solid fa-share-nodes" aria-hidden="true"></i>
-                                <span>Lưu khảo sát</span>
+                                <span> Chia sẻ</span>
                             </button>
                         </div>
                     </div>
@@ -1441,10 +1741,20 @@ export default function CreateAI() {
                                                     <i className="fa-solid fa-trash" aria-hidden="true"></i>
                                                 </button>
                                             </div>
+
                                         </div>
                                     ))}
                                 </div>
+
                             )}
+                            <button
+                                className="sidebar-add"
+                                type="button"
+                                onClick={() => handleAddQuestion()}
+                                disabled={loading}
+                            >
+                                + Câu hỏi mới
+                            </button>
                         </div>
 
                         <div className="survey-main">
@@ -1506,7 +1816,7 @@ export default function CreateAI() {
                                                     Người tham gia sẽ nhập câu trả lời ngắn gọn cho câu hỏi này.
                                                 </div>
                                             )}
-                                            
+
                                             {isDateTime && (
                                                 <>
                                                     <div className="question-helper">
@@ -1523,7 +1833,7 @@ export default function CreateAI() {
                                                     </div>
                                                 </>
                                             )}
-                                            
+
                                             {isFileUpload && (
                                                 <>
                                                     <div className="question-helper">
@@ -1545,13 +1855,13 @@ export default function CreateAI() {
                                                     </div>
                                                 </>
                                             )}
-                                            
+
                                             {isRanking && (
                                                 <div className="question-helper">
                                                     Người tham gia sẽ sắp xếp các lựa chọn theo thứ tự ưu tiên.
                                                 </div>
                                             )}
-                                            
+
                                             {isSingleChoice && (
                                                 <div className="question-helper">
                                                     Người tham gia sẽ chọn một lựa chọn từ danh sách.
@@ -1669,7 +1979,7 @@ export default function CreateAI() {
 
                                                             const oldIndex = activeQuestion.options.findIndex(opt => opt.id === active.id);
                                                             const newIndex = activeQuestion.options.findIndex(opt => opt.id === over.id);
-                                                            
+
                                                             const newOptions = arrayMove(activeQuestion.options, oldIndex, newIndex);
                                                             setQuestions(prev => {
                                                                 const next = [...prev];
@@ -1941,8 +2251,8 @@ export default function CreateAI() {
                     <div className="mobile-view-container" onClick={(e) => e.stopPropagation()}>
                         <div className="mobile-view-header">
                             <h3>Xem trước trên Mobile</h3>
-                            <button 
-                                className="mobile-view-close" 
+                            <button
+                                className="mobile-view-close"
                                 onClick={() => setShowMobileView(false)}
                                 aria-label="Đóng xem trước"
                             >
@@ -1966,33 +2276,33 @@ export default function CreateAI() {
                                                         </p>
                                                     )}
                                                 </div>
-                                                
+
                                                 {preview.questions.map((q, idx) => (
-                                                    <div key={q.id || idx} style={{ 
-                                                        background: '#f8fafc', 
-                                                        border: '1px solid #e2e8f0', 
-                                                        borderRadius: '8px', 
-                                                        padding: '16px', 
-                                                        marginBottom: '16px' 
+                                                    <div key={q.id || idx} style={{
+                                                        background: '#f8fafc',
+                                                        border: '1px solid #e2e8f0',
+                                                        borderRadius: '8px',
+                                                        padding: '16px',
+                                                        marginBottom: '16px'
                                                     }}>
-                                                        <h3 style={{ 
-                                                            fontSize: '16px', 
-                                                            fontWeight: '600', 
+                                                        <h3 style={{
+                                                            fontSize: '16px',
+                                                            fontWeight: '600',
                                                             margin: '0 0 12px 0',
-                                                            color: '#1e293b' 
+                                                            color: '#1e293b'
                                                         }}>
                                                             {q.text || 'Câu hỏi'}
                                                             {q.is_required && <span style={{ color: '#ef4444', marginLeft: '4px' }}>*</span>}
                                                         </h3>
-                                                        
+
                                                         {/* Render preview of question type */}
                                                         {(q.type === 'open-ended' || q.type === 'open-text') && (
-                                                            <textarea 
-                                                                disabled 
-                                                                style={{ 
-                                                                    width: '100%', 
-                                                                    padding: '12px', 
-                                                                    border: '1px solid #cbd5e1', 
+                                                            <textarea
+                                                                disabled
+                                                                style={{
+                                                                    width: '100%',
+                                                                    padding: '12px',
+                                                                    border: '1px solid #cbd5e1',
                                                                     borderRadius: '6px',
                                                                     fontSize: '14px',
                                                                     resize: 'vertical',
@@ -2001,21 +2311,21 @@ export default function CreateAI() {
                                                                 placeholder="Nhập câu trả lời..."
                                                             />
                                                         )}
-                                                        
+
                                                         {(q.type === 'multiple-choice-single' || q.type === 'multiple-choice-multiple' || q.type === 'boolean') && q.options && Array.isArray(q.options) && (
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                                 {q.options.map((opt, optIdx) => {
                                                                     const optText = typeof opt === 'string' ? opt : (opt?.text || opt?.option_text || opt?.id || '');
                                                                     const optId = typeof opt === 'object' && opt?.id ? opt.id : optIdx;
                                                                     return (
-                                                                        <label key={optId || optIdx} style={{ 
-                                                                            display: 'flex', 
-                                                                            alignItems: 'center', 
+                                                                        <label key={optId || optIdx} style={{
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
                                                                             gap: '10px',
                                                                             cursor: 'pointer'
                                                                         }}>
-                                                                            <input 
-                                                                                type={q.type === 'multiple-choice-multiple' ? 'checkbox' : 'radio'} 
+                                                                            <input
+                                                                                type={q.type === 'multiple-choice-multiple' ? 'checkbox' : 'radio'}
                                                                                 disabled
                                                                                 style={{ width: '18px', height: '18px' }}
                                                                             />
@@ -2027,29 +2337,29 @@ export default function CreateAI() {
                                                                 })}
                                                             </div>
                                                         )}
-                                                        
+
                                                         {q.type === 'ranking' && q.options && Array.isArray(q.options) && (
                                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                                                 {q.options.map((opt, optIdx) => {
                                                                     const optText = typeof opt === 'string' ? opt : (opt?.text || opt?.option_text || opt?.id || '');
                                                                     const optId = typeof opt === 'object' && opt?.id ? opt.id : optIdx;
                                                                     return (
-                                                                        <div key={optId || optIdx} style={{ 
-                                                                            display: 'flex', 
-                                                                            alignItems: 'center', 
+                                                                        <div key={optId || optIdx} style={{
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
                                                                             gap: '12px',
                                                                             padding: '12px',
                                                                             background: '#fff',
                                                                             border: '1px solid #e2e8f0',
                                                                             borderRadius: '6px'
                                                                         }}>
-                                                                            <div style={{ 
-                                                                                minWidth: '32px', 
-                                                                                height: '32px', 
-                                                                                background: 'linear-gradient(135deg, #6366f1, #7c3aed)', 
-                                                                                borderRadius: '50%', 
-                                                                                display: 'flex', 
-                                                                                alignItems: 'center', 
+                                                                            <div style={{
+                                                                                minWidth: '32px',
+                                                                                height: '32px',
+                                                                                background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
+                                                                                borderRadius: '50%',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
                                                                                 justifyContent: 'center',
                                                                                 color: '#fff',
                                                                                 fontWeight: '600',
@@ -2065,7 +2375,7 @@ export default function CreateAI() {
                                                                 })}
                                                             </div>
                                                         )}
-                                                        
+
                                                         {q.type === 'rating-scale' && (
                                                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                                                                 {[1, 2, 3, 4, 5].map(num => (
@@ -2088,13 +2398,13 @@ export default function CreateAI() {
                                                                 ))}
                                                             </div>
                                                         )}
-                                                        
+
                                                         {(q.type === 'date_time' || q.type === 'date-time') && (
                                                             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                                                <input 
-                                                                    type="date" 
-                                                                    disabled 
-                                                                    style={{ 
+                                                                <input
+                                                                    type="date"
+                                                                    disabled
+                                                                    style={{
                                                                         flex: 1,
                                                                         minWidth: '120px',
                                                                         padding: '12px',
@@ -2104,10 +2414,10 @@ export default function CreateAI() {
                                                                         background: '#f8fafc'
                                                                     }}
                                                                 />
-                                                                <input 
-                                                                    type="time" 
-                                                                    disabled 
-                                                                    style={{ 
+                                                                <input
+                                                                    type="time"
+                                                                    disabled
+                                                                    style={{
                                                                         flex: 1,
                                                                         minWidth: '120px',
                                                                         padding: '12px',
@@ -2119,10 +2429,10 @@ export default function CreateAI() {
                                                                 />
                                                             </div>
                                                         )}
-                                                        
+
                                                         {(q.type === 'file_upload' || q.type === 'file-upload') && (
-                                                            <div style={{ 
-                                                                border: '2px dashed #cbd5e1', 
+                                                            <div style={{
+                                                                border: '2px dashed #cbd5e1',
                                                                 borderRadius: '12px',
                                                                 padding: '24px',
                                                                 textAlign: 'center',
@@ -2139,11 +2449,11 @@ export default function CreateAI() {
                                                         )}
                                                     </div>
                                                 ))}
-                                                
-                                                <button 
+
+                                                <button
                                                     type="button"
                                                     disabled
-                                                    style={{ 
+                                                    style={{
                                                         width: '100%',
                                                         padding: '14px',
                                                         background: '#e5e7eb',
