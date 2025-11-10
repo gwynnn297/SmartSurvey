@@ -3,13 +3,128 @@ import { useParams, useLocation } from "react-router-dom";
 import "./ResponseFormPage.css";
 import { responseService } from "../../services/responseService";
 import { getSurveyPublicInfo } from "../../services/dashboardReportService";
-import { isValidTokenFormat } from "../../utils/tokenGenerator";
+import { isValidTokenFormat, generateUniqueToken } from "../../utils/tokenGenerator";
 import logoSmartSurvey from "../../assets/logoSmartSurvey.png";
 import { apiClient } from "../../services/authService";
 import { publicApiClient } from "../../services/publicApiClient";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+
+/**
+ * Hàm trích xuất respondent token từ URL chia sẻ khảo sát.
+ * Link mới có dạng `...?{token}` nên ngoài tham số `respondentToken` truyền thống,
+ * hàm còn xử lý các trường hợp:
+ *  - Token nằm trong tham số khác (ví dụ legacy `k`).
+ *  - Token được truyền dưới dạng key không có value hoặc toàn bộ query chỉ chứa token.
+ * Hàm trả về token hợp lệ đầu tiên tìm được hoặc `null` nếu không có.
+ */
+const extractRespondentToken = (search) => {
+    if (!search) return null;
+
+    const normalizedSearch = search.startsWith("?") ? search : `?${search}`;
+    const params = new URLSearchParams(normalizedSearch);
+
+    const directToken = params.get("respondentToken");
+    if (directToken) return directToken;
+
+    const legacyToken = params.get("k");
+    if (legacyToken) return legacyToken;
+
+    for (const [key, value] of params.entries()) {
+        if (value && isValidTokenFormat(value)) {
+            return value;
+        }
+        if (!value && isValidTokenFormat(key)) {
+            return key;
+        }
+    }
+
+    const raw = normalizedSearch.slice(1);
+    if (raw && raw.indexOf("=") === -1 && isValidTokenFormat(raw)) {
+        return raw;
+    }
+
+    return null;
+};
+
+const SUBMISSION_STATUS_STORAGE_KEY = "respondent_submitted_surveys";
+
+// 📦 Chuẩn hóa dữ liệu lưu trữ token đã gửi theo khảo sát
+const normalizeSubmissionRecords = (records) => {
+    if (!records) return [];
+    if (Array.isArray(records)) {
+        return records.map((item) => String(item));
+    }
+    if (typeof records === "object") {
+        return Object.keys(records);
+    }
+    return [String(records)];
+};
+
+// 📖 Đọc trạng thái khảo sát đã submit từ localStorage
+const readSubmissionStatus = () => {
+    if (typeof window === "undefined") return {};
+    try {
+        const raw = window.localStorage.getItem(SUBMISSION_STATUS_STORAGE_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_) {
+        return {};
+    }
+};
+
+// ✍️ Ghi trạng thái khảo sát đã submit vào localStorage
+const writeSubmissionStatus = (data) => {
+    if (typeof window === "undefined") return;
+    try {
+        window.localStorage.setItem(SUBMISSION_STATUS_STORAGE_KEY, JSON.stringify(data));
+    } catch (_) { }
+};
+
+// ✅ Kiểm tra người dùng với token tương ứng đã hoàn thành khảo sát chưa
+const hasSubmittedSurvey = (surveyId, token) => {
+    if (!surveyId || !token) return false;
+    const status = readSubmissionStatus();
+    const surveyKey = String(surveyId);
+    const tokenStr = String(token);
+    const records = normalizeSubmissionRecords(status[surveyKey]);
+    return records.includes(tokenStr);
+};
+
+// 🗂️ Đánh dấu khảo sát đã được submit với token hiện tại
+const markSurveyAsSubmitted = (surveyId, token) => {
+    if (!surveyId || !token) return;
+    const status = readSubmissionStatus();
+    const surveyKey = String(surveyId);
+    const tokenStr = String(token);
+    const updatedRecords = new Set(normalizeSubmissionRecords(status[surveyKey]));
+    if (!updatedRecords.has(tokenStr)) {
+        updatedRecords.add(tokenStr);
+        status[surveyKey] = Array.from(updatedRecords);
+        writeSubmissionStatus(status);
+    }
+};
+
+// 🎟️ Lấy hoặc tạo mới respondent token để nhận diện người trả lời
+const getOrCreateRequestToken = () => {
+    if (typeof window === "undefined") return null;
+    let token = null;
+    try {
+        token = window.localStorage.getItem("respondent_request_token");
+    } catch (_) { }
+
+    if (token && isValidTokenFormat(token)) {
+        return token;
+    }
+
+    const newToken = generateUniqueToken();
+    try {
+        window.localStorage.setItem("respondent_request_token", newToken);
+    } catch (_) { }
+    return newToken;
+};
 
 // 🎯 Sortable Ranking Item for Public Response
 function PublicSortableRankingItem({ id, index, text }) {
@@ -59,9 +174,9 @@ const PublicResponsePage = () => {
     );
 
     useEffect(() => {
-        const respondentTokenFromLink = new URLSearchParams(location.search).get("respondentToken");
+        const respondentTokenFromLink = extractRespondentToken(location.search);
         console.log('🔍 URL search params:', location.search);
-        console.log('🎫 Token from URL:', respondentTokenFromLink);
+        console.log('🎫 Token extracted from URL:', respondentTokenFromLink);
 
         if (respondentTokenFromLink) {
             if (isValidTokenFormat(respondentTokenFromLink)) {
@@ -184,6 +299,12 @@ const PublicResponsePage = () => {
                         console.warn("Cannot verify token usage:", checkErr);
                     }
                 }
+
+                const tokensToCheck = [currentToken, respondentTokenFromLink].filter(Boolean);
+                if (tokensToCheck.some((token) => hasSubmittedSurvey(surveyId, token))) {
+                    console.log("🔁 Respondent already submitted this survey locally. Showing summary state.");
+                    setAlreadySubmitted(true);
+                }
             } catch (err) {
                 console.error("Error loading public survey:", err);
             } finally {
@@ -265,10 +386,19 @@ const PublicResponsePage = () => {
     };
 
     // Public submit function (không cần authentication)
-    const submitPublicResponse = async (surveyId, responses, survey, durationSeconds = 0) => {
+    const submitPublicResponse = async (
+        surveyId,
+        responses,
+        survey,
+        durationSeconds = 0,
+        providedRequestToken = null
+    ) => {
         // Kiểm tra có file upload không
         const hasFiles = survey && Array.isArray(survey.questions) &&
             survey.questions.some(q => q.type === 'file_upload' && responses[q.id] instanceof File);
+
+        const requestToken = providedRequestToken || getOrCreateRequestToken();
+        console.log('🎫 Request token prepared for submission:', requestToken);
 
         if (hasFiles) {
             // Submit với files sử dụng FormData qua public endpoint
@@ -342,6 +472,10 @@ const PublicResponsePage = () => {
 
             formData.append('answers', JSON.stringify(answers));
 
+            if (requestToken) {
+                formData.append('requestToken', requestToken);
+            }
+
             if (durationSeconds > 0) {
                 formData.append('durationSeconds', String(durationSeconds));
             }
@@ -357,7 +491,8 @@ const PublicResponsePage = () => {
             const payload = {
                 surveyId,
                 answers: [],
-                durationSeconds
+                durationSeconds,
+                requestToken
             };
 
             // Xử lý answers tương tự như trên nhưng không có file
@@ -442,6 +577,8 @@ const PublicResponsePage = () => {
             ? Math.floor((Date.now() - surveyStartTimeRef.current) / 1000)
             : 0;
 
+        const requestToken = getOrCreateRequestToken();
+
         // Debug: Kiểm tra token trước khi submit
         const currentToken = localStorage.getItem("respondent_request_token");
         console.log('🔍 Current token in localStorage:', currentToken);
@@ -463,9 +600,13 @@ const PublicResponsePage = () => {
                 activeSurvey.id,
                 responses,
                 activeSurvey,
-                durationSeconds
+                durationSeconds,
+                requestToken
             );
             console.log("✅ Submit public response result:", apiResult);
+            if (requestToken) {
+                markSurveyAsSubmitted(activeSurvey.id, requestToken);
+            }
             setSuccess(true);
             // Reset form sau khi submit thành công
             setResponses({});

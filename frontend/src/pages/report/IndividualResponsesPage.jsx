@@ -30,6 +30,7 @@ const IndividualResponsesPage = () => {
         from: '',
         to: ''
     });
+    const [searchDraft, setSearchDraft] = useState('');
 
     // Format thời gian từ ISO string
     const formatDateTime = (dateTimeString) => {
@@ -125,6 +126,7 @@ const IndividualResponsesPage = () => {
                 from: '',
                 to: ''
             });
+            setSearchDraft('');
         }
     }, [surveyId]);
 
@@ -347,7 +349,22 @@ const IndividualResponsesPage = () => {
             from: '',
             to: ''
         });
+        setSearchDraft('');
     };
+
+    // Debounce live search: only apply when >= 3 characters, or clear when empty
+    useEffect(() => {
+        const t = setTimeout(() => {
+            const v = searchDraft.trim();
+            if (v === '') {
+                handleFilterChange('search', '');
+            } else if (v.length >= 3) {
+                handleFilterChange('search', v);
+            }
+        }, 1000);
+
+        return () => clearTimeout(t);
+    }, [searchDraft]);
 
     // Format date để input date-time-local
     const formatDateForInput = (dateString) => {
@@ -432,8 +449,22 @@ const IndividualResponsesPage = () => {
                                 type="text"
                                 className="filter-input"
                                 placeholder="Tìm trong câu trả lời..."
-                                value={filters.search}
-                                onChange={(e) => handleFilterChange('search', e.target.value)}
+                                value={searchDraft}
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    setSearchDraft(v);
+                                    if (v.trim() === '') {
+                                        handleFilterChange('search', '');
+                                    }
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        const v = searchDraft.trim();
+                                        if (v === '' || v.length >= 3) {
+                                            handleFilterChange('search', v);
+                                        }
+                                    }
+                                }}
                             />
                         </div>
 

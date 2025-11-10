@@ -67,7 +67,7 @@ const ShareSurveyPage = () => {
                 const shareLink =
                     detail.shareLink ||
                     survey.link ||
-                    `${window.location.origin}/response/${id}?respondentToken=${token}`;
+                    `${window.location.origin}/response/${id}?${token}`;
 
                 try {
                     if (!detail.shareLink) {
@@ -108,7 +108,7 @@ const ShareSurveyPage = () => {
             const newToken = generateUniqueToken();
 
             // ✅ Đổi URL chứa respondentToken
-            const newShareLink = `${window.location.origin}/response/${id}?respondentToken=${newToken}`;
+            const newShareLink = `${window.location.origin}/response/${id}?${newToken}`;
 
             setSurvey((prev) => ({
                 ...prev,

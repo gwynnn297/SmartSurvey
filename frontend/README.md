@@ -105,7 +105,7 @@ $env:MYSQL_HOST  = "localhost"
 # General Survey 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-$env:GEMINI_API_KEY = 'AIzaSyB0WT0WABvKFcWekHbdfhDXjV2xFvn5GZM'
+$env:GEMINI_API_KEY = 'AIzaSyAH1PcqlF-8OZI5NsM-IJeebi8JULejRiQ'
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
 
 
@@ -117,6 +117,13 @@ test QR thì vào
 https://zxing.org/w/decode.jspx
 ## 🏗️ Cấu trúc dự án
 
+# Xóa db
+-- Cẩn thận: MẤT HẾT DỮ LIỆU DB 'smartsurvey'
+DROP DATABASE IF EXISTS smartsurvey;
+
+CREATE DATABASE smartsurvey
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
 ```
 frontend/
 ├── public/

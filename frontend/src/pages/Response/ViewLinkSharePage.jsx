@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import "./ViewLinkSharePage.css";
 import { surveyService } from "../../services/surveyService";
 import { questionService, optionService } from "../../services/questionSurvey";
@@ -7,6 +7,7 @@ import logoSmartSurvey from "../../assets/logoSmartSurvey.png";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { generateUniqueToken } from "../../utils/tokenGenerator";
 
 // 🎯 Sortable Ranking Item for Preview
 function SortableRankingItem({ id, index, text }) {
@@ -38,7 +39,6 @@ function SortableRankingItem({ id, index, text }) {
 
 const ViewLinkSharePage = () => {
     const params = useParams();
-    const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [loadingSurvey, setLoadingSurvey] = useState(false);
     const [loadedSurvey, setLoadedSurvey] = useState(null);
@@ -57,6 +57,53 @@ const ViewLinkSharePage = () => {
 
     useEffect(() => {
         if (!surveyId) return;
+
+        const buildShareLink = (token) => {
+            const origin = typeof window !== 'undefined' && window.location?.origin
+                ? window.location.origin
+                : '';
+            return `${origin}/response/${surveyId}?${token}`;
+        };
+
+        const normalizeShareLink = (rawLink) => {
+            let needsUpdate = false;
+            let token = null;
+
+            if (rawLink) {
+                try {
+                    const parsed = new URL(rawLink, window.location.origin);
+                    token = parsed.searchParams.get('respondentToken');
+
+                    if (!token) {
+                        const legacyToken = parsed.searchParams.get('k');
+                        if (legacyToken) {
+                            token = legacyToken;
+                            needsUpdate = true;
+                        }
+                    }
+
+                    if (!token) {
+                        needsUpdate = true;
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Invalid shareLink detected, regenerating token.', error);
+                    needsUpdate = true;
+                }
+            } else {
+                needsUpdate = true;
+            }
+
+            if (!token) {
+                token = generateUniqueToken();
+            }
+
+            const normalized = buildShareLink(token);
+            if (rawLink !== normalized) {
+                needsUpdate = true;
+            }
+
+            return { link: normalized, token, needsUpdate };
+        };
 
         const loadSurvey = async () => {
             try {
@@ -132,35 +179,19 @@ const ViewLinkSharePage = () => {
 
                 setQuestions(mappedQuestions);
 
-                // ... sau khi setQuestions(mappedQuestions)
-
                 const existingLink = (detail.shareLink || '').trim();
-                const fallbackUrl = `${window.location.origin}/response/${surveyId}`;
-                const responseUrl = existingLink || fallbackUrl;
+                const { link: normalizedLink, needsUpdate } = normalizeShareLink(existingLink);
+                setShareUrl(normalizedLink);
 
-                setShareUrl(responseUrl);
-
-                try {
-                    if (!existingLink) {
-                        await surveyService.updateSurvey(surveyId, { shareLink: fallbackUrl });
-                        console.log('✅ Saved default shareLink:', fallbackUrl);
-                    } else {
-                        console.log('ℹ️ Using existing shareLink:', responseUrl);
+                if (!existingLink || needsUpdate) {
+                    try {
+                        await surveyService.updateSurvey(surveyId, { shareLink: normalizedLink });
+                        console.log('✅ Share link normalized and saved:', normalizedLink);
+                    } catch (error) {
+                        console.warn("Could not update shareLink on backend:", error);
                     }
-                } catch (error) {
-                    console.warn("Could not update shareLink on backend:", error);
-                }
-
-                // Cập nhật shareLink trong database nếu chưa có
-                try {
-                    if (!detail.shareLink) {
-                        await surveyService.updateSurvey(surveyId, { shareLink: responseUrl });
-                        console.log('✅ Updated shareLink in database:', responseUrl);
-                    } else {
-                        console.log('ℹ️ ShareLink already exists:', detail.shareLink);
-                    }
-                } catch (error) {
-                    console.warn("Could not update shareLink on backend:", error);
+                } else {
+                    console.log('ℹ️ Using existing shareLink:', normalizedLink);
                 }
             } catch (err) {
                 console.error("Error loading survey:", err);
@@ -204,13 +235,17 @@ const ViewLinkSharePage = () => {
     const handleGenerateNewLink = async () => {
         try {
             setLoading(true);
-            const newShareUrl = `${window.location.origin}/response/${surveyId}`;
+            const newToken = generateUniqueToken();
+            const origin = typeof window !== 'undefined' && window.location?.origin
+                ? window.location.origin
+                : '';
+            const newShareUrl = `${origin}/response/${surveyId}?${newToken}`;
             setShareUrl(newShareUrl);
             await surveyService.updateSurvey(surveyId, { shareLink: newShareUrl });
-            alert("Liên kết đã được đặt lại về mặc định.");
+            alert("Đã tạo liên kết mới với token khác!");
         } catch (error) {
             console.error("Error resetting share link:", error);
-            alert("Có lỗi khi đặt lại liên kết!");
+            alert("Có lỗi khi tạo liên kết mới!");
         } finally {
             setLoading(false);
         }
