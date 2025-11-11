@@ -295,17 +295,16 @@ export default function CreateAI() {
     const [isEditMode, setIsEditMode] = useState(false);
     const [form, setForm] = useState({
         title: '',
-        category_name: '', // Đổi từ category_id thành category_name để có thể nhập tự do
+        category_id: '',
+        category_name: '',
         description: '',
         ai_context: '',
         target_audience: '',
-        question_count: 5
+        question_count: ''
     });
 
     const [errors, setErrors] = useState({});
     const [categories, setCategories] = useState([]);
-    const [filteredCategories, setFilteredCategories] = useState([]);
-    const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
     const [loading, setLoading] = useState(false);
     const [categoriesLoading, setCategoriesLoading] = useState(true);
     const [questions, setQuestions] = useState([]);
@@ -399,6 +398,9 @@ export default function CreateAI() {
                 if (detail.description !== undefined && detail.description !== null) {
                     next.description = detail.description;
                 }
+                if (detail.categoryId) {
+                    next.category_id = detail.categoryId.toString();
+                }
                 if (detail.categoryName) {
                     next.category_name = detail.categoryName;
                 }
@@ -432,70 +434,35 @@ export default function CreateAI() {
         }
     };
 
-    // Handle category input change with auto-complete
-    const handleCategoryInputChange = async (value) => {
-        setForm(prev => ({ ...prev, category_name: value }));
+    // Handle category selection change
+    const handleCategorySelectChange = (value) => {
+        const selected = categories.find(
+            (cat) => String(cat.categoryId ?? cat.id) === value
+        );
+        setForm(prev => ({
+            ...prev,
+            category_id: value,
+            category_name: selected ? (selected.categoryName || selected.name || '') : ''
+        }));
+        clearError('category_id');
         clearError('category_name');
+    };
 
-        if (value.trim().length > 0) {
-            try {
-                console.log('🔍 Searching categories for:', value); // Debug log
-                console.log('📋 All categories available:', categories); // Debug log
-
-                // Search trong categories đã load - sử dụng đúng field name
-                const localFiltered = categories.filter(cat =>
-                    (cat.categoryName || cat.name || '').toLowerCase().includes(value.toLowerCase())
-                );
-
-                console.log('🎯 Local filtered results:', localFiltered); // Debug log
-
-                // Nếu có ít hơn 5 kết quả local, search thêm từ server
-                if (localFiltered.length < 5) {
-                    const serverResults = await categoryService.searchCategories(value);
-
-                    // Merge và remove duplicates - sử dụng đúng field name
-                    const merged = [...localFiltered];
-                    serverResults.forEach(serverCat => {
-                        const serverId = serverCat.categoryId || serverCat.id;
-                        if (!merged.find(localCat => (localCat.categoryId || localCat.id) === serverId)) {
-                            merged.push(serverCat);
-                        }
-                    });
-
-                    setFilteredCategories(merged.slice(0, 10)); // Giới hạn 10 kết quả
-                } else {
-                    setFilteredCategories(localFiltered.slice(0, 10));
-                }
-
-                setShowCategoryDropdown(true);
-            } catch (error) {
-                console.error('Error searching categories:', error);
-                // Fallback to local search only
-                const localFiltered = categories.filter(cat =>
-                    (cat.categoryName || cat.name || '').toLowerCase().includes(value.toLowerCase())
-                );
-                setFilteredCategories(localFiltered.slice(0, 10));
-                setShowCategoryDropdown(true);
-            }
-        } else {
-            setFilteredCategories([]);
-            setShowCategoryDropdown(false);
+    useEffect(() => {
+        if (!form.category_id || !categories.length) return;
+        const selected = categories.find(
+            (cat) => String(cat.categoryId ?? cat.id) === form.category_id
+        );
+        if (selected) {
+            setForm(prev => {
+                if ((selected.categoryName || selected.name || '') === prev.category_name) return prev;
+                return {
+                    ...prev,
+                    category_name: selected.categoryName || selected.name || ''
+                };
+            });
         }
-    };
-
-    // Handle category selection from dropdown
-    const handleCategorySelect = (category) => {
-        // Sử dụng đúng field name
-        const categoryName = category.categoryName || category.name || '';
-        setForm(prev => ({ ...prev, category_name: categoryName }));
-        setShowCategoryDropdown(false);
-        clearError('category_name');
-    };
-
-    // Hide dropdown when clicking outside
-    const handleCategoryBlur = () => {
-        setTimeout(() => setShowCategoryDropdown(false), 200);
-    };
+    }, [categories, form.category_id]);
 
     const stats = useMemo(() => {
         const total = questions.length;
@@ -557,8 +524,8 @@ export default function CreateAI() {
         if (!form.title.trim()) {
             newErrors.title = 'Tiêu đề khảo sát là bắt buộc';
         }
-        if (!form.category_name.trim()) {
-            newErrors.category_name = 'Vui lòng nhập hoặc chọn danh mục khảo sát';
+        if (!form.category_id) {
+            newErrors.category_id = 'Vui lòng chọn danh mục khảo sát';
         }
         if (!form.ai_context.trim()) {
             newErrors.ai_context = 'Vui lòng nhập ngữ cảnh chi tiết';
@@ -566,8 +533,8 @@ export default function CreateAI() {
             newErrors.ai_context = 'Ngữ cảnh quá ngắn. Vui lòng mô tả chi tiết hơn (ít nhất 20 ký tự)';
         }
         const questionCount = Number(form.question_count);
-        if (!questionCount || questionCount < 3 || questionCount > 20) {
-            newErrors.question_count = 'Vui lòng nhập số lượng câu hỏi từ 3 đến 20';
+        if (!questionCount || questionCount < 1 || questionCount > 20) {
+            newErrors.question_count = 'Vui lòng nhập số lượng câu hỏi từ 1 đến 20';
         }
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -634,7 +601,7 @@ export default function CreateAI() {
             const requestData = {
                 title: form.title,
                 description: form.description,
-                categoryId: null, // Sẽ được backend xử lý
+                categoryId: form.category_id ? Number(form.category_id) : null,
                 categoryName: form.category_name,
                 aiPrompt: form.ai_context,
                 targetAudience: form.target_audience || null,
@@ -693,6 +660,7 @@ export default function CreateAI() {
                     const additionalRequestData = {
                         title: form.title,
                         description: form.description,
+                        categoryId: form.category_id ? Number(form.category_id) : null,
                         categoryName: form.category_name,
                         aiPrompt: form.ai_context + ` (Tạo thêm ${remainingQuestions} câu hỏi bổ sung cho khảo sát này)`,
                         targetAudience: form.target_audience || null,
@@ -718,6 +686,7 @@ export default function CreateAI() {
                             console.log(`✅ Đã tạo thêm ${additionalMappedQuestions.length} câu hỏi bổ sung`);
                         }
                     } catch (err) {
+
                         console.warn('⚠️ Không thể tạo thêm câu hỏi bổ sung:', err);
                         // Vẫn hiển thị thông báo nếu không tạo được thêm
                         setTimeout(() => {
@@ -1066,7 +1035,7 @@ export default function CreateAI() {
             const surveyPayload = {
                 title: form.title,
                 description: form.description,
-                categoryId: 1, // tạm dùng category mặc định hoặc map từ category_name nếu cần
+                categoryId: form.category_id ? Number(form.category_id) : 1,
                 aiPrompt: form.ai_context
             };
 
@@ -1239,7 +1208,7 @@ export default function CreateAI() {
                 const payload = {
                     title: form.title,
                     description: form.description,
-                    categoryId: 1, // nếu muốn map từ form.category_name, bạn có thể xử lý ở đây
+                    categoryId: form.category_id ? Number(form.category_id) : 1,
                     aiPrompt: form.ai_context
                 };
 
@@ -1255,7 +1224,7 @@ export default function CreateAI() {
                 await surveyService.updateSurvey(surveyId, {
                     title: form.title,
                     description: form.description,
-                    categoryId: 1,
+                    categoryId: form.category_id ? Number(form.category_id) : 1,
                     status: 'published',
                     aiPrompt: form.ai_context
                 });
@@ -1507,36 +1476,28 @@ export default function CreateAI() {
 
                         <div className="ai-form-row category-form-row">
                             <label>Danh mục khảo sát <span className="req">*</span></label>
-                            <div className="category-input-wrapper" style={{ position: 'relative' }}>
-                                <input
-                                    value={form.category_name}
-                                    onChange={(e) => handleCategoryInputChange(e.target.value)}
-                                    onBlur={handleCategoryBlur}
-                                    placeholder="Nhập hoặc chọn danh mục (VD: Khảo sát khách hàng)"
-                                    className={errors.category_name ? 'error' : ''}
-                                    autoComplete="off"
-                                />
-
-                                {/* Auto-complete dropdown */}
-                                {showCategoryDropdown && filteredCategories.length > 0 && (
-                                    <div className="category-dropdown">
-                                        {filteredCategories.map((cat, index) => (
-                                            <div
-                                                key={cat.categoryId || cat.id || index}
-                                                className="category-dropdown-item"
-                                                onClick={() => handleCategorySelect(cat)}
-                                            >
-                                                {cat.categoryName || cat.name || 'Không có tên'}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
+                            <div className="category-input-wrapper">
+                                <select
+                                    value={form.category_id}
+                                    onChange={(e) => handleCategorySelectChange(e.target.value)}
+                                    className={errors.category_id ? 'error' : ''}
+                                    disabled={categoriesLoading}
+                                >
+                                    <option value="">Chọn danh mục</option>
+                                    {categories.map((cat) => (
+                                        <option
+                                            key={cat.categoryId || cat.id}
+                                            value={String(cat.categoryId ?? cat.id)}
+                                        >
+                                            {cat.categoryName || cat.name || 'Không có tên'}
+                                        </option>
+                                    ))}
+                                </select>
                                 <small className="field-hint">
-                                    Bạn có thể nhập danh mục mới hoặc chọn từ danh sách gợi ý
+                                    Lựa chọn danh mục phù hợp với khảo sát của bạn
                                 </small>
                             </div>
-                            {errors.category_name && <div className="ai-error">{errors.category_name}</div>}
+                            {errors.category_id && <div className="ai-error">{errors.category_id}</div>}
                         </div>
 
                         <div className="ai-form-row">
@@ -1564,11 +1525,11 @@ export default function CreateAI() {
                                 <label>Số lượng câu hỏi <span className="req">*</span></label>
                                 <input
                                     type="number"
-                                    min="3"
+                                    min="2"
                                     max="20"
-                                    value={form.question_count || 5}
+                                    value={form.question_count}
                                     onChange={(e) => handleFormChange('question_count', e.target.value)}
-                                    placeholder="3-20"
+                                    placeholder="Nhập số lượng câu hỏi"
                                     className={errors.question_count ? 'error' : ''}
                                 />
                                 {errors.question_count && <div className="ai-error">{errors.question_count}</div>}
@@ -1588,7 +1549,7 @@ export default function CreateAI() {
                         </div>
 
                         <div className="ai-actions">
-                            <button className="btn-primary" onClick={handleGenerateQuestions} disabled={loading}>
+                            <button className="btn-createAI" onClick={handleGenerateQuestions} disabled={loading}>
                                 {loading ? 'Đang tạo gợi ý…' : 'Tạo gợi ý bằng AI'}
                             </button>
                         </div>
@@ -2201,7 +2162,10 @@ export default function CreateAI() {
                                     <strong>Mô tả:</strong> {form.description || 'Không có mô tả'}
                                 </div>
                                 <div className="ai-survey-item">
-                                    <strong>Số câu hỏi:</strong> {form.question_count || 15} câu
+                                    <strong>Danh mục:</strong> {form.category_name || 'Chưa chọn'}
+                                </div>
+                                <div className="ai-survey-item">
+                                    <strong>Số câu hỏi:</strong> {form.question_count || questions.length || '—'} câu
                                 </div>
                             </div>
                         </div>

@@ -290,6 +290,26 @@
     background-color: #3b82f6;
 }
 
+.progress__bar.purple {
+    background-color: #8b5cf6;
+}
+
+.progress__bar.yellow {
+    background-color: #f59e0b;
+}
+
+.progress__bar.orange {
+    background-color: #fb923c;
+}
+
+.progress__bar.red {
+    background-color: #ef4444;
+}
+
+.progress__bar.teal {
+    background-color: #14b8a6;
+}
+
 .progress-item__note {
     margin-top: 4px;
     color: #2563eb;

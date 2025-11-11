@@ -250,7 +250,7 @@ const SentimentPage = () => {
         </section>
 
         {/* Chi tiết phản hồi */}
-        <div className="feedback-section">
+        {/* <div className="feedback-section">
           <div className="feedback-header">
             <h3><i className="fa-regular fa-comment" title="Chi tiết phản hồi theo cảm xúc"></i> Chi tiết phản hồi theo cảm xúc</h3>
             <div className="feedback-filters">
@@ -270,7 +270,7 @@ const SentimentPage = () => {
               </div>
             ))}
           </div>
-        </div>
+        </div> */}
       </div>
     </MainLayout>
   );

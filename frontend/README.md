@@ -105,7 +105,7 @@ $env:MYSQL_HOST  = "localhost"
 # General Survey 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-$env:GEMINI_API_KEY = 'AIzaSyAH1PcqlF-8OZI5NsM-IJeebi8JULejRiQ'
+$env:GEMINI_API_KEY = 'AIzaSyDhxEYcrZqIz6vnw4Cj2AUlF8Vd3aqnFFQ'
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
 
 

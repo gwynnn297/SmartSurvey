@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import MainLayout from "../../layouts/MainLayout";
 import "./ShareSurveyPage.css";
@@ -35,6 +35,10 @@ const ShareSurveyPage = () => {
     });
 
     const [loading, setLoading] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
+    const [isClosingSurvey, setIsClosingSurvey] = useState(false);
+    const settingsMenuRef = useRef(null);
 
     useEffect(() => {
         const load = async () => {
@@ -130,6 +134,74 @@ const ShareSurveyPage = () => {
         }
     };
 
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (settingsMenuRef.current && !settingsMenuRef.current.contains(event.target)) {
+                setIsSettingsMenuOpen(false);
+            }
+        };
+
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, []);
+
+    const statusMeta = useMemo(() => {
+        const map = {
+            published: {
+                label: "Đang mở",
+                className: "status-active",
+                dotColor: "#22c55e"
+            },
+            draft: {
+                label: "Bản nháp",
+                className: "status-draft",
+                dotColor: "#d97706"
+            },
+            archived: {
+                label: "Đã đóng",
+                className: "status-archived",
+                dotColor: "#6b7280"
+            }
+        };
+        return map[survey.status] || {
+            label: survey.status || "Không xác định",
+            className: "status-unknown",
+            dotColor: "#6b7280"
+        };
+    }, [survey.status]);
+
+    const toggleSettingsMenu = () => {
+        setIsSettingsMenuOpen((prev) => !prev);
+    };
+
+    const openCloseSurveyModal = () => {
+        setIsSettingsMenuOpen(false);
+        setIsSettingsOpen(true);
+    };
+
+    const handleCloseSurvey = async () => {
+        if (!survey.id) return;
+        try {
+            setIsClosingSurvey(true);
+            const updated = await surveyService.updateSurvey(survey.id, { status: "archived" });
+            setSurvey((prev) => ({
+                ...prev,
+                status: updated?.status || "archived"
+            }));
+            alert("Khảo sát đã được đóng. Người tham gia sẽ không thể gửi phản hồi mới.");
+            setIsSettingsOpen(false);
+        } catch (error) {
+            console.error("Error closing survey:", error);
+            alert("Không thể đóng khảo sát. Vui lòng thử lại sau.");
+        } finally {
+            setIsClosingSurvey(false);
+        }
+    };
+
+    const closeCloseSurveyModal = () => setIsSettingsOpen(false);
+
     return (
         <MainLayout>
             <div className="share-survey-container">
@@ -137,10 +209,15 @@ const ShareSurveyPage = () => {
                     <div className="share-survey-information">
                         <div className="share-survey-title-row">
                             <h1>{survey.title || (loading ? "Đang tải..." : "")}</h1>
-                            <div className="share-survey-status">
-                                <span className="share-status-dot"></span>
-                                <span>{survey.status}</span>
-                            </div>
+                            {survey.status && (
+                                <div className={`share-survey-status ${statusMeta.className}`}>
+                                    <span
+                                        className="share-status-dot"
+                                        style={{ backgroundColor: statusMeta.dotColor }}
+                                    />
+                                    <span>{statusMeta.label}</span>
+                                </div>
+                            )}
                         </div>
                         <p>{survey.description}</p>
                         <div className="share-survey-info">
@@ -153,10 +230,37 @@ const ShareSurveyPage = () => {
                     </div>
 
                     <div className="share-survey-actions">
-                        <button className="btn-outline">⚙ Cài đặt</button>
+                        <div className="settings-menu" ref={settingsMenuRef}>
+                            <button
+                                className={`dropdown-toggle settings-toggle ${isSettingsMenuOpen ? "open" : ""}`}
+                                onClick={toggleSettingsMenu}
+                                type="button"
+                                aria-haspopup="true"
+                                aria-expanded={isSettingsMenuOpen}
+                            >
+                                <span className="settings-toggle__icon" aria-hidden="true">⚙</span>
+                                <span>Cài đặt</span>
+                                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                            </button>
+                            {isSettingsMenuOpen && (
+                                <div className="settings-dropdown" role="menu">
+                                    <div
+                                        className="dropdown-item"
+                                        role="menuitem"
+                                        onClick={openCloseSurveyModal}
+                                    >
+                                        <i className="fa-solid fa-xmark" title="Đóng khảo sát"></i>
+                                        Đóng khảo sát
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         <button
                             className="btn-outline"
-                            onClick={() =>
+                            onClick={() => {
+                                setIsSettingsMenuOpen(false);
                                 navigate("/create-survey", {
                                     state: {
                                         editSurvey: {
@@ -166,8 +270,8 @@ const ShareSurveyPage = () => {
                                             status: survey.status,
                                         },
                                     },
-                                })
-                            }
+                                });
+                            }}
                         >
                             ✏ Chỉnh sửa
                         </button>
@@ -215,6 +319,59 @@ const ShareSurveyPage = () => {
                     </div>
                 </div>
             </div>
+
+            {isSettingsOpen && (
+                <div className="settings-modal-overlay" onClick={closeCloseSurveyModal}>
+                    <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="settings-modal__header">
+                            <div className="settings-modal__icon" aria-hidden="true">
+                                🔒
+                            </div>
+                            <div>
+                                <h3>Đóng khảo sát</h3>
+                                <p>Ngừng nhận phản hồi mới và ẩn biểu mẫu khỏi người tham gia.</p>
+                            </div>
+                        </div>
+
+                        <div className="settings-modal__body">
+                            <div className="settings-notice">
+                                <strong>Lưu ý:</strong> Khi khảo sát được đóng, liên kết chia sẻ sẽ hiển thị thông báo “Khảo sát đã kết thúc”. Bạn có thể mở lại khảo sát bất cứ lúc nào trong trang chỉnh sửa.
+                            </div>
+                            <div className="settings-summary">
+                                <div>
+                                    <span className="summary-label">Trạng thái hiện tại</span>
+                                    <span className={`summary-status ${statusMeta.className}`}>
+                                        {statusMeta.label}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="summary-label">Số câu hỏi</span>
+                                    <span className="summary-value">{survey.totalQuestions}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="settings-modal__actions">
+                            <button
+                                className="btn-secondary"
+                                type="button"
+                                onClick={closeCloseSurveyModal}
+                                disabled={isClosingSurvey}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                className="btn-danger"
+                                type="button"
+                                onClick={handleCloseSurvey}
+                                disabled={isClosingSurvey}
+                            >
+                                {isClosingSurvey ? "Đang đóng..." : "Đóng khảo sát"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </MainLayout>
     );
 };

@@ -1306,6 +1306,14 @@ const CreateSurvey = () => {
                 localStorage.setItem('userSurveys', JSON.stringify(existingSurveys));
             }
 
+            setSurveyData(prev => ({
+                ...prev,
+                title: savedSurvey.title ?? prev.title,
+                description: savedSurvey.description ?? prev.description,
+                category_id: savedSurvey.categoryId ?? prev.category_id,
+                status: savedSurvey.status ?? prev.status ?? status
+            }));
+
             const message = isEditMode
                 ? 'Đã cập nhật khảo sát thành công!'
                 : (status === 'draft' ? 'Đã lưu bản nháp khảo sát!' : 'Đã xuất bản khảo sát thành công!');
@@ -1456,6 +1464,7 @@ const CreateSurvey = () => {
 
         setLoading(true);
         try {
+            let latestSurvey = null;
             // Nếu có thay đổi chưa lưu, tự động lưu vào localStorage trước
             if (hasUnsavedChanges) {
                 saveDraftToLocalStorage();
@@ -1482,13 +1491,13 @@ const CreateSurvey = () => {
                 draftStorageKey.current = `survey_draft_${surveyId}`;
 
                 // Cập nhật status thành published
-                await surveyService.updateSurvey(surveyId, { status: 'published' });
+                latestSurvey = await surveyService.updateSurvey(surveyId, { status: 'published' }) || savedSurvey;
 
                 // Lưu questions và options vào database
                 await saveQuestionsAndOptions(surveyId);
             } else {
                 // Cập nhật survey hiện có thành published và lưu questions/options mới nhất
-                await surveyService.updateSurvey(surveyId, {
+                latestSurvey = await surveyService.updateSurvey(surveyId, {
                     status: 'published',
                     title: surveyData.title,
                     description: surveyData.description,
@@ -1592,6 +1601,27 @@ const CreateSurvey = () => {
                 localStorage.removeItem(draftStorageKey.current);
             }
             setHasUnsavedChanges(false);
+
+            if (!latestSurvey) {
+                latestSurvey = {
+                    id: surveyId,
+                    status: 'published',
+                    title: surveyData.title,
+                    description: surveyData.description,
+                    categoryId: surveyData.category_id ? parseInt(surveyData.category_id) : null
+                };
+            }
+
+            setSurveyData(prev => ({
+                ...prev,
+                title: latestSurvey.title ?? prev.title,
+                description: latestSurvey.description ?? prev.description,
+                category_id: latestSurvey.categoryId ?? prev.category_id,
+                status: latestSurvey.status ?? 'published'
+            }));
+
+            setEditSurveyId(latestSurvey.id ?? surveyId);
+            setIsEditMode(true);
 
             // Chuyển đến trang ViewLinkSharePage để hiển thị link chia sẻ
             navigate(`/view-link-share/${surveyId}`);

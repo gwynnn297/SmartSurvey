@@ -367,6 +367,45 @@ export default function DashboardReportPage() {
         return colorMap[type] || 'indigo';
     };
 
+    const normalizeQuestionTypeKey = (typeKey = '') => {
+        const key = (typeKey || '').toString().toLowerCase();
+        switch (key) {
+            case 'multiplechoice':
+            case 'multiple_choice':
+                return 'multiple_choice';
+            case 'singlechoice':
+            case 'single_choice':
+                return 'single_choice';
+            case 'openended':
+            case 'open_ended':
+            case 'text':
+                return 'open_ended';
+            case 'rating':
+            case 'rating_star':
+            case 'star_rating':
+                return 'rating';
+            case 'boolean':
+            case 'boolean_':
+            case 'yes_no':
+            case 'true_false':
+                return 'boolean_';
+            case 'ranking':
+            case 'rank':
+                return 'ranking';
+            case 'fileupload':
+            case 'file_upload':
+            case 'upload':
+                return 'file_upload';
+            case 'datetime':
+            case 'date_time':
+            case 'date':
+            case 'time':
+                return 'date_time';
+            default:
+                return key;
+        }
+    };
+
     // Helper function để render tất cả các loại câu hỏi
     const renderQuestionStats = (byType = {}, totalQuestions = 0) => {
         const allQuestionTypes = [
@@ -380,9 +419,22 @@ export default function DashboardReportPage() {
             'date_time'
         ];
 
+        const normalizedCounts = Object.entries(byType || {}).reduce((acc, [rawType, rawCount]) => {
+            const normalizedType = normalizeQuestionTypeKey(rawType);
+            const count = Number(rawCount) || 0;
+            if (!normalizedType) return acc;
+            acc[normalizedType] = (acc[normalizedType] || 0) + count;
+            return acc;
+        }, {});
+
+        const countsArray = allQuestionTypes.map((type) => normalizedCounts[type] || 0);
+        const sumCounts = countsArray.reduce((sum, value) => sum + value, 0);
+        const maxCount = countsArray.reduce((max, value) => Math.max(max, value), 0);
+        const denominator = totalQuestions > 0 ? totalQuestions : (sumCounts > 0 ? sumCounts : maxCount);
+
         return allQuestionTypes.map((type) => {
-            const count = byType[type] || 0;
-            const percent = totalQuestions > 0 ? (count / totalQuestions) * 100 : 0;
+            const count = normalizedCounts[type] || 0;
+            const percent = denominator > 0 ? (count / denominator) * 100 : 0;
 
             return (
                 <ProgressItem

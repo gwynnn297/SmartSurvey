@@ -207,7 +207,10 @@ export default function DashboardPage() {
 
   // Function to fetch response counts for surveys
   const fetchResponseCounts = useCallback(async (surveyList) => {
-    if (!surveyList || surveyList.length === 0) return;
+    if (!surveyList || surveyList.length === 0) {
+      setResponseCounts({});
+      return {};
+    }
 
     setLoadingResponseCounts(true);
     try {
@@ -216,14 +219,15 @@ export default function DashboardPage() {
         .map(s => s.id || s._id);
 
       if (surveyIds.length === 0) {
-        setLoadingResponseCounts(false);
-        return;
+        setResponseCounts({});
+        return {};
       }
 
       console.log('Dashboard: Fetching response counts for surveys:', surveyIds);
       const counts = await responseService.getMultipleResponseCounts(surveyIds);
       console.log('Dashboard: Received response counts:', counts);
       setResponseCounts(counts);
+      return counts;
     } catch (error) {
       console.error('Dashboard: Error fetching response counts:', error);
       // Set fallback counts to 0
@@ -233,6 +237,7 @@ export default function DashboardPage() {
         fallbackCounts[id] = 0;
       });
       setResponseCounts(fallbackCounts);
+      return fallbackCounts;
     } finally {
       setLoadingResponseCounts(false);
     }
@@ -309,12 +314,6 @@ export default function DashboardPage() {
       setTotalPages(paginationMeta.pages);
       setTotalElements(paginationMeta.total);
 
-      // Fetch response counts for the surveys
-      fetchResponseCounts(surveysForDisplay);
-
-      // Fetch total response count from API
-      const apiTotalResponses = await fetchTotalResponseCount();
-
       let surveysForStatistics = surveysForDisplay;
       if (pageResponse?.meta) {
         try {
@@ -334,8 +333,17 @@ export default function DashboardPage() {
         surveysForStatistics = localSurveys;
       }
 
+      const [countsMap, apiTotalResponses] = await Promise.all([
+        fetchResponseCounts(surveysForStatistics),
+        fetchTotalResponseCount()
+      ]);
+
       // Calculate stats with API total response count
-      const stats = await calculateRealStats(surveysForStatistics, pageResponse?.meta || paginationMeta, responseCounts);
+      const stats = await calculateRealStats(
+        surveysForStatistics,
+        pageResponse?.meta || paginationMeta,
+        countsMap || {}
+      );
 
       // Override totalResponses with API value if available
       if (apiTotalResponses > 0) {
@@ -480,72 +488,72 @@ export default function DashboardPage() {
 
         {showCreateModal && (
           <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
               <button
-                  className="modal-close-btn"
-                  onClick={() => setShowCreateModal(false)}
-                  aria-label="Đóng"
+                className="modal-close-btn"
+                onClick={() => setShowCreateModal(false)}
+                aria-label="Đóng"
               >
-                  ×
+                ×
               </button>
               <div className="modal-header">
-                  <h3>Chọn phương thức tạo khảo sát</h3>
-                  <p>Chọn phương thức tạo khảo sát phù hợp với nhu cầu của bạn</p>
+                <h3>Chọn phương thức tạo khảo sát</h3>
+                <p>Chọn phương thức tạo khảo sát phù hợp với nhu cầu của bạn</p>
               </div>
               <div className="modal-body">
-                  <div
-                      className="create-option"
-                      onClick={() => {
-                          setShowCreateModal(false);
-                          navigate('/create-ai');
-                      }}
-                  >
-                      <div className="option-icon ai">
-                          <i className="fa-solid fa-robot" style={{ fontSize: '24px' }}></i>
-                      </div>
-                      <div className="option-title">Tạo bằng AI</div>
-                      <p className="option-desc">
-                          Sử dụng AI để tự động tạo khảo sát từ mô tả của bạn
-                      </p>
-                      <ul>
-                          <li>Tự động tạo câu hỏi thông minh</li>
-                          <li>Tiết kiệm thời gian</li>
-                          <li>Đề xuất câu hỏi phù hợp</li>
-                      </ul>
-                      <button className="btn-primary small">
-                          Tạo bằng AI
-                      </button>
+                <div
+                  className="create-option"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    navigate('/create-ai');
+                  }}
+                >
+                  <div className="option-icon ai">
+                    <i className="fa-solid fa-robot" style={{ fontSize: '24px' }}></i>
                   </div>
+                  <div className="option-title">Tạo bằng AI</div>
+                  <p className="option-desc">
+                    Sử dụng AI để tự động tạo khảo sát từ mô tả của bạn
+                  </p>
+                  <ul>
+                    <li>Tự động tạo câu hỏi thông minh</li>
+                    <li>Tiết kiệm thời gian</li>
+                    <li>Đề xuất câu hỏi phù hợp</li>
+                  </ul>
+                  <button className="btn-primary small">
+                    Tạo bằng AI
+                  </button>
+                </div>
 
-                  <div
-                      className="create-option"
-                      onClick={() => {
-                          setShowCreateModal(false);
-                          navigate('/create-survey');
-                      }}
-                  >
-                      <div className="option-icon manual">
-                          <i className="fa-solid fa-pen-to-square" style={{ fontSize: '24px' }}></i>
-                      </div>
-                      <div className="option-title">Tạo thủ công</div>
-                      <p className="option-desc">
-                          Tự thiết kế và chỉnh sửa khảo sát theo ý muốn
-                      </p>
-                      <ul>
-                          <li>Kiểm soát hoàn toàn</li>
-                          <li>Tùy chỉnh chi tiết</li>
-                          <li>Nhiều loại câu hỏi</li>
-                      </ul>
-                      <button className="btn-primary small">
-                          Tạo thủ công
-                      </button>
+                <div
+                  className="create-option"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    navigate('/create-survey');
+                  }}
+                >
+                  <div className="option-icon manual">
+                    <i className="fa-solid fa-pen-to-square" style={{ fontSize: '24px' }}></i>
                   </div>
+                  <div className="option-title">Tạo thủ công</div>
+                  <p className="option-desc">
+                    Tự thiết kế và chỉnh sửa khảo sát theo ý muốn
+                  </p>
+                  <ul>
+                    <li>Kiểm soát hoàn toàn</li>
+                    <li>Tùy chỉnh chi tiết</li>
+                    <li>Nhiều loại câu hỏi</li>
+                  </ul>
+                  <button className="btn-primary small">
+                    Tạo thủ công
+                  </button>
+                </div>
               </div>
               <div className="modal-footer">
-                  <p className="note">Bạn có thể chuyển đổi giữa hai phương thức bất cứ lúc nào</p>
+                <p className="note">Bạn có thể chuyển đổi giữa hai phương thức bất cứ lúc nào</p>
               </div>
+            </div>
           </div>
-      </div>
         )}
       </main>
 

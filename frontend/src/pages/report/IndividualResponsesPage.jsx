@@ -358,10 +358,10 @@ const IndividualResponsesPage = () => {
             const v = searchDraft.trim();
             if (v === '') {
                 handleFilterChange('search', '');
-            } else if (v.length >= 3) {
+            } else if (v.length >= 1) {
                 handleFilterChange('search', v);
             }
-        }, 1000);
+        }, 800);
 
         return () => clearTimeout(t);
     }, [searchDraft]);
