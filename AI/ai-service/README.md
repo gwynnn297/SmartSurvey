@@ -135,3 +135,21 @@ Duplicate Detection – Phát hiện câu trùng hoặc gần trùng (không d�
   "tag_rules_yaml": "config/rules.yml"
 }
 ## POST /ai/srp/process/{survey_id} → xử lý batch thực tế.
+
+## AI Service Integration & Optimization
+Mục tiêu: Tối ưu hiệu suất, độ tin cậy và chi phí của các dịch vụ AI hiện có (Gemini, Sentiment, Summary).
+- Response Caching (LRU + TTL) : Cache phản hồi Gemini cho sentiment và summary. Giảm 60–80% số lần gọi API lặp.
+- Circuit Breaker + Retry : Khi Gemini lỗi liên tục → tự đóng mạch trong thời gian cooldown. Có retry + exponential backoff + jitter.
+- Smart Rate Limiting : Cơ chế Token Bucket ngăn spam API. Giới hạn tần suất theo loại tác vụ (classify, summary).
+- A/B Prompt Testing : Tự động chia traffic giữa 2 biến thể prompt (A/B) theo hash để so sánh độ chính xác và tốc độ.
+- Metrics Endpoint : GET /ai/metrics hiển thị thống kê thời gian, tỉ lệ thành công, cache hit rate.
+- Cost Optimization : Gộp batch, truncate prompt, cache dài TTL để tiết kiệm token và quota.
+
+## Cách kiểm thử nhanh
+Gọi các endpoint:
+- POST /ai/basic-sentiment/{survey_id}
+- POST /ai/summary/{survey_id}
+## Mở GET /ai/metrics để xem:
+- cache_hit tăng dần sau khi gọi lại cùng survey
+- p95_ms < 5s
+- success_rate ~100%

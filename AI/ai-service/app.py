@@ -40,6 +40,138 @@ except Exception:  # ImportError hoặc lỗi init model
 import httpx
 import time as _time
 
+app = FastAPI(title="SmartSurvey AI Service")   
+
+# =================== AI OPTIMIZATION PRIMITIVES ===================
+import threading, time as _t, random
+from collections import OrderedDict, deque
+
+# --- LRU Cache with TTL ---
+class _LRUCacheTTL:
+    def __init__(self, maxsize=10000, ttl=3600.0):
+        self.maxsize = maxsize; self.ttl = ttl
+        self._data = OrderedDict(); self._lock = threading.Lock()
+    def get(self, key):
+        with self._lock:
+            item = self._data.get(key)
+            if not item: return None
+            val, ts = item
+            if _t.time() - ts > self.ttl:
+                self._data.pop(key, None); return None
+            self._data.move_to_end(key); return val
+    def set(self, key, value):
+        with self._lock:
+            if key in self._data: self._data.move_to_end(key)
+            self._data[key] = (value, _t.time())
+            if len(self._data) > self.maxsize:
+                self._data.popitem(last=False)
+
+CLASSIFY_CACHE = _LRUCacheTTL(
+    maxsize=int(os.getenv("CACHE_CLASSIFY_MAX","20000")),
+    ttl=float(os.getenv("CACHE_CLASSIFY_TTL","86400"))
+)
+SUMMARY_CACHE  = _LRUCacheTTL(
+    maxsize=int(os.getenv("CACHE_SUMMARY_MAX","2000")),
+    ttl=float(os.getenv("CACHE_SUMMARY_TTL","86400"))
+)
+
+def _hash_text_for_cache(s: str) -> str:
+    return sha256(norm_text(s))
+
+def _label_cache_key(text: str, variant: str = "A") -> str:
+    return f"label:{variant}:{_hash_text_for_cache(text)}"
+
+# --- Circuit Breaker + Retry wrapper (dùng chung cho Gemini) ---
+class _Circuit:
+    def __init__(self, fails_to_open=8, cooldown=30.0):
+        self.fails = 0; self.open_until = 0.0
+        self.fails_to_open = fails_to_open; self.cooldown = cooldown
+    def is_open(self): return _t.time() < self.open_until
+    def record(self, ok: bool):
+        if ok: self.fails = 0; self.open_until = 0.0; return
+        self.fails += 1
+        if self.fails >= self.fails_to_open:
+            self.open_until = _t.time() + self.cooldown
+
+_GEMINI_CB = _Circuit(
+    fails_to_open=int(os.getenv("CB_FAILS","8")),
+    cooldown=float(os.getenv("CB_COOLDOWN","30"))
+)
+
+def call_gemini_json(url: str, key: str, payload: dict, timeout: float, max_retry: int = 4) -> dict:
+    if _GEMINI_CB.is_open():
+        raise RuntimeError("CircuitOpen")
+    for attempt in range(max_retry+1):
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                r = client.post(f"{url}?key={key}", json=payload)
+                if r.status_code == 429:
+                    raise RuntimeError("RateLimited")
+                r.raise_for_status()
+                _GEMINI_CB.record(True)
+                return r.json()
+        except Exception:
+            _GEMINI_CB.record(False)
+            if attempt >= max_retry: raise
+            # exp backoff + jitter
+            back = min(3.0, (0.2 * (2**attempt))) + random.uniform(0, 0.2)
+            _t.sleep(back)
+
+# --- Token-bucket rate limiting ---
+class TokenBucket:
+    def __init__(self, rate_per_sec: float, burst: int):
+        self.rate = rate_per_sec; self.capacity = burst
+        self.tokens = burst; self.ts = _t.time(); self._lock = threading.Lock()
+    def allow(self, n=1):
+        with self._lock:
+            now = _t.time()
+            delta = now - self.ts; self.ts = now
+            self.tokens = min(self.capacity, self.tokens + delta * self.rate)
+            if self.tokens >= n: self.tokens -= n; return True
+            return False
+
+BUCKETS = {
+    "classify": TokenBucket(float(os.getenv("RL_CLASSIFY_RPS","5")), int(os.getenv("RL_CLASSIFY_BURST","10"))),
+    "summary":  TokenBucket(float(os.getenv("RL_SUMMARY_RPS","1")),  int(os.getenv("RL_SUMMARY_BURST","2"))),
+}
+
+# --- A/B assignment ---
+def assign_bucket_by_hash(text_or_id: str, traffic_b: int = int(os.getenv("AB_TRAFFIC_B","20"))) -> str:
+    try:
+        h = int(sha256(str(text_or_id))[:6], 16) % 100
+        return "B" if h < traffic_b else "A"
+    except Exception:
+        return "A"
+
+# --- Lightweight in-memory metrics + endpoint (/ai/metrics) ---
+_METRICS = {
+    "classify_calls": 0, "classify_success": 0, "classify_cache_hit": 0, "classify_latency_ms": deque(maxlen=4000),
+    "summary_calls":  0, "summary_success":  0, "summary_cache_hit":  0, "summary_latency_ms":  deque(maxlen=1000),
+}
+def _rec_latency(key: str, ms: float): _METRICS[key].append(ms)
+def _p(vals: deque, q: float) -> float:
+    if not vals: return 0.0
+    xs = sorted(vals); idx = min(len(xs)-1, int(q*(len(xs)-1))); return xs[idx]
+
+@app.get("/ai/metrics")
+def ai_metrics():
+    return {
+        "classify": {
+            "calls": _METRICS["classify_calls"], "success": _METRICS["classify_success"],
+            "cache_hit": _METRICS["classify_cache_hit"],
+            "p50_ms": _p(_METRICS["classify_latency_ms"], 0.50),
+            "p95_ms": _p(_METRICS["classify_latency_ms"], 0.95),
+            "success_rate": 100.0 * _METRICS["classify_success"] / max(1, _METRICS["classify_calls"]),
+        },
+        "summary": {
+            "calls": _METRICS["summary_calls"], "success": _METRICS["summary_success"],
+            "cache_hit": _METRICS["summary_cache_hit"],
+            "p50_ms": _p(_METRICS["summary_latency_ms"], 0.50),
+            "p95_ms": _p(_METRICS["summary_latency_ms"], 0.95),
+            "success_rate": 100.0 * _METRICS["summary_success"] / max(1, _METRICS["summary_calls"]),
+        }
+    }
+# ================= END AI OPTIMIZATION PRIMITIVES ===============
 
 # ====== dự án sẵn có (KHÔNG dùng model train nội bộ) ======
 # bạn giữ nguyên các module settings/db/model như dự án của bạn
@@ -226,7 +358,6 @@ def call_external_sentiment(text: str, retries: int | None = None) -> Tuple[int,
 # ============================================================
 # FastAPI app
 # ============================================================
-app = FastAPI(title="SmartSurvey AI Service")
 
 
 def get_db():
@@ -634,51 +765,91 @@ def _gemini_prompt_batch(items: list[str]) -> str:
         "\n".join([f"{i}. {items[i]}" for i in range(len(items))])
     )
 
-def gemini_classify_batch(texts: List[str]) -> List[str]:
-    """Trả list nhãn ('POS'|'NEU'|'NEG') cùng độ dài với texts. Lỗi ⇒ 'NEU'."""
-    if not texts:
-        return []
+def gemini_classify_batch(texts: List[str], variant: str | None = None) -> List[str]:
+    """Trả list nhãn ('POS'|'NEU'|'NEG'). Lỗi ⇒ 'NEU'."""
+    if not texts: return []
     labels = ["NEU"] * len(texts)
-    payload = {"contents": [{"parts": [{"text": _gemini_prompt_batch(texts)}]}]}
 
-    backoff = 0.0
-    for attempt in range(1, EXT_RETRY + 1):
-        try:
-            with httpx.Client(timeout=float(EXT_TIMEOUT)) as client:
-                r = client.post(f"{EXT_URL}?key={EXT_KEY}", json=payload)
-                if r.status_code == 429:
-                    backoff = backoff * BACKOFF_K + 0.7  # backoff tăng dần
-                    _time.sleep(min(3.0, backoff))
-                    r = client.post(f"{EXT_URL}?key={EXT_KEY}", json=payload)
+    # 1) A/B variant
+    variant = variant or assign_bucket_by_hash(texts[0] if texts else "batch")
 
-                r.raise_for_status()
-                data = r.json()
-                text_out = (
-                    (data.get("candidates") or [{}])[0]
-                    .get("content", {})
-                    .get("parts", [{}])[0]
-                    .get("text", "")
-                )
-                t = text_out.strip()
-                first, last = t.find('['), t.rfind(']')
-                if first != -1 and last != -1 and last > first:
-                    t = t[first:last+1]
+    # 2) Cache hit trước
+    miss_idx, miss_texts = [], []
+    for i, t in enumerate(texts):
+        ck = _label_cache_key(t, variant)
+        val = CLASSIFY_CACHE.get(ck)
+        if val:
+            labels[i] = val
+            _METRICS["classify_cache_hit"] += 1
+        else:
+            miss_idx.append(i); miss_texts.append(t)
 
-                arr = json.loads(t)
-                for obj in arr:
-                    i = obj.get("i")
-                    lab = (obj.get("label") or "").strip().upper()
-                    if isinstance(i, int) and 0 <= i < len(labels) and lab in {"POS","NEU","NEG"}:
-                        labels[i] = lab
-                return labels
-        except Exception:
-            _time.sleep(0.5 * attempt)
+    if not miss_texts:
+        return labels
+
+    # 3) De-dup trong batch miss
+    uniq_list, uniq_map = [], {}
+    for i, t in zip(miss_idx, miss_texts):
+        h = _hash_text_for_cache(t)
+        if h not in uniq_map:
+            uniq_map[h] = []
+            uniq_list.append(t)
+        uniq_map[h].append(i)
+
+    # 4) Tạo prompt theo variant
+    def _prompt_A(items: list[str]) -> str:
+        return (
+            "Bạn là bộ phân loại cảm xúc TIẾNG VIỆT.\n"
+            "Trả về JSON Array: [{\"i\":<index>,\"label\":\"POS|NEU|NEG\"}] cho các câu sau:\n" +
+            "\n".join([f"{i}. {items[i]}" for i in range(len(items))])
+        )
+    def _prompt_B(items: list[str]) -> str:
+        return (
+            "Classify Vietnamese sentiments. Output *only* JSON array [{\"i\":int,\"label\":\"POS|NEU|NEG\"}].\n" +
+            "\n".join([f"{i}. {items[i]}" for i in range(len(items))])
+        )
+    prompt = _prompt_B(uniq_list) if variant == "B" else _prompt_A(uniq_list)
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+    # 5) Gọi Gemni qua wrapper (retry + jitter + circuit breaker)
+    _METRICS["classify_calls"] += 1
+    t0 = _time.perf_counter()
+    try:
+        data = call_gemini_json(EXT_URL, EXT_KEY, payload, timeout=float(EXT_TIMEOUT), max_retry=int(EXT_RETRY))
+        text_out = ((data.get("candidates") or [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")).strip()
+        # cắt ra JSON array
+        first, last = text_out.find('['), text_out.rfind(']')
+        if first != -1 and last != -1 and last > first:
+            text_out = text_out[first:last+1]
+        arr = json.loads(text_out)
+        # 6) phản ánh kết quả
+        labels_uniq = ["NEU"] * len(uniq_list)
+        for obj in arr:
+            i = obj.get("i"); lab = (obj.get("label") or "").strip().upper()
+            if isinstance(i, int) and 0 <= i < len(labels_uniq) and lab in {"POS","NEU","NEG"}:
+                labels_uniq[i] = lab
+        # gán về labels và set cache
+        for text_u, lab in zip(uniq_list, labels_uniq):
+            for idx in uniq_map[_hash_text_for_cache(text_u)]:
+                labels[idx] = lab
+            CLASSIFY_CACHE.set(_label_cache_key(text_u, variant), lab)
+        _METRICS["classify_success"] += 1
+    except Exception:
+        # giữ nguyên 'NEU' cho phần miss khi lỗi
+        pass
+    finally:
+        _rec_latency("classify_latency_ms", 1000.0*(_time.perf_counter()-t0))
 
     return labels
 
 
+
 @app.post("/ai/basic-sentiment/{survey_id}", tags=["Analysis Service"])
 def ai_basic_senti(survey_id: int):
+    if not BUCKETS["classify"].allow():
+        return {"ok": False, "message": "Rate limited. Vui lòng thử lại sau.", "total": 0, "counts": {"POS":0,"NEU":0,"NEG":0}}
+    start = _time.perf_counter()
+
     texts_all = _fetch_texts_by_survey(survey_id)
     if not texts_all:
         payload = {"total": 0, "counts": {"POS": 0, "NEU": 0, "NEG": 0}}
@@ -691,7 +862,7 @@ def ai_basic_senti(survey_id: int):
         labels_all: List[str] = []
         for i in range(0, len(texts_all), BATCH_SIZE):
             batch = texts_all[i:i + BATCH_SIZE]
-            labels_all.extend(gemini_classify_batch(batch))
+            labels_all.extend(gemini_classify_batch(batch, variant=assign_bucket_by_hash(str(survey_id))))
             _time.sleep(0.25)
 
         for lab in labels_all:
@@ -701,6 +872,7 @@ def ai_basic_senti(survey_id: int):
 
     payload = {"total": len(texts_all), "counts": counts}
     _save_analysis(survey_id, payload, "BASIC_SENTI")
+    _rec_latency("classify_latency_ms", 1000.0*(_time.perf_counter()-start))
     return {"ok": True, **payload}
 
 
@@ -740,53 +912,53 @@ def _gemini_summarize(responses: _List[str]) -> str:
     if not responses:
         return "Không có dữ liệu để tóm tắt."
 
-    # hạn chế độ dài input để giảm rủi ro 429
+    # ---- CACHE GET (theo nội dung) ----
     MAX_RESP = int(os.getenv("SUMMARY_MAX_RESP", "120"))
     MAX_CHARS = int(os.getenv("SUMMARY_MAX_CHARS", "6000"))
-    joined = "\n- ".join([r.strip() for r in responses if r][:MAX_RESP])[:MAX_CHARS]
+    joined_for_hash = "\n".join([r.strip() for r in responses if r][:MAX_RESP])[:MAX_CHARS]
+    ck = f"summary:{sha256(joined_for_hash)}"
+    cached = SUMMARY_CACHE.get(ck)
+    if cached:
+        _METRICS["summary_cache_hit"] += 1
+        return cached
 
+    # (giữ nguyên phần tạo prompt/payload hiện có, chỉ khác dưới đây dùng wrapper)
     prompt = (
         "Tóm tắt ngắn gọn (3-5 bullet) các ý chính từ danh sách phản hồi tiếng Việt dưới đây. "
         "Nhấn mạnh điểm tích cực, tiêu cực và đề xuất cải tiến nếu có.\n\n"
-        "Danh sách phản hồi:\n- " + joined
+        "Danh sách phản hồi:\n- " + joined_for_hash.replace("\n", "\n- ")
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
-    # nếu chưa có key → dùng local summary
     if not GEMINI_KEY or not GEMINI_URL:
-        return _local_summary(responses)
+        summ = _local_summary(responses)
+        SUMMARY_CACHE.set(ck, summ)
+        return summ
 
+    _METRICS["summary_calls"] += 1
+    t0 = _time.perf_counter()
     try:
-        with httpx.Client(timeout=float(os.getenv("EXT_SENTI_TIMEOUT", "12.0"))) as client:
-            r = client.post(f"{GEMINI_URL}?key={GEMINI_KEY}", json=payload)
+        data = call_gemini_json(GEMINI_URL, GEMINI_KEY, payload, timeout=float(os.getenv("EXT_SENTI_TIMEOUT","12.0")), max_retry=int(os.getenv("EXT_SENTI_MAX_RETRY","4")))
+        cand = (data.get("candidates") or [{}])[0]
+        content = cand.get("content") or {}
+        parts = content.get("parts") or [{}]
+        txt = parts[0].get("text")
+        if isinstance(txt, str) and txt.strip():
+            SUMMARY_CACHE.set(ck, txt)
+            _METRICS["summary_success"] += 1
+            _rec_latency("summary_latency_ms", 1000.0*(_time.perf_counter()-t0))
+            return txt
+        # fallback:
+        summ = _local_summary(responses)
+        SUMMARY_CACHE.set(ck, summ)
+        _rec_latency("summary_latency_ms", 1000.0*(_time.perf_counter()-t0))
+        return summ
+    except Exception:
+        summ = _local_summary(responses)
+        SUMMARY_CACHE.set(ck, summ)
+        _rec_latency("summary_latency_ms", 1000.0*(_time.perf_counter()-t0))
+        return summ
 
-        if r.status_code == 200:
-            data = r.json()
-            cand = (data.get("candidates") or [{}])[0]
-            content = cand.get("content") or {}
-            parts = content.get("parts") or [{}]
-            txt = parts[0].get("text")
-            if isinstance(txt, str) and txt.strip():
-                return txt
-            # fallback nếu proxy trả field khác
-            if isinstance(data, dict) and "text" in data and str(data["text"]).strip():
-                return str(data["text"])
-            return _local_summary(responses)
-
-        # lỗi: đọc body để phân biệt rate/quota
-        try:
-            err = r.json()
-        except Exception:
-            err = {"text": r.text}
-        status = (err.get("error") or {}).get("status") or err.get("status") or ""
-        # nếu là 429 / RESOURCE_EXHAUSTED → fallback cục bộ
-        if r.status_code == 429 or str(status).upper() in {"RATE_LIMIT_EXCEEDED", "RESOURCE_EXHAUSTED"}:
-            return _local_summary(responses)
-        # các lỗi khác: trả thông báo ngắn kèm fallback
-        return f"Không tóm tắt được (HTTP {r.status_code}: {status}).\n" + _local_summary(responses)
-
-    except Exception as e:
-        return f"Không tóm tắt được. Lỗi: {e}\n" + _local_summary(responses)
 
 # ---- throttle đơn giản cho /ai/summary ----
 _SUMMARY_THROTTLE = {}
@@ -804,6 +976,8 @@ def _allow_summary_call(sid: int, window: int = int(os.getenv("SUMMARY_THROTTLE_
 def ai_summary(survey_id: int):
     if not _allow_summary_call(survey_id):
         return {"ok": False, "summary": "Đang giới hạn tần suất, vui lòng thử lại sau vài giây.", "count": 0}
+    if not BUCKETS["summary"].allow():
+        return {"ok": False, "summary": "Rate limited. Vui lòng thử lại sau.", "count": 0}
     texts = _fetch_texts_by_survey(survey_id)
     summ = _gemini_summarize(texts)
     _save_analysis(survey_id, {"summary": summ, "sample_size": len(texts)}, "SUMMARY", analysis_type_override="SUMMARY")
@@ -977,7 +1151,7 @@ def _ins_stat(df, rules):
 
 def _ins_trend(df, rules):
     out = []
-    if "created_at" not in df: return out
+    if "created_at" not in df.columns: return out
     pct_th = float(rules["trend"]["pct_change"]); mono_len = int(rules["trend"]["monotonic_len"])
     for qid, g in df.groupby("question_id"):
         s = g.set_index("created_at")["answer_numeric"].dropna().resample("W").mean().dropna()
