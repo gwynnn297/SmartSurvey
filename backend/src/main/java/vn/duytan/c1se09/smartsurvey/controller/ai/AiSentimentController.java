@@ -30,8 +30,8 @@ public class AiSentimentController {
     @PostMapping("/sentiment/{surveyId}")
     @ApiMessage("Phân tích sentiment cho survey")
     public ResponseEntity<SentimentAnalysisResponseDTO> analyzeSentiment(
-            @PathVariable Long surveyId,
-            @RequestParam(required = false) Long questionId,
+            @PathVariable("surveyId") Long surveyId,
+            @RequestParam(name = "questionId", required = false) Long questionId,
             Principal principal) {
 
         log.info("Nhận yêu cầu phân tích sentiment cho survey: {}, question: {}, user: {}",
@@ -61,7 +61,7 @@ public class AiSentimentController {
     @GetMapping("/sentiment/{surveyId}")
     @ApiMessage("Lấy kết quả sentiment gần nhất")
     public ResponseEntity<SentimentAnalysisResponseDTO> getLatestSentiment(
-            @PathVariable Long surveyId,
+            @PathVariable("surveyId") Long surveyId,
             Principal principal) {
 
         log.info("Nhận yêu cầu lấy kết quả sentiment cho survey: {}, user: {}",
