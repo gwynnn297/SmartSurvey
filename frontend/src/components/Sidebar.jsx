@@ -75,14 +75,14 @@ const Sidebar = () => {
                 <div className="nav-item">
                     <div
                         className={`nav-link ${isActive('/responses') ? 'active' : ''}`}
-                        onClick={() => navigate('/responses')}
+                        onClick={() => navigate('#')}
                     >
                         <div className="nav-icon">
                             <i className="fa-solid fa-signal" title="Phản hồi/Kết quả"></i>
                         </div>
                         <div className="nav-content">
                             <div className="nav-title">
-                                Chatbot hỏi đáp
+                                Quản lý Team
                             </div>
                         </div>
                     </div>
