@@ -712,7 +712,11 @@ def _fetch_texts_by_survey(survey_id: int) -> _List[str]:
         SELECT a.answer_text
         FROM answers a
         JOIN responses r ON r.response_id = a.response_id
-        WHERE r.survey_id=%s AND a.answer_text IS NOT NULL AND TRIM(a.answer_text) <> ''
+        JOIN questions q ON q.question_id = a.question_id
+        WHERE r.survey_id=%s 
+        AND a.answer_text IS NOT NULL 
+        AND TRIM(a.answer_text) <> ''
+        AND q.question_type = 'open_ended'
         ORDER BY a.answer_id ASC
         """,
         (survey_id,),

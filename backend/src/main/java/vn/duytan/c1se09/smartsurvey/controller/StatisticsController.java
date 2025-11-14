@@ -5,6 +5,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveyOverviewResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveyTimelineResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveyChartsResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveyTextAnalysisResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveySentimentResponseDTO;
 import vn.duytan.c1se09.smartsurvey.service.StatisticsService;
 import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveyQuestionCountsDTO;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
@@ -64,6 +67,57 @@ public class StatisticsController {
         try {
             SurveyQuestionCountsDTO counts = statisticsService.getSurveyQuestionCounts(surveyId);
             return ResponseEntity.ok(counts);
+        } catch (IdInvalidException e) {
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+    
+    /**
+     * Lấy dữ liệu biểu đồ cho survey (multiple choice, rating, boolean questions)
+     * GET /api/surveys/{surveyId}/results/charts
+     */
+    @GetMapping("/{surveyId}/results/charts")
+    @ApiMessage("Lấy dữ liệu biểu đồ cho survey")
+    public ResponseEntity<SurveyChartsResponseDTO> getSurveyCharts(@PathVariable Long surveyId) {
+        try {
+            SurveyChartsResponseDTO charts = statisticsService.getSurveyCharts(surveyId);
+            return ResponseEntity.ok(charts);
+        } catch (IdInvalidException e) {
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+    
+    /**
+     * Lấy phân tích văn bản AI cho các câu hỏi mở
+     * GET /api/surveys/{surveyId}/results/text-analysis
+     */
+    @GetMapping("/{surveyId}/results/text-analysis")
+    @ApiMessage("Lấy phân tích văn bản AI cho survey")
+    public ResponseEntity<SurveyTextAnalysisResponseDTO> getSurveyTextAnalysis(@PathVariable Long surveyId) {
+        try {
+            SurveyTextAnalysisResponseDTO textAnalysis = statisticsService.getSurveyTextAnalysis(surveyId);
+            return ResponseEntity.ok(textAnalysis);
+        } catch (IdInvalidException e) {
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+    
+    /**
+     * Lấy phân tích cảm xúc AI cho survey
+     * GET /api/surveys/{surveyId}/results/sentiment
+     */
+    @GetMapping("/{surveyId}/results/sentiment")
+    @ApiMessage("Lấy phân tích cảm xúc AI cho survey")
+    public ResponseEntity<SurveySentimentResponseDTO> getSurveySentimentAnalysis(@PathVariable Long surveyId) {
+        try {
+            SurveySentimentResponseDTO sentiment = statisticsService.getSurveySentimentAnalysis(surveyId);
+            return ResponseEntity.ok(sentiment);
         } catch (IdInvalidException e) {
             return ResponseEntity.notFound().build();
         } catch (Exception e) {

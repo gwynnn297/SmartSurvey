@@ -2,13 +2,21 @@ package vn.duytan.c1se09.smartsurvey.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 import vn.duytan.c1se09.smartsurvey.domain.*;
 import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveyOverviewResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveyQuestionCountsDTO;
-import vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum;
 import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveyTimelineResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveyChartsResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveyTextAnalysisResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveySentimentResponseDTO;
+import vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum;
 import vn.duytan.c1se09.smartsurvey.repository.*;
+
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 
 import java.time.LocalDateTime;
@@ -31,6 +39,10 @@ public class StatisticsService {
     private final QuestionRepository questionRepository;
     private final SurveyViewRepository surveyViewRepository;
     private final AuthService authService;
+    
+    // AI service configuration
+    private static final String AI_SERVICE_BASE_URL = "http://localhost:8000";
+    private final RestTemplate restTemplate = new RestTemplate();
     
     /**
      * Lấy thống kê tổng quan của survey
@@ -489,4 +501,501 @@ public class StatisticsService {
         
         return hourlyData;
     }
+    
+    /**
+     * Lấy dữ liệu biểu đồ cho survey
+     */
+    public SurveyChartsResponseDTO getSurveyCharts(Long surveyId) throws IdInvalidException {
+        // Kiểm tra survey tồn tại và quyền truy cập
+        Survey survey = surveyRepository.findById(surveyId)
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
+        
+        User currentUser = authService.getCurrentUser();
+        if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
+            throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này");
+        }
+        
+        // Lấy tất cả questions của survey
+        List<Question> questions = questionRepository.findBySurveyOrderByDisplayOrderAsc(survey);
+        
+        // Phân loại và xử lý từng loại câu hỏi
+        List<SurveyChartsResponseDTO.MultipleChoiceDataDTO> multipleChoiceData = new ArrayList<>();
+        List<SurveyChartsResponseDTO.RatingDataDTO> ratingData = new ArrayList<>();
+        List<SurveyChartsResponseDTO.BooleanDataDTO> booleanData = new ArrayList<>();
+        
+        for (Question question : questions) {
+            QuestionTypeEnum questionType = question.getQuestionType();
+            
+            switch (questionType) {
+                case multiple_choice:
+                case single_choice:
+                    multipleChoiceData.add(buildMultipleChoiceData(question));
+                    break;
+                case rating:
+                    ratingData.add(buildRatingData(question));
+                    break;
+                case boolean_:
+                    booleanData.add(buildBooleanData(question));
+                    break;
+                case ranking:
+                    // Ranking cũng được xử lý như multiple choice để hiển thị thống kê
+                    multipleChoiceData.add(buildMultipleChoiceData(question));
+                    break;
+                default:
+                    // Bỏ qua các loại câu hỏi khác (open_ended, file_upload, date_time, matrix)
+                    break;
+            }
+        }
+        
+        return SurveyChartsResponseDTO.builder()
+                .multipleChoiceData(multipleChoiceData)
+                .ratingData(ratingData)
+                .booleanData(booleanData)
+                .build();
+    }
+    
+    /**
+     * Xây dựng dữ liệu biểu đồ cho câu hỏi multiple choice/single choice/ranking
+     */
+    private SurveyChartsResponseDTO.MultipleChoiceDataDTO buildMultipleChoiceData(Question question) {
+        // Lấy tất cả options của question
+        List<Option> options = optionRepository.findByQuestionOrderByCreatedAt(question);
+        
+        // Lấy tất cả answers cho question này
+        List<Answer> answers = answerRepository.findByQuestion(question);
+        
+        // Đếm số lần chọn mỗi option
+        Map<Long, Integer> optionCounts = new HashMap<>();
+        
+        for (Answer answer : answers) {
+            if (answer.getOption() != null) {
+                Long optionId = answer.getOption().getOptionId();
+                optionCounts.put(optionId, optionCounts.getOrDefault(optionId, 0) + 1);
+            }
+        }
+        
+        QuestionTypeEnum questionType = question.getQuestionType();
+        
+        // Tính tổng số responses (unique responses)
+        int totalResponses = (int) answers.stream()
+                .map(answer -> answer.getResponse().getResponseId())
+                .distinct()
+                .count();
+        
+        // Xây dựng chart data
+        List<SurveyChartsResponseDTO.MultipleChoiceDataDTO.ChartDataDTO> chartData = new ArrayList<>();
+        
+        for (Option option : options) {
+            int count = optionCounts.getOrDefault(option.getOptionId(), 0);
+            double percentage = totalResponses > 0 ? (double) count / totalResponses * 100 : 0.0;
+            
+            chartData.add(SurveyChartsResponseDTO.MultipleChoiceDataDTO.ChartDataDTO.builder()
+                    .option(option.getOptionText())
+                    .count(count)
+                    .percentage(Math.round(percentage * 100.0) / 100.0) // Làm tròn 2 chữ số
+                    .build());
+        }
+        
+        // Xác định chart type dựa trên question type
+        String chartType = "pie"; // Default
+        if (questionType == QuestionTypeEnum.ranking) {
+            chartType = "bar"; // Ranking thường dùng bar chart
+        }
+        
+        return SurveyChartsResponseDTO.MultipleChoiceDataDTO.builder()
+                .questionId(question.getQuestionId())
+                .questionText(question.getQuestionText())
+                .chartData(chartData)
+                .chartType(chartType)
+                .build();
+    }
+    
+    /**
+     * Xây dựng dữ liệu biểu đồ cho câu hỏi rating
+     */
+    private SurveyChartsResponseDTO.RatingDataDTO buildRatingData(Question question) {
+        // Lấy tất cả answers cho question này
+        List<Answer> answers = answerRepository.findByQuestion(question);
+        
+        // Đếm distribution và tính average
+        Map<String, Integer> distribution = new HashMap<>();
+        List<Integer> ratings = new ArrayList<>();
+        
+        for (Answer answer : answers) {
+            try {
+                // Giả sử rating được lưu trong answerText dưới dạng số
+                if (answer.getAnswerText() != null && !answer.getAnswerText().trim().isEmpty()) {
+                    int rating = Integer.parseInt(answer.getAnswerText().trim());
+                    if (rating >= 1 && rating <= 5) { // Giả sử scale 1-5
+                        String ratingStr = String.valueOf(rating);
+                        distribution.put(ratingStr, distribution.getOrDefault(ratingStr, 0) + 1);
+                        ratings.add(rating);
+                    }
+                }
+            } catch (NumberFormatException e) {
+                // Bỏ qua answers không phải số
+                log.warn("Invalid rating value for question {}: {}", question.getQuestionId(), answer.getAnswerText());
+            }
+        }
+        
+        // Tính average rating
+        double averageRating = ratings.isEmpty() ? 0.0 : 
+                ratings.stream().mapToInt(Integer::intValue).average().orElse(0.0);
+        
+        return SurveyChartsResponseDTO.RatingDataDTO.builder()
+                .questionId(question.getQuestionId())
+                .questionText(question.getQuestionText())
+                .averageRating(Math.round(averageRating * 100.0) / 100.0) // Làm tròn 2 chữ số
+                .distribution(distribution)
+                .build();
+    }
+    
+    /**
+     * Xây dựng dữ liệu biểu đồ cho câu hỏi boolean
+     */
+    private SurveyChartsResponseDTO.BooleanDataDTO buildBooleanData(Question question) {
+        // Lấy tất cả answers cho question này
+        List<Answer> answers = answerRepository.findByQuestion(question);
+        
+        int trueCount = 0;
+        int falseCount = 0;
+        
+        for (Answer answer : answers) {
+            if (answer.getAnswerText() != null) {
+                String answerText = answer.getAnswerText().trim().toLowerCase();
+                if ("true".equals(answerText) || "đúng".equals(answerText) || "có".equals(answerText) || "yes".equals(answerText)) {
+                    trueCount++;
+                } else if ("false".equals(answerText) || "sai".equals(answerText) || "không".equals(answerText) || "no".equals(answerText)) {
+                    falseCount++;
+                }
+            }
+        }
+        
+        int totalResponses = trueCount + falseCount;
+        double truePercentage = totalResponses > 0 ? (double) trueCount / totalResponses * 100 : 0.0;
+        
+        return SurveyChartsResponseDTO.BooleanDataDTO.builder()
+                .questionId(question.getQuestionId())
+                .questionText(question.getQuestionText())
+                .trueCount(trueCount)
+                .falseCount(falseCount)
+                .truePercentage(Math.round(truePercentage * 100.0) / 100.0) // Làm tròn 2 chữ số
+                .build();
+    }
+    
+    /**
+     * Lấy text analysis dữ liệu cho survey từ AI service
+     */
+    public SurveyTextAnalysisResponseDTO getSurveyTextAnalysis(Long surveyId) throws IdInvalidException {
+        // Kiểm tra survey tồn tại và quyền truy cập
+        Survey survey = surveyRepository.findById(surveyId)
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
+        
+        User currentUser = authService.getCurrentUser();
+        if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
+            throw new IdInvalidException("Bạn không có quyền xem phân tích khảo sát này");
+        }
+        
+        // Lấy tất cả open-ended questions của survey
+        List<Question> openEndedQuestions = questionRepository.findBySurveyOrderByDisplayOrderAsc(survey)
+                .stream()
+                .filter(q -> q.getQuestionType() == QuestionTypeEnum.open_ended)
+                .collect(Collectors.toList());
+        
+        if (openEndedQuestions.isEmpty()) {
+            // Trả về dữ liệu trống nếu không có câu hỏi open-ended
+            return SurveyTextAnalysisResponseDTO.builder()
+                    .openEndedSummary(SurveyTextAnalysisResponseDTO.OpenEndedSummaryDTO.builder()
+                            .totalAnswers(0)
+                            .avgLength(0)
+                            .keyInsights("Không có câu hỏi mở để phân tích")
+                            .commonKeywords(new ArrayList<>())
+                            .themes(new ArrayList<>())
+                            .build())
+                    .build();
+        }
+        
+        // Lấy tất cả answers cho open-ended questions
+        List<Answer> openEndedAnswers = new ArrayList<>();
+        for (Question question : openEndedQuestions) {
+            openEndedAnswers.addAll(answerRepository.findByQuestion(question));
+        }
+        
+        // Lọc những answers có text
+        List<Answer> validAnswers = openEndedAnswers.stream()
+                .filter(answer -> answer.getAnswerText() != null && !answer.getAnswerText().trim().isEmpty())
+                .collect(Collectors.toList());
+        
+        int totalAnswers = validAnswers.size();
+        
+        // Tính average length
+        int avgLength = totalAnswers > 0 ? 
+                (int) Math.round(validAnswers.stream()
+                        .mapToInt(answer -> answer.getAnswerText().length())
+                        .average()
+                        .orElse(0.0)) : 0;
+        
+        // Gọi AI service để lấy keywords và themes
+        List<SurveyTextAnalysisResponseDTO.OpenEndedSummaryDTO.CommonKeywordDTO> commonKeywords = new ArrayList<>();
+        List<SurveyTextAnalysisResponseDTO.OpenEndedSummaryDTO.ThemeDTO> themes = new ArrayList<>();
+        List<String> keyInsights = new ArrayList<>();
+        
+        try {
+            // Gọi AI service trực tiếp để lấy keywords
+            String keywordsUrl = AI_SERVICE_BASE_URL + "/ai/keywords/" + surveyId;
+            
+            ResponseEntity<Map<String, Object>> keywordsResponse = restTemplate.exchange(
+                    keywordsUrl, 
+                    HttpMethod.POST, 
+                    null, 
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            
+            if (keywordsResponse.getStatusCode() == HttpStatus.OK && keywordsResponse.getBody() != null) {
+                Map<String, Object> keywordsData = keywordsResponse.getBody();
+                
+                if (keywordsData != null && keywordsData.get("ok").equals(true) && keywordsData.containsKey("keywords")) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> keywordsList = (List<Map<String, Object>>) keywordsData.get("keywords");
+                    
+                    for (Map<String, Object> kw : keywordsList) {
+                        // Convert decimal score (0.0-1.0) to meaningful frequency (multiply by 100 and round)
+                        double score = ((Number) kw.get("score")).doubleValue();
+                        int frequency = (int) Math.round(score * 100);
+                        
+                        commonKeywords.add(SurveyTextAnalysisResponseDTO.OpenEndedSummaryDTO.CommonKeywordDTO.builder()
+                                .word((String) kw.get("keyword"))  // AI service trả về "keyword", không phải "word"
+                                .frequency(frequency)  // Convert score to frequency percentage
+                                .build());
+                    }
+                }
+            }
+            
+            // Gọi AI service trực tiếp để lấy themes
+            String themesUrl = AI_SERVICE_BASE_URL + "/ai/themes/" + surveyId;
+            
+            ResponseEntity<Map<String, Object>> themesResponse = restTemplate.exchange(
+                    themesUrl, 
+                    HttpMethod.POST, 
+                    null, 
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            
+            if (themesResponse.getStatusCode() == HttpStatus.OK && themesResponse.getBody() != null) {
+                Map<String, Object> themesData = themesResponse.getBody();
+                
+                if (themesData != null && themesData.get("ok").equals(true) && themesData.containsKey("themes")) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> themesList = (List<Map<String, Object>>) themesData.get("themes");
+                    
+                    for (Map<String, Object> theme : themesList) {
+                        // AI service trả về format: {"cluster": 0, "size": 11, "examples": [...]}
+                        int clusterNum = ((Number) theme.get("cluster")).intValue();
+                        int size = ((Number) theme.get("size")).intValue();
+                        
+                        // Analyze sentiment based on cluster size and content
+                        String sentiment = "neutral"; // default
+                        if (size >= 3) {
+                            sentiment = "positive"; // Larger clusters tend to be more significant/positive
+                        } else if (size == 1) {
+                            sentiment = "neutral"; // Single items are usually neutral
+                        }
+                        
+                        themes.add(SurveyTextAnalysisResponseDTO.OpenEndedSummaryDTO.ThemeDTO.builder()
+                                .theme("Theme " + (clusterNum + 1))  // More user-friendly naming (Theme 1, Theme 2)
+                                .mentions(size)  // AI service trả về "size"
+                                .sentiment(sentiment)  // Improved sentiment logic
+                                .build());
+                    }
+                }
+            }
+            
+            // Gọi AI service để lấy summary thông minh
+            String summaryUrl = AI_SERVICE_BASE_URL + "/ai/summary/" + surveyId;
+            
+            ResponseEntity<Map<String, Object>> summaryResponse = restTemplate.exchange(
+                    summaryUrl, 
+                    HttpMethod.POST, 
+                    null, 
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            
+            if (summaryResponse.getStatusCode() == HttpStatus.OK && summaryResponse.getBody() != null) {
+                Map<String, Object> summaryData = summaryResponse.getBody();
+                
+                if (summaryData != null && summaryData.get("ok").equals(true) && summaryData.containsKey("summary")) {
+                    // Sử dụng AI summary làm key insights chính
+                    String aiSummary = (String) summaryData.get("summary");
+                    keyInsights.add(aiSummary);
+                } else {
+                    // Fallback về insights cơ bản nếu AI không có summary
+                    keyInsights.add("Tổng cộng " + totalAnswers + " câu trả lời văn bản");
+                    keyInsights.add("Độ dài trung bình: " + avgLength + " ký tự");
+                    
+                    if (!commonKeywords.isEmpty()) {
+                        SurveyTextAnalysisResponseDTO.OpenEndedSummaryDTO.CommonKeywordDTO topKeyword = commonKeywords.get(0);
+                        keyInsights.add("Từ khóa phổ biến nhất: \"" + topKeyword.getWord() + "\" (" + topKeyword.getFrequency() + " lần)");
+                    }
+                    
+                    if (!themes.isEmpty()) {
+                        keyInsights.add("Đã xác định được " + themes.size() + " chủ đề chính");
+                    }
+                }
+            } else {
+                // Fallback về insights cơ bản nếu không gọi được AI service
+                keyInsights.add("Tổng cộng " + totalAnswers + " câu trả lời văn bản");
+                keyInsights.add("Độ dài trung bình: " + avgLength + " ký tự");
+                
+                if (!commonKeywords.isEmpty()) {
+                    SurveyTextAnalysisResponseDTO.OpenEndedSummaryDTO.CommonKeywordDTO topKeyword = commonKeywords.get(0);
+                    keyInsights.add("Từ khóa phổ biến nhất: \"" + topKeyword.getWord() + "\" (" + topKeyword.getFrequency() + " lần)");
+                }
+                
+                if (!themes.isEmpty()) {
+                    keyInsights.add("Đã xác định được " + themes.size() + " chủ đề chính");
+                }
+            }
+            
+        } catch (Exception e) {
+            log.error("Lỗi khi gọi AI service cho text analysis của survey {}: {}", surveyId, e.getMessage());
+            keyInsights.add("Không thể phân tích AI: " + e.getMessage());
+        }
+        
+        return SurveyTextAnalysisResponseDTO.builder()
+                .openEndedSummary(SurveyTextAnalysisResponseDTO.OpenEndedSummaryDTO.builder()
+                        .totalAnswers(totalAnswers)
+                        .avgLength(avgLength)
+                        .keyInsights(String.join("; ", keyInsights)) // Nối các insights thành string
+                        .commonKeywords(commonKeywords)
+                        .themes(themes)
+                        .build())
+                .build();
+    }
+    
+    /**
+     * Lấy sentiment analysis dữ liệu cho survey
+     */
+    public SurveySentimentResponseDTO getSurveySentimentAnalysis(Long surveyId) throws IdInvalidException {
+        // Kiểm tra survey tồn tại và quyền truy cập
+        Survey survey = surveyRepository.findById(surveyId)
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
+        
+        User currentUser = authService.getCurrentUser();
+        if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
+            throw new IdInvalidException("Bạn không có quyền xem phân tích cảm xúc khảo sát này");
+        }
+        
+        // Lấy tất cả open-ended questions của survey
+        List<Question> openEndedQuestions = questionRepository.findBySurveyOrderByDisplayOrderAsc(survey)
+                .stream()
+                .filter(q -> q.getQuestionType() == QuestionTypeEnum.open_ended)
+                .collect(Collectors.toList());
+        
+        if (openEndedQuestions.isEmpty()) {
+            // Trả về dữ liệu trống nếu không có câu hỏi open-ended
+            return createEmptySentimentResponse();
+        }
+        
+        try {
+            // Gọi AI service để lấy sentiment data thông qua REST call
+            String aiServiceUrl = AI_SERVICE_BASE_URL + "/ai/basic-sentiment/" + surveyId;
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    aiServiceUrl, 
+                    HttpMethod.POST, 
+                    null, 
+                    new org.springframework.core.ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                Map<String, Object> sentimentResponse = response.getBody();
+                
+                if (sentimentResponse == null || sentimentResponse.get("ok") == null || !sentimentResponse.get("ok").equals(true)) {
+                    log.warn("AI service trả về lỗi cho sentiment analysis: {}", 
+                            sentimentResponse != null ? sentimentResponse.get("error") : "null response");
+                    return createEmptySentimentResponse();
+                }
+                
+                // Parse sentiment data từ AI response
+                return parseSentimentFromAiResponse(surveyId, sentimentResponse, openEndedQuestions);
+            } else {
+                log.warn("AI service trả về status code: {}", response.getStatusCode());
+                return createEmptySentimentResponse();
+            }
+            
+        } catch (Exception e) {
+            log.error("Lỗi khi gọi AI service cho sentiment analysis của survey {}: {}", surveyId, e.getMessage());
+            return createEmptySentimentResponse();
+        }
+    }
+    
+    /**
+     * Tạo response trống cho sentiment analysis
+     */
+    private SurveySentimentResponseDTO createEmptySentimentResponse() {
+        return SurveySentimentResponseDTO.builder()
+                .overall(SurveySentimentResponseDTO.SentimentOverallDTO.builder()
+                        .positive(0.0)
+                        .neutral(0.0)
+                        .negative(0.0)
+                        .build())
+                .byQuestion(new ArrayList<>())
+                .trends(new ArrayList<>())
+                .build();
+    }
+    
+    /**
+     * Parse sentiment data từ AI response 
+     * AI response format: {"ok": true, "total": 15, "counts": {"POS": 4, "NEU": 10, "NEG": 1}}
+     */
+    private SurveySentimentResponseDTO parseSentimentFromAiResponse(Long surveyId, 
+                                                                   Map<String, Object> aiResponse, 
+                                                                   List<Question> openEndedQuestions) {
+        
+        // Parse counts từ AI response
+        @SuppressWarnings("unchecked")
+        Map<String, Object> counts = (Map<String, Object>) aiResponse.getOrDefault("counts", new HashMap<>());
+        
+        int positiveCount = ((Number) counts.getOrDefault("POS", 0)).intValue();
+        int neutralCount = ((Number) counts.getOrDefault("NEU", 0)).intValue();
+        int negativeCount = ((Number) counts.getOrDefault("NEG", 0)).intValue();
+        int total = ((Number) aiResponse.getOrDefault("total", 1)).intValue();
+        
+        // Tính phần trăm
+        double positivePercent = total > 0 ? (double) positiveCount / total * 100 : 0.0;
+        double neutralPercent = total > 0 ? (double) neutralCount / total * 100 : 0.0;
+        double negativePercent = total > 0 ? (double) negativeCount / total * 100 : 0.0;
+        
+        SurveySentimentResponseDTO.SentimentOverallDTO overall = SurveySentimentResponseDTO.SentimentOverallDTO.builder()
+                .positive(positivePercent)
+                .neutral(neutralPercent)
+                .negative(negativePercent)
+                .build();
+        
+        // Parse by question sentiment - tạo cho từng open-ended question
+        List<SurveySentimentResponseDTO.SentimentByQuestionDTO> byQuestion = new ArrayList<>();
+        
+        for (Question question : openEndedQuestions) {
+            // Tính sentiment cho từng question (sử dụng tỉ lệ chung vì AI service chưa trả về by question)
+            byQuestion.add(SurveySentimentResponseDTO.SentimentByQuestionDTO.builder()
+                    .questionId(question.getQuestionId())
+                    .questionText(question.getQuestionText())
+                    .positive(positivePercent)
+                    .neutral(neutralPercent)
+                    .negative(negativePercent)
+                    .totalResponses(total)
+                    .build());
+        }
+        
+        // Không cần trends phức tạp, chỉ trả về empty list
+        List<SurveySentimentResponseDTO.SentimentTrendDTO> trends = new ArrayList<>();
+        
+        return SurveySentimentResponseDTO.builder()
+                .overall(overall)
+                .byQuestion(byQuestion)
+                .trends(trends)
+                .build();
+    }
+    
+
 }

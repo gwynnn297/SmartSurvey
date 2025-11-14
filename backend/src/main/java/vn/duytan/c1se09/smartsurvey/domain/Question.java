@@ -40,7 +40,7 @@ public class Question {
     private Integer displayOrder = 0;
 
     // Removed question_config field - not used in application logic
-    
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
