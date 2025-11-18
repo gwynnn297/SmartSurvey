@@ -5,6 +5,8 @@ import { surveyService } from '../../services/surveyService';
 import { questionService, optionService } from '../../services/questionSurvey';
 import { aiSurveyService } from '../../services/aiSurveyService';
 import './CreateSurvey.css';
+import '../Response/ResponseFormPage.css';
+import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
 
 // 🧩 DND Kit
 import {
@@ -291,6 +293,336 @@ function SortableSidebarItem({ id, index, text, isActive, onSelect, onDuplicate,
     );
 }
 
+// 🎯 Preview Form Content Component (without MainLayout)
+function ResponseFormContent({ survey: surveyProp, isView = true }) {
+    const [responses, setResponses] = useState({});
+    const [errors, setErrors] = useState({});
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    );
+
+    const activeSurvey = surveyProp;
+
+    // Initialize ranking questions with their options
+    useEffect(() => {
+        if (!activeSurvey || !activeSurvey.questions) return;
+
+        setResponses(prev => {
+            const newResponses = { ...prev };
+            activeSurvey.questions.forEach(q => {
+                if (q.type === 'ranking' && !newResponses[q.id] && q.options && q.options.length > 0) {
+                    newResponses[q.id] = q.options.map(opt => opt.id);
+                }
+            });
+            return newResponses;
+        });
+    }, [activeSurvey]);
+
+    const handleChange = (questionId, value, multiple = false) => {
+        if (isView) return; // Disable interaction in preview mode
+        setResponses((prev) => {
+            if (multiple) {
+                const current = prev[questionId] || [];
+                return {
+                    ...prev,
+                    [questionId]: current.includes(value)
+                        ? current.filter((v) => v !== value)
+                        : [...current, value],
+                };
+            }
+            return { ...prev, [questionId]: value };
+        });
+    };
+
+    const renderQuestion = (q) => {
+        switch (q.type) {
+            case "multiple-choice-single":
+                return (q.options || []).map((opt, i) => (
+                    <label key={i} className="option-label">
+                        <input
+                            type="radio"
+                            name={`question_${q.id}`}
+                            value={String(opt.id || opt)}
+                            checked={String(responses[q.id]) === String(opt.id || opt)}
+                            onChange={() => handleChange(q.id, String(opt.id || opt))}
+                            disabled={isView}
+                        />
+                        <span>{opt.text || opt}</span>
+                    </label>
+                ));
+
+            case "multiple-choice-multiple":
+                return (q.options || []).map((opt, i) => (
+                    <label key={i} className="option-label">
+                        <input
+                            type="checkbox"
+                            name={`question_${q.id}`}
+                            value={String(opt.id || opt)}
+                            checked={(responses[q.id] || []).map(String).includes(String(opt.id || opt))}
+                            onChange={() => handleChange(q.id, String(opt.id || opt), true)}
+                            disabled={isView}
+                        />
+                        <span>{opt.text || opt}</span>
+                    </label>
+                ));
+
+            case "boolean":
+                return (q.options || []).map((opt, i) => (
+                    <label key={i} className="option-label">
+                        <input
+                            type="radio"
+                            name={`question_${q.id}`}
+                            value={String(opt.id || opt)}
+                            checked={String(responses[q.id]) === String(opt.id || opt)}
+                            onChange={() => handleChange(q.id, String(opt.id || opt))}
+                            disabled={isView}
+                        />
+                        <span>{opt.text || opt}</span>
+                    </label>
+                ));
+
+            case "ranking":
+                const rankingOptionIds = responses[q.id] || [];
+                const rankingOptionsList = rankingOptionIds.map(id =>
+                    q.options?.find(opt => String(opt.id) === String(id))
+                ).filter(Boolean);
+
+                if (!rankingOptionsList || rankingOptionsList.length === 0) {
+                    return <div className="ranking-hint">Chưa có lựa chọn để xếp hạng</div>;
+                }
+                return (
+                    <div className="ranking-list">
+                        <p className="ranking-hint">Kéo thả để sắp xếp các lựa chọn theo thứ tự ưu tiên</p>
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={(event) => {
+                                if (isView) return;
+                                const { active, over } = event;
+                                if (!over || active.id === over.id) return;
+
+                                const oldIndex = rankingOptionsList.findIndex(opt => String(opt.id) === String(active.id));
+                                const newIndex = rankingOptionsList.findIndex(opt => String(opt.id) === String(over.id));
+
+                                const newOrder = arrayMove(rankingOptionsList, oldIndex, newIndex);
+                                handleChange(q.id, newOrder.map(opt => opt.id));
+                            }}
+                        >
+                            <SortableContext
+                                items={rankingOptionsList.map(opt => String(opt.id))}
+                                strategy={verticalListSortingStrategy}
+                            >
+                                {rankingOptionsList.map((opt, i) => (
+                                    <SortableRankingItemPreview
+                                        key={opt.id || i}
+                                        id={String(opt.id)}
+                                        index={i}
+                                        text={opt.text}
+                                    />
+                                ))}
+                            </SortableContext>
+                        </DndContext>
+                    </div>
+                );
+
+            case "open-ended":
+            case "open-text":
+                return (
+                    <textarea
+                        rows="4"
+                        placeholder="Nhập câu trả lời..."
+                        value={responses[q.id] || ""}
+                        onChange={(e) => handleChange(q.id, e.target.value)}
+                        disabled={isView}
+                    />
+                );
+
+            case "rating-scale":
+                return (
+                    <div className="rating-scale">
+                        {(q.scale || []).map((num) => (
+                            <label key={num} className="rating-circle">
+                                <input
+                                    type="radio"
+                                    name={`question_${q.id}`}
+                                    value={num}
+                                    checked={responses[q.id] === num.toString()}
+                                    onChange={() => handleChange(q.id, num.toString())}
+                                    disabled={isView}
+                                />
+                                <div>{num}</div>
+                            </label>
+                        ))}
+                    </div>
+                );
+
+            case "date_time":
+                const dateTimeValue = responses[q.id] || { date: '', time: '' };
+                const dateValue = typeof dateTimeValue === 'string'
+                    ? (dateTimeValue.match(/(\d{4}-\d{2}-\d{2})/) || ['', ''])[1]
+                    : dateTimeValue.date || '';
+                const timeValue = typeof dateTimeValue === 'string'
+                    ? (dateTimeValue.match(/(\d{2}:\d{2})/) || ['', ''])[1]
+                    : dateTimeValue.time || '';
+
+                return (
+                    <div className="date-time-inputs">
+                        <input
+                            type="date"
+                            value={dateValue}
+                            onChange={(e) => {
+                                const newTime = typeof dateTimeValue === 'string'
+                                    ? (dateTimeValue.match(/(\d{2}:\d{2})/) || ['', ''])[1]
+                                    : dateTimeValue.time || '';
+                                handleChange(q.id, { date: e.target.value, time: newTime });
+                            }}
+                            disabled={isView}
+                        />
+                        <input
+                            type="time"
+                            value={timeValue}
+                            onChange={(e) => {
+                                const newDate = typeof dateTimeValue === 'string'
+                                    ? (dateTimeValue.match(/(\d{4}-\d{2}-\d{2})/) || ['', ''])[1]
+                                    : dateTimeValue.date || '';
+                                handleChange(q.id, { date: newDate, time: e.target.value });
+                            }}
+                            disabled={isView}
+                        />
+                    </div>
+                );
+
+            case "file_upload":
+                const selectedFile = responses[q.id] instanceof File ? responses[q.id] : null;
+                return (
+                    <div className="file-upload">
+                        <div className="upload-zone">
+                            <label htmlFor={`file-upload-${q.id}`}>
+                                <i className="fa-solid fa-cloud-arrow-up upload-icon"></i>
+                                <p className="upload-text">
+                                    <span>Nhấp hoặc kéo thả file vào đây</span>
+                                </p>
+                                <p className="upload-hint">
+                                    Định dạng: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, ZIP, RAR (Tối đa 10MB)
+                                </p>
+                            </label>
+                            <input
+                                id={`file-upload-${q.id}`}
+                                type="file"
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                        handleChange(q.id, file);
+                                    }
+                                }}
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+                                disabled={isView}
+                            />
+                        </div>
+                        {selectedFile && (
+                            <div className="file-preview">
+                                <i className="fa-solid fa-file"></i>
+                                <span className="file-name">{selectedFile.name}</span>
+                                <span className="file-size">({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+                                <button
+                                    type="button"
+                                    className="file-remove"
+                                    onClick={() => handleChange(q.id, null)}
+                                    disabled={isView}
+                                >
+                                    <i className="fa-solid fa-times"></i>
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                );
+
+            default:
+                return <div>Unknown question type: {q.type}</div>;
+        }
+    };
+
+    if (!activeSurvey) {
+        return <div style={{ padding: 24, textAlign: 'center' }}>Không tìm thấy khảo sát.</div>;
+    }
+
+    return (
+        <div className="response-container" style={{ background: "radial-gradient(130% 140% at 10% 10%, rgba(59, 130, 246, 0.32), transparent 55%), radial-gradient(120% 120% at 90% 20%, rgba(139, 92, 246, 0.35), transparent 45%), linear-gradient(135deg, #eef2ff 0%, #f8fafc 40%, #eef2ff 100%)" }}>
+            <div className="survey-card">
+                <form onSubmit={(e) => { e.preventDefault(); }}>
+                    <div className="survey-header">
+                        <img className="logo-smart-survey" src={logoSmartSurvey} alt="logoSmartSurvey" />
+                        <h1>{activeSurvey.title}</h1>
+                        <p>{activeSurvey.description}</p>
+                    </div>
+
+                    {activeSurvey.questions.map((q) => (
+                        <div
+                            key={q.id}
+                            className={`question-card ${errors[q.id] ? "error" : ""}`}
+                        >
+                            <h3>
+                                {q.text}{" "}
+                                {q.is_required && <span className="required">*</span>}
+                            </h3>
+                            {renderQuestion(q)}
+                            {errors[q.id] && (
+                                <p className="error-message">{errors[q.id]}</p>
+                            )}
+                        </div>
+                    ))}
+
+                    <div className="form-footer">
+                        <button
+                            type="button"
+                            disabled
+                            style={{
+                                pointerEvents: "none",
+                                cursor: "not-allowed",
+                                opacity: 0.6
+                            }}
+                        >
+                            Xem trước (Chế độ chỉ xem)
+                        </button>
+                        <p className="note">
+                            Đây là chế độ xem trước. Phản hồi sẽ không được lưu.
+                        </p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+}
+
+// Sortable Ranking Item for Preview
+function SortableRankingItemPreview({ id, index, text }) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} className="ranking-response-item">
+            <div className="ranking-handle-response" {...attributes} {...listeners}>
+                <i className="fa-solid fa-grip-vertical" aria-hidden="true"></i>
+            </div>
+            <span className="ranking-position">{index + 1}</span>
+            <span className="ranking-text">{text}</span>
+        </div>
+    );
+}
+
 // 🎯 Sortable Ranking Option Component
 function SortableRankingOption({ id, index, option, error, onTextChange, onDelete, disabled, onMoveUp, onMoveDown, totalCount }) {
     const {
@@ -379,6 +711,9 @@ const CreateSurvey = () => {
     const [autoSaveStatus, setAutoSaveStatus] = useState('idle'); // idle, saving, saved, error
     const autoSaveTimeoutRef = React.useRef(null);
     const [showMobileView, setShowMobileView] = useState(false);
+    const [showPreviewModal, setShowPreviewModal] = useState(false);
+    const [previewMode, setPreviewMode] = useState('desktop'); // 'desktop' or 'mobile'
+    const [showPreviewDropdown, setShowPreviewDropdown] = useState(false);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const draftStorageKey = React.useRef(null); // Key để lưu draft vào localStorage
     const [showDraftModal, setShowDraftModal] = useState(false);
@@ -860,6 +1195,23 @@ const CreateSurvey = () => {
             }
         };
     }, [surveyData, questions]);
+
+    // Đóng dropdown khi click bên ngoài
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (showPreviewDropdown && !event.target.closest('.preview-dropdown-wrapper')) {
+                setShowPreviewDropdown(false);
+            }
+        };
+
+        if (showPreviewDropdown) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showPreviewDropdown]);
 
     useEffect(() => {
         loadCategories();
@@ -1442,14 +1794,12 @@ const CreateSurvey = () => {
         };
     };
 
-    const handlePreview = () => {
-        // Đánh dấu là đang điều hướng tới preview (không hiển thị modal khi quay lại)
-        isNavigatingToPreviewOrShare.current = true;
-        sessionStorage.setItem('returning_from_preview', 'true');
+    const handlePreview = (mode = 'desktop') => {
         // Lưu draft vào localStorage trước khi xem trước
         saveDraftToLocalStorage();
-        const preview = buildPreviewSurvey();
-        navigate('/response-preview', { state: { survey: preview } });
+        setPreviewMode(mode);
+        setShowPreviewModal(true);
+        setShowPreviewDropdown(false);
     };
 
     const handleShareSurvey = async () => {
@@ -1494,7 +1844,11 @@ const CreateSurvey = () => {
                 latestSurvey = await surveyService.updateSurvey(surveyId, { status: 'published' }) || savedSurvey;
 
                 // Lưu questions và options vào database
-                await saveQuestionsAndOptions(surveyId);
+                const savedQuestions = await saveQuestionsAndOptions(surveyId);
+                // Cập nhật state với questions có ID thực từ server
+                if (savedQuestions && savedQuestions.length > 0) {
+                    setQuestions(savedQuestions);
+                }
             } else {
                 // Cập nhật survey hiện có thành published và lưu questions/options mới nhất
                 latestSurvey = await surveyService.updateSurvey(surveyId, {
@@ -1674,7 +2028,11 @@ const CreateSurvey = () => {
                 surveyId = savedSurvey.id;
 
                 // Lưu questions và options
-                await saveQuestionsAndOptions(surveyId);
+                const savedQuestions = await saveQuestionsAndOptions(surveyId);
+                // Cập nhật state với questions có ID thực từ server
+                if (savedQuestions && savedQuestions.length > 0) {
+                    setQuestions(savedQuestions);
+                }
 
                 // Cập nhật editSurveyId
                 setEditSurveyId(surveyId);
@@ -1708,8 +2066,9 @@ const CreateSurvey = () => {
     };
 
     const saveQuestionsAndOptions = async (surveyId) => {
-        if (questions.length === 0) return;
+        if (questions.length === 0) return [];
 
+        const updatedQuestions = [];
         for (const question of questions) {
             const backendType = mapTypeToBackend(question.question_type);
             const questionPayload = {
@@ -1725,6 +2084,7 @@ const CreateSurvey = () => {
             }
 
             // Tạo options cho tất cả các loại câu hỏi cần options
+            const updatedOptions = [];
             if (needsOptions(question.question_type) && question.options?.length > 0) {
                 for (const option of question.options) {
                     if (option.option_text && option.option_text.trim()) {
@@ -1733,11 +2093,31 @@ const CreateSurvey = () => {
                             optionText: option.option_text
                         };
 
-                        await optionService.createOption(optionPayload);
+                        const savedOption = await optionService.createOption(optionPayload);
+                        if (savedOption && savedOption.id) {
+                            updatedOptions.push({
+                                id: savedOption.id,
+                                option_text: savedOption.optionText
+                            });
+                        }
                     }
                 }
             }
+
+            // Trả về question đã được normalize với ID thực
+            const normalized = normalizeQuestionData({
+                id: savedQuestion.id,
+                question_text: savedQuestion.questionText,
+                question_type: savedQuestion.questionType,
+                is_required: savedQuestion.isRequired ?? true,
+                options: updatedOptions,
+                choice_type: question.choice_type,
+                rating_scale: question.rating_scale
+            });
+            updatedQuestions.push(normalized);
         }
+
+        return updatedQuestions;
     };
 
     return (
@@ -1822,26 +2202,41 @@ const CreateSurvey = () => {
                                 )}
                             </div>
                         )}
-                        <button
-                            className="btn-view"
-                            type="button"
-                            onClick={handlePreview}
-                            disabled={questions.length === 0}
-                            title="Xem trước khảo sát"
-                        >
-                            <i className="fa-regular fa-eye" aria-hidden="true"></i>
-                            <span> Xem trước</span>
-                        </button>
-                        <button
-                            className={`btn-mobile-view ${showMobileView ? 'active' : ''}`}
-                            type="button"
-                            onClick={() => setShowMobileView(!showMobileView)}
-                            disabled={questions.length === 0}
-                            title="Xem trước trên Mobile"
-                        >
-                            <i className="fa-solid fa-mobile-screen-button" aria-hidden="true"></i>
-                            <span> Mobile</span>
-                        </button>
+                        <div className="preview-dropdown-wrapper">
+                            <button
+                                className="btn-view"
+                                type="button"
+                                onClick={() => setShowPreviewDropdown(!showPreviewDropdown)}
+                                disabled={questions.length === 0}
+                                title="Xem trước khảo sát"
+                            >
+                                <i className="fa-regular fa-eye" aria-hidden="true"></i>
+                                <span> Xem trước</span>
+                                <i className="fa-solid fa-chevron-down" style={{ marginLeft: '8px', fontSize: '0.75rem' }}></i>
+                            </button>
+                            {showPreviewDropdown && (
+                                <div className="preview-dropdown-menu">
+                                    <button
+                                        type="button"
+                                        className="preview-dropdown-item"
+                                        onClick={() => handlePreview('desktop')}
+                                        disabled={questions.length === 0}
+                                    >
+                                        <i className="fa-solid fa-laptop" aria-hidden="true"></i>
+                                        <span>Desktop</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="preview-dropdown-item"
+                                        onClick={() => handlePreview('mobile')}
+                                        disabled={questions.length === 0}
+                                    >
+                                        <i className="fa-solid fa-mobile-screen-button" aria-hidden="true"></i>
+                                        <span>Mobile</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                         <button
                             className="btn-report"
                             type="button"
@@ -2445,6 +2840,241 @@ const CreateSurvey = () => {
                     </aside>
                 </div>
             </div>
+
+            {/* Preview Modal - Desktop View */}
+            {showPreviewModal && (
+                <div className="mobile-view-overlay" onClick={() => setShowPreviewModal(false)}>
+                    <div className={`preview-modal-container ${previewMode === 'mobile' ? 'preview-mobile-mode' : ''}`} onClick={(e) => e.stopPropagation()}>
+                        <div className="mobile-view-header">
+                            <h3>Xem trước khảo sát - {previewMode === 'mobile' ? 'Mobile' : 'Laptop'}</h3>
+                            <button
+                                className="mobile-view-close"
+                                onClick={() => setShowPreviewModal(false)}
+                                aria-label="Đóng xem trước"
+                            >
+                                <i className="fa-solid fa-xmark" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div className={`preview-modal-content ${previewMode === 'mobile' ? 'preview-mobile-content' : ''}`}>
+                            {previewMode === 'desktop' ? (
+                                <div className="preview-form-wrapper">
+                                    <ResponseFormContent
+                                        survey={buildPreviewSurvey()}
+                                        isView={true}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="mobile-view-device">
+                                    <div className="mobile-view-frame">
+                                        <div className="mobile-view-content">
+                                            {(() => {
+                                                const preview = buildPreviewSurvey();
+                                                return (
+                                                    <div style={{ padding: '16px', background: '#fff', minHeight: '100vh' }}>
+                                                        <div style={{ textAlign: 'center', marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid #e5e7eb' }}>
+                                                            <h2 style={{ fontSize: '20px', fontWeight: '700', margin: '0 0 8px 0', color: '#1e293b' }}>
+                                                                {surveyData.title || 'Tiêu đề khảo sát'}
+                                                            </h2>
+                                                            {surveyData.description && (
+                                                                <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>
+                                                                    {surveyData.description}
+                                                                </p>
+                                                            )}
+                                                        </div>
+
+                                                        {preview.questions.map((q, idx) => (
+                                                            <div key={q.id || idx} style={{
+                                                                background: '#f8fafc',
+                                                                border: '1px solid #e2e8f0',
+                                                                borderRadius: '8px',
+                                                                padding: '16px',
+                                                                marginBottom: '16px'
+                                                            }}>
+                                                                <h3 style={{
+                                                                    fontSize: '16px',
+                                                                    fontWeight: '600',
+                                                                    margin: '0 0 12px 0',
+                                                                    color: '#1e293b'
+                                                                }}>
+                                                                    {q.text || 'Câu hỏi'}
+                                                                    {q.is_required && <span style={{ color: '#ef4444', marginLeft: '4px' }}>*</span>}
+                                                                </h3>
+
+                                                                {/* Render preview of question type */}
+                                                                {q.type === 'open-ended' && (
+                                                                    <textarea
+                                                                        disabled
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            padding: '12px',
+                                                                            border: '1px solid #cbd5e1',
+                                                                            borderRadius: '6px',
+                                                                            fontSize: '14px',
+                                                                            resize: 'vertical',
+                                                                            minHeight: '80px'
+                                                                        }}
+                                                                        placeholder="Nhập câu trả lời..."
+                                                                    />
+                                                                )}
+
+                                                                {(q.type === 'multiple-choice-single' || q.type === 'multiple-choice-multiple' || q.type === 'boolean') && q.options && (
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                        {q.options.map((opt, optIdx) => (
+                                                                            <label key={optIdx} style={{
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '10px',
+                                                                                cursor: 'pointer'
+                                                                            }}>
+                                                                                <input
+                                                                                    type={q.type === 'multiple-choice-multiple' ? 'checkbox' : 'radio'}
+                                                                                    disabled
+                                                                                    style={{ width: '18px', height: '18px' }}
+                                                                                />
+                                                                                <span style={{ fontSize: '14px', color: '#1e293b' }}>
+                                                                                    {typeof opt === 'string' ? opt : (opt.text || opt.id)}
+                                                                                </span>
+                                                                            </label>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+
+                                                                {q.type === 'ranking' && q.options && (
+                                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                                        {q.options.map((opt, optIdx) => (
+                                                                            <div key={optIdx} style={{
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '12px',
+                                                                                padding: '12px',
+                                                                                background: '#fff',
+                                                                                border: '1px solid #e2e8f0',
+                                                                                borderRadius: '6px'
+                                                                            }}>
+                                                                                <div style={{
+                                                                                    minWidth: '32px',
+                                                                                    height: '32px',
+                                                                                    background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
+                                                                                    borderRadius: '50%',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    justifyContent: 'center',
+                                                                                    color: '#fff',
+                                                                                    fontWeight: '600',
+                                                                                    fontSize: '14px'
+                                                                                }}>
+                                                                                    {optIdx + 1}
+                                                                                </div>
+                                                                                <span style={{ fontSize: '14px', color: '#1e293b', flex: 1 }}>
+                                                                                    {typeof opt === 'string' ? opt : (opt.text || opt.id)}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+
+                                                                {q.type === 'rating-scale' && (
+                                                                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                                                        {[1, 2, 3, 4, 5].map(num => (
+                                                                            <div key={num} style={{
+                                                                                width: '40px',
+                                                                                height: '40px',
+                                                                                borderRadius: '50%',
+                                                                                background: '#f1f5f9',
+                                                                                border: '2px solid #cbd5e1',
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                justifyContent: 'center',
+                                                                                cursor: 'pointer',
+                                                                                fontSize: '16px',
+                                                                                fontWeight: '600',
+                                                                                color: '#475569'
+                                                                            }}>
+                                                                                {num}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+
+                                                                {q.type === 'date_time' && (
+                                                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                                        <input
+                                                                            type="date"
+                                                                            disabled
+                                                                            style={{
+                                                                                flex: 1,
+                                                                                minWidth: '120px',
+                                                                                padding: '12px',
+                                                                                border: '1px solid #cbd5e1',
+                                                                                borderRadius: '6px',
+                                                                                fontSize: '14px',
+                                                                                background: '#f8fafc'
+                                                                            }}
+                                                                        />
+                                                                        <input
+                                                                            type="time"
+                                                                            disabled
+                                                                            style={{
+                                                                                flex: 1,
+                                                                                minWidth: '120px',
+                                                                                padding: '12px',
+                                                                                border: '1px solid #cbd5e1',
+                                                                                borderRadius: '6px',
+                                                                                fontSize: '14px',
+                                                                                background: '#f8fafc'
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                )}
+
+                                                                {q.type === 'file_upload' && (
+                                                                    <div style={{
+                                                                        border: '2px dashed #cbd5e1',
+                                                                        borderRadius: '12px',
+                                                                        padding: '24px',
+                                                                        textAlign: 'center',
+                                                                        background: '#f8fafc'
+                                                                    }}>
+                                                                        <i className="fa-solid fa-cloud-arrow-up" style={{ fontSize: '32px', color: '#94a3b8', marginBottom: '8px' }}></i>
+                                                                        <p style={{ fontSize: '14px', color: '#475569', margin: '0 0 4px 0', fontWeight: '600' }}>
+                                                                            Nhấp hoặc kéo thả file vào đây
+                                                                        </p>
+                                                                        <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
+                                                                            Định dạng: PDF, DOC, XLS, PPT, TXT, ZIP, RAR
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+
+                                                        <button
+                                                            type="button"
+                                                            disabled
+                                                            style={{
+                                                                width: '100%',
+                                                                padding: '14px',
+                                                                background: '#e5e7eb',
+                                                                border: 'none',
+                                                                borderRadius: '8px',
+                                                                fontSize: '16px',
+                                                                fontWeight: '600',
+                                                                color: '#9ca3af',
+                                                                cursor: 'not-allowed'
+                                                            }}
+                                                        >
+                                                            Gửi phản hồi
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Mobile View Preview Panel */}
             {showMobileView && (

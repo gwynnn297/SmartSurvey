@@ -1,6 +1,6 @@
 /* Individual Responses Page Styles */
 .individual-responses-container {
-    padding: 24px;
+    padding: 1.5rem 24px 24px 24px;
     background-color: #f8f9fc;
     min-height: 100vh;
 }

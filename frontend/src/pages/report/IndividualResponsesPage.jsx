@@ -4,6 +4,7 @@ import MainLayout from '../../layouts/MainLayout';
 import { individualResponseService } from '../../services/individualResponseService';
 import { surveyService } from '../../services/surveyService';
 import { questionService, optionService } from '../../services/questionSurvey';
+import ToolbarResult from '../../components/ToolbarResult';
 import './IndividualResponses.css';
 
 const IndividualResponsesPage = () => {
@@ -391,6 +392,11 @@ const IndividualResponsesPage = () => {
     if (!surveyId) {
         return (
             <MainLayout>
+                <ToolbarResult
+                    surveyId={surveyId}
+                    surveyTitle={surveyTitle}
+                    surveyDescription={surveyDescription}
+                />
                 <div className="individual-responses-container">
                     <div style={{ padding: '20px', textAlign: 'center' }}>
                         <p>Vui lòng chọn khảo sát để xem phản hồi.</p>
@@ -403,6 +409,11 @@ const IndividualResponsesPage = () => {
     if (loading && responses.length === 0) {
         return (
             <MainLayout>
+                <ToolbarResult
+                    surveyId={surveyId}
+                    surveyTitle={surveyTitle}
+                    surveyDescription={surveyDescription}
+                />
                 <div className="individual-responses-container">
                     <div style={{ padding: '20px', textAlign: 'center' }}>
                         <p>Đang tải dữ liệu...</p>
@@ -415,6 +426,11 @@ const IndividualResponsesPage = () => {
     if (error && responses.length === 0) {
         return (
             <MainLayout>
+                <ToolbarResult
+                    surveyId={surveyId}
+                    surveyTitle={surveyTitle}
+                    surveyDescription={surveyDescription}
+                />
                 <div className="individual-responses-container">
                     <div style={{ padding: '20px', textAlign: 'center', color: 'red' }}>
                         <p>{error}</p>
@@ -426,7 +442,13 @@ const IndividualResponsesPage = () => {
 
     return (
         <MainLayout>
+
             <div className="individual-responses-container">
+                <ToolbarResult
+                    surveyId={surveyId}
+                    surveyTitle={surveyInfo?.title || surveyTitle}
+                    surveyDescription={surveyInfo?.description || surveyDescription}
+                />
                 {/* Header */}
                 <div className="page-header">
                     <div className="header-content">

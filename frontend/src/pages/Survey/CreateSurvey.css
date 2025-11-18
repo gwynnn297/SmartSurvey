@@ -374,6 +374,7 @@
   align-items: center;
   gap: 0.25rem;
 }
+
 .btn-save {
   background: #78bcda;
   font-weight: 700;
@@ -386,10 +387,12 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
   cursor: pointer;
 }
+
 .btn-save:hover {
   transform: translateY(-2px);
   box-shadow: 0 34px 60px -26px rgba(79, 70, 229, 0.55);
 }
+
 .btn-share {
   background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 45%, #6366f1 100%);
   border: none;
@@ -436,14 +439,22 @@
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
 }
+
 .btn-report:hover {
   transform: translateY(-2px);
   box-shadow: 0 34px 60px -26px rgba(79, 70, 229, 0.55);
 }
+
 .btn-report:disabled {
   background: #9ca3af;
   cursor: not-allowed;
 }
+
+.preview-dropdown-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
 .btn-view {
   background: #6d7786;
   font-weight: 700;
@@ -455,9 +466,12 @@
   border-radius: 999px;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.btn-view:hover {
+.btn-view:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 34px 60px -26px rgba(79, 70, 229, 0.55);
 }
@@ -465,6 +479,74 @@
 .btn-view:disabled {
   background: #9ca3af;
   cursor: not-allowed;
+}
+
+.preview-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  min-width: 160px;
+  z-index: 1000;
+  overflow: hidden;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.preview-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: white;
+  color: #1e293b;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  text-align: left;
+}
+
+.preview-dropdown-item:first-child {
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+.preview-dropdown-item:last-child {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.preview-dropdown-item:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #6366f1;
+}
+
+.preview-dropdown-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.preview-dropdown-item i {
+  width: 18px;
+  text-align: center;
+  font-size: 1rem;
 }
 
 .survey-select {
@@ -1773,6 +1855,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -1866,6 +1949,75 @@
 }
 
 /* -----------------------------
+     Preview Modal (Desktop View)
+  ------------------------------*/
+.preview-modal-container {
+  background: white;
+  border-radius: 24px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease;
+  overflow: hidden;
+}
+
+.preview-modal-container.preview-mobile-mode {
+  max-width: 440px;
+}
+
+.preview-modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 0 0 24px 24px;
+}
+
+.preview-modal-content.preview-mobile-content {
+  padding: 2rem;
+  background: #f8fafc;
+}
+
+.preview-modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.preview-modal-content::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.preview-modal-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.preview-modal-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.preview-form-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+.preview-form-wrapper .response-container {
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+  border-radius: 0 0 24px 24px;
+}
+
+.preview-form-wrapper .survey-card {
+  box-shadow: none;
+  border-radius: 0 0 24px 24px;
+  margin: 0;
+  padding: 1.5rem;
+}
+
+/* -----------------------------
      Draft Modal
   ------------------------------*/
 .draft-modal-overlay {
@@ -1897,6 +2049,7 @@
     opacity: 0;
     transform: translateY(-20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);

@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import { dashboardReportService } from '../../services/dashboardReportService';
+import ToolbarResult from '../../components/ToolbarResult';
 
 import './DashboardReportPage.css';
 
@@ -456,7 +457,13 @@ export default function DashboardReportPage() {
 
     return (
         <MainLayout>
+
             <div className="report-container">
+                <ToolbarResult
+                    surveyId={surveyId}
+                    surveyTitle={surveyTitle}
+                    surveyDescription={surveyDescription}
+                />
                 <header className="report-header">
                     <div className="report-header__top">
                         <div className="report-header__titles">
@@ -634,7 +641,7 @@ export default function DashboardReportPage() {
                             Quay lại chỉnh sửa
                         </button>
                     )} */}
-                    <button className="btn blue" onClick={() => navigate('/report/details-statistic', {
+                    {/* <button className="btn blue" onClick={() => navigate('/report/details-statistic', {
                         state: surveyId ? { surveyId, surveyTitle, surveyDescription } : undefined
                     })}>
                         <span className="btn-icon" aria-hidden="true">📊</span>
@@ -651,7 +658,7 @@ export default function DashboardReportPage() {
                     })}>
                         <span className="btn-icon" aria-hidden="true">😊</span>
                         Phân tích cảm xúc
-                    </button>
+                    </button> */}
 
                 </section>
             </div>

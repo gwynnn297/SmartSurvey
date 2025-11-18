@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './HeaderComponent.css';
 import logoSmartSurvey from '../assets/logoSmartSurvey.png';
 const HeaderComponent = ({ showUserInfo = false, username }) => {
     const navigate = useNavigate();
     const [showDropdown, setShowDropdown] = useState(false);
+    const userInfoRef = useRef(null);
 
     const handleLogoClick = () => {
         // Kiểm tra xem user đã đăng nhập chưa
@@ -28,6 +29,23 @@ const HeaderComponent = ({ showUserInfo = false, username }) => {
         setShowDropdown(!showDropdown);
     };
 
+    // Đóng dropdown khi click bên ngoài
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (showDropdown && userInfoRef.current && !userInfoRef.current.contains(event.target)) {
+                setShowDropdown(false);
+            }
+        };
+
+        if (showDropdown) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showDropdown]);
+
     // Lấy username từ localStorage nếu không truyền qua props
     const storedUser = (() => {
         try {
@@ -50,7 +68,7 @@ const HeaderComponent = ({ showUserInfo = false, username }) => {
 
             {showUserInfo && (
                 <div className="header-right">
-                    <div className="user-info">
+                    <div className="user-info" ref={userInfoRef}>
                         <div className="user-avatar" onClick={() => { navigate('/profile'); setShowDropdown(false); }}>
                             <span>{avatarInitial}</span>
                         </div>

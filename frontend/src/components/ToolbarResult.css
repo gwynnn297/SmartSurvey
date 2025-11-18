@@ -1,0 +1,87 @@
+/* ToolbarResult.css */
+.toolbar-result {
+    width: 94%;
+    margin-bottom: 15px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.toolbar-result-content {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    justify-content: center;
+}
+
+.toolbar-result-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.2rem;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(226, 232, 240, 0.85);
+    border-radius: 12px;
+    color: #64748b;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.toolbar-result-btn:hover {
+    background: rgba(241, 245, 249, 0.95);
+    border-color: rgba(148, 163, 184, 0.5);
+    color: #475569;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+}
+
+.toolbar-result-btn.active {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    border-color: #6366f1;
+    color: #ffffff;
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+}
+
+.toolbar-result-btn.active:hover {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+}
+
+.toolbar-result-btn i {
+    font-size: 1rem;
+}
+
+.toolbar-result-btn span {
+    font-size: 0.9rem;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .toolbar-result {
+        width: 90%;
+    }
+
+    .toolbar-result-content {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 640px) {
+    .toolbar-result-content {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .toolbar-result-btn {
+        width: 100%;
+        justify-content: center;
+        padding: 0.6rem 1rem;
+    }
+}

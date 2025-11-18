@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import MainLayout from "../../layouts/MainLayout";
+import ToolbarResult from "../../components/ToolbarResult";
 import "./SentimentPage.css";
 import { aiAnalysisService } from "../../services/aiAnalysisService";
 import { responseService } from "../../services/responseService";
@@ -367,7 +368,13 @@ const SentimentPage = () => {
 
   return (
     <MainLayout>
+
       <div className="sentiment-container">
+        <ToolbarResult
+          surveyId={location.state?.surveyId}
+          surveyTitle={location.state?.surveyTitle}
+          surveyDescription={location.state?.surveyDescription}
+        />
         <h1 className="page-title">
           {location.state?.surveyTitle ?
             `Phân tích cảm xúc: ${location.state.surveyTitle}` :
