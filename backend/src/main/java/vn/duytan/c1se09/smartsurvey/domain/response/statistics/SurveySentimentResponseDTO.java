@@ -15,11 +15,11 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SurveySentimentResponseDTO {
-    
+
     private SentimentOverallDTO overall;
     private List<SentimentByQuestionDTO> byQuestion;
     private List<SentimentTrendDTO> trends;
-    
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -29,7 +29,7 @@ public class SurveySentimentResponseDTO {
         private Double neutral;
         private Double negative;
     }
-    
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -42,7 +42,7 @@ public class SurveySentimentResponseDTO {
         private Double negative;
         private Integer totalResponses;
     }
-    
+
     @Data
     @Builder
     @NoArgsConstructor

@@ -15,11 +15,11 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SurveyChartsResponseDTO {
-    
+
     private List<MultipleChoiceDataDTO> multipleChoiceData;
     private List<RatingDataDTO> ratingData;
     private List<BooleanDataDTO> booleanData;
-    
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -29,7 +29,7 @@ public class SurveyChartsResponseDTO {
         private String questionText;
         private List<ChartDataDTO> chartData;
         private String chartType; // "pie" or "bar"
-        
+
         @Data
         @Builder
         @NoArgsConstructor
@@ -40,7 +40,7 @@ public class SurveyChartsResponseDTO {
             private Double percentage;
         }
     }
-    
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -51,7 +51,7 @@ public class SurveyChartsResponseDTO {
         private Double averageRating;
         private java.util.Map<String, Integer> distribution; // "1": 5, "2": 12, etc.
     }
-    
+
     @Data
     @Builder
     @NoArgsConstructor

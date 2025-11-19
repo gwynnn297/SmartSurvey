@@ -15,9 +15,9 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SurveyTextAnalysisResponseDTO {
-    
+
     private OpenEndedSummaryDTO openEndedSummary;
-    
+
     @Data
     @Builder
     @NoArgsConstructor
@@ -28,7 +28,7 @@ public class SurveyTextAnalysisResponseDTO {
         private String keyInsights;
         private List<CommonKeywordDTO> commonKeywords;
         private List<ThemeDTO> themes;
-        
+
         @Data
         @Builder
         @NoArgsConstructor
@@ -37,7 +37,7 @@ public class SurveyTextAnalysisResponseDTO {
             private String word;
             private Integer frequency;
         }
-        
+
         @Data
         @Builder
         @NoArgsConstructor

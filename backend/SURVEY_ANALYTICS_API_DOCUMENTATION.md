@@ -6,8 +6,8 @@
 ## API Endpoints
 
 ### 1. Charts API - `/api/surveys/{surveyId}/results/charts`
-**Method:** GET  
-**Authentication:** Bearer Token required  
+**Method:** GET
+**Authentication:** Bearer Token required
 **Mục đích:** Lấy dữ liệu để vẽ biểu đồ cho các loại câu hỏi
 
 #### Response Format:
@@ -96,8 +96,8 @@
 - **Statistics:** Display total answers và average length prominently
 
 ### 3. Sentiment Analysis API - `/api/surveys/{surveyId}/results/sentiment`
-**Method:** GET  
-**Authentication:** Bearer Token required  
+**Method:** GET
+**Authentication:** Bearer Token required
 **Mục đích:** Phân tích cảm xúc từ câu trả lời mở
 
 #### Response Format:
@@ -148,7 +148,7 @@ Authorization: Bearer <your-jwt-token>
 
 ## Test Data Available
 - **Survey ID:** 5 (Customer Satisfaction Survey)
-- **Total Responses:** 10 
+- **Total Responses:** 10
 - **Open-ended Responses:** 6 (for AI analysis)
 - **Question Types:** Multiple choice, Rating, Boolean, Open-ended
 - **Sample Open-ended Question:** "Bạn có góp ý gì để cải thiện dịch vụ của chúng tôi?"

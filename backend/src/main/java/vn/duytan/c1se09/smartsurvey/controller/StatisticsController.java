@@ -20,9 +20,9 @@ import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 @RequestMapping("/api/surveys")
 @RequiredArgsConstructor
 public class StatisticsController {
-    
+
     private final StatisticsService statisticsService;
-    
+
     /**
      * Lấy thống kê tổng quan của survey
      * GET /api/surveys/{surveyId}/results/overview
@@ -39,7 +39,7 @@ public class StatisticsController {
             return ResponseEntity.internalServerError().build();
         }
     }
-    
+
     /**
      * Lấy timeline responses của survey
      * GET /api/surveys/{surveyId}/results/timeline
@@ -73,9 +73,10 @@ public class StatisticsController {
             return ResponseEntity.internalServerError().build();
         }
     }
-    
+
     /**
-     * Lấy dữ liệu biểu đồ cho survey (multiple choice, rating, boolean questions)
+     * Lấy dữ liệu biểu đồ cho survey (multiple choice/single
+     * choice/ranking/rating/bolean)
      * GET /api/surveys/{surveyId}/results/charts
      */
     @GetMapping("/{surveyId}/results/charts")
@@ -90,7 +91,7 @@ public class StatisticsController {
             return ResponseEntity.internalServerError().build();
         }
     }
-    
+
     /**
      * Lấy phân tích văn bản AI cho các câu hỏi mở
      * GET /api/surveys/{surveyId}/results/text-analysis
@@ -107,7 +108,7 @@ public class StatisticsController {
             return ResponseEntity.internalServerError().build();
         }
     }
-    
+
     /**
      * Lấy phân tích cảm xúc AI cho survey
      * GET /api/surveys/{surveyId}/results/sentiment
@@ -125,5 +126,3 @@ public class StatisticsController {
         }
     }
 }
-
-
