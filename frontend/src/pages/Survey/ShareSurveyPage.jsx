@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import MainLayout from "../../layouts/MainLayout";
+import NotificationModal from "../../components/NotificationModal";
 import "./ShareSurveyPage.css";
 import { QRCodeCanvas } from "qrcode.react";
 import { surveyService } from "../../services/surveyService";
@@ -38,7 +39,13 @@ const ShareSurveyPage = () => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
     const [isClosingSurvey, setIsClosingSurvey] = useState(false);
+    const [notification, setNotification] = useState(null);
     const settingsMenuRef = useRef(null);
+
+    // Hàm helper để hiển thị notification
+    const showNotification = (type, message) => {
+        setNotification({ type, message });
+    };
 
     useEffect(() => {
         const load = async () => {
@@ -91,7 +98,7 @@ const ShareSurveyPage = () => {
                 });
             } catch (err) {
                 console.error("ShareSurveyPage: load error", err);
-                alert("Không tải được thông tin khảo sát.");
+                showNotification('error', "Không tải được thông tin khảo sát.");
                 navigate("/dashboard");
             } finally {
                 setLoading(false);
@@ -102,7 +109,7 @@ const ShareSurveyPage = () => {
 
     const handleCopy = () => {
         navigator.clipboard.writeText(survey.link);
-        alert("Đã sao chép liên kết khảo sát!");
+        showNotification('success', "Đã sao chép liên kết khảo sát!");
     };
 
     const handleGenerateNewLink = async () => {
@@ -125,10 +132,10 @@ const ShareSurveyPage = () => {
                 console.warn("Could not update shareLink on backend:", error);
             }
 
-            alert("Đã tạo liên kết mới với token khác!");
+            showNotification('success', "Đã tạo liên kết mới với token khác!");
         } catch (error) {
             console.error("Error generating new link:", error);
-            alert("Có lỗi khi tạo liên kết mới!");
+            showNotification('error', "Có lỗi khi tạo liên kết mới!");
         } finally {
             setLoading(false);
         }
@@ -190,11 +197,11 @@ const ShareSurveyPage = () => {
                 ...prev,
                 status: updated?.status || "archived"
             }));
-            alert("Khảo sát đã được đóng. Người tham gia sẽ không thể gửi phản hồi mới.");
+            showNotification('success', "Khảo sát đã được đóng. Người tham gia sẽ không thể gửi phản hồi mới.");
             setIsSettingsOpen(false);
         } catch (error) {
             console.error("Error closing survey:", error);
-            alert("Không thể đóng khảo sát. Vui lòng thử lại sau.");
+            showNotification('error', "Không thể đóng khảo sát. Vui lòng thử lại sau.");
         } finally {
             setIsClosingSurvey(false);
         }
@@ -204,6 +211,15 @@ const ShareSurveyPage = () => {
 
     return (
         <MainLayout>
+            {/* Notification Modal */}
+            {notification && (
+                <NotificationModal
+                    type={notification.type}
+                    message={notification.message}
+                    onClose={() => setNotification(null)}
+                />
+            )}
+
             <div className="share-survey-container">
                 <div className="share-survey-header">
                     <div className="share-survey-information">

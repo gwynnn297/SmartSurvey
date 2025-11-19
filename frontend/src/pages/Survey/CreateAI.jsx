@@ -5,6 +5,7 @@ import { surveyService } from '../../services/surveyService';
 import { questionService, optionService } from '../../services/questionSurvey';
 import { aiSurveyService } from '../../services/aiSurveyService';
 import { categoryService } from '../../services/categoryService';
+import NotificationModal from '../../components/NotificationModal';
 import './CreateAI.css';
 import '../Survey/CreateSurvey.css';
 
@@ -315,9 +316,15 @@ export default function CreateAI() {
     const [progress, setProgress] = useState(0);
     const [showForm, setShowForm] = useState(true);
     const [showMobileView, setShowMobileView] = useState(false);
+    const [notification, setNotification] = useState(null);
 
     // Ref để ngăn việc lưu nhiều lần
     const isSavingRef = useRef(false);
+
+    // Hàm helper để hiển thị notification
+    const showNotification = (type, message) => {
+        setNotification({ type, message });
+    };
 
     // DND Kit sensors
     const sensors = useSensors(
@@ -690,7 +697,7 @@ export default function CreateAI() {
                         console.warn('⚠️ Không thể tạo thêm câu hỏi bổ sung:', err);
                         // Vẫn hiển thị thông báo nếu không tạo được thêm
                         setTimeout(() => {
-                            alert(`✅ Đã tạo ${currentQuestions} câu hỏi.\n\n💡 Bạn có thể sử dụng nút "Tạo lại" để tạo thêm câu hỏi hoặc chỉnh sửa từng câu theo ý muốn.`);
+                            showNotification('success', `✅ Đã tạo ${currentQuestions} câu hỏi. Bạn có thể sử dụng nút "Tạo lại" để tạo thêm câu hỏi hoặc chỉnh sửa từng câu theo ý muốn.`);
                         }, 1500);
                     }
                 } else {
@@ -733,7 +740,7 @@ export default function CreateAI() {
                     '📝 Ví dụ tốt: "Tạo khảo sát đánh giá mức độ hài lòng của nhân viên IT về môi trường làm việc, bao gồm không gian làm việc, chính sách phúc lợi và cơ hội phát triển nghề nghiệp"';
             }
 
-            alert(errorMessage);
+            showNotification('error', errorMessage);
             setShowProcessingModal(false);
         } finally {
             setLoading(false);
@@ -1009,7 +1016,7 @@ export default function CreateAI() {
                 errorMessage = error.message;
             }
 
-            alert(errorMessage);
+            showNotification('error', errorMessage);
         } finally {
             // Xóa questionIndex khỏi set đang refresh
             setRefreshingQuestions(prev => {
@@ -1173,7 +1180,7 @@ export default function CreateAI() {
                 await syncSurveyFromServer(surveyId);
             }
 
-            alert(isEditMode ? '✅ Đã cập nhật khảo sát thành công!' : '✅ Lưu khảo sát thành công!');
+            showNotification('success', isEditMode ? '✅ Đã cập nhật khảo sát thành công!' : '✅ Lưu khảo sát thành công!');
             // bỏ navigate nếu muốn ở lại trang
             // navigate('/dashboard');
 
@@ -1187,7 +1194,7 @@ export default function CreateAI() {
                 errorMessage = error.message;
             }
 
-            alert('❌ ' + errorMessage);
+            showNotification('error', '❌ ' + errorMessage);
         } finally {
             setLoading(false);
             isSavingRef.current = false;
@@ -1196,7 +1203,7 @@ export default function CreateAI() {
 
     const handleShareSurvey = async () => {
         if (!validateQuestions()) {
-            alert('Vui lòng hoàn thành tất cả thông tin bắt buộc trước khi chia sẻ khảo sát.');
+            showNotification('warning', 'Vui lòng hoàn thành tất cả thông tin bắt buộc trước khi chia sẻ khảo sát.');
             return;
         }
 
@@ -1338,7 +1345,7 @@ export default function CreateAI() {
                 errorMessage = error.message;
             }
 
-            alert(errorMessage);
+            showNotification('error', errorMessage);
         } finally {
             setLoading(false);
         }
@@ -1412,7 +1419,7 @@ export default function CreateAI() {
         try {
             // Validate before preview
             if (!questions || questions.length === 0) {
-                alert('Không có câu hỏi nào để xem trước. Vui lòng thêm ít nhất một câu hỏi.');
+                showNotification('warning', 'Không có câu hỏi nào để xem trước. Vui lòng thêm ít nhất một câu hỏi.');
                 return;
             }
 
@@ -1420,7 +1427,7 @@ export default function CreateAI() {
 
             // Validate preview data
             if (!preview || !preview.questions || preview.questions.length === 0) {
-                alert('Không thể tạo xem trước. Vui lòng kiểm tra lại các câu hỏi.');
+                showNotification('warning', 'Không thể tạo xem trước. Vui lòng kiểm tra lại các câu hỏi.');
                 return;
             }
 
@@ -1438,7 +1445,7 @@ export default function CreateAI() {
             navigate('/response-preview', { state: { survey: preview } });
         } catch (error) {
             console.error('Error in handlePreview:', error);
-            alert('Có lỗi xảy ra khi tạo xem trước. Vui lòng thử lại.');
+            showNotification('error', 'Có lỗi xảy ra khi tạo xem trước. Vui lòng thử lại.');
         }
     };
 
@@ -1457,6 +1464,15 @@ export default function CreateAI() {
 
     return (
         <MainLayout>
+            {/* Notification Modal */}
+            {notification && (
+                <NotificationModal
+                    type={notification.type}
+                    message={notification.message}
+                    onClose={() => setNotification(null)}
+                />
+            )}
+
             {showForm ? (
                 <div className="ai-container">
                     <h2 className="ai-title">Tạo khảo sát thông minh với AI</h2>

@@ -4,6 +4,7 @@ import MainLayout from '../../layouts/MainLayout';
 import { surveyService } from '../../services/surveyService';
 import { questionService, optionService } from '../../services/questionSurvey';
 import { aiSurveyService } from '../../services/aiSurveyService';
+import NotificationModal from '../../components/NotificationModal';
 import './CreateSurvey.css';
 import '../Response/ResponseFormPage.css';
 import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
@@ -718,6 +719,7 @@ const CreateSurvey = () => {
     const draftStorageKey = React.useRef(null); // Key để lưu draft vào localStorage
     const [showDraftModal, setShowDraftModal] = useState(false);
     const isNavigatingToPreviewOrShare = React.useRef(false); // Để theo dõi navigation tới preview/share
+    const [notification, setNotification] = useState(null); // State để quản lý notification
 
     const [surveyData, setSurveyData] = useState({
         title: '',
@@ -725,6 +727,11 @@ const CreateSurvey = () => {
         category_id: '',
         status: 'draft'
     });
+
+    // Hàm helper để hiển thị notification
+    const showNotification = (type, message) => {
+        setNotification({ type, message });
+    };
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -817,7 +824,7 @@ const CreateSurvey = () => {
             const hasDescription = surveyData.description?.trim().length > 0;
 
             if (!hasTitle && !hasDescription) {
-                alert('⚠️ Không thể tạo lại câu hỏi!\n\nĐể sử dụng tính năng này, vui lòng:\n1. Thêm tiêu đề cho khảo sát\n2. Thêm mô tả cho khảo sát\n\nSau đó thử lại.');
+                showNotification('warning', '⚠️ Không thể tạo lại câu hỏi! Để sử dụng tính năng này, vui lòng thêm tiêu đề hoặc mô tả cho khảo sát.');
                 return;
             }
 
@@ -893,7 +900,7 @@ const CreateSurvey = () => {
                 errorMessage = error.message;
             }
 
-            alert(errorMessage);
+            showNotification('error', errorMessage);
         } finally {
             setRefreshingQuestions(prev => {
                 const next = new Set(prev);
@@ -1058,7 +1065,7 @@ const CreateSurvey = () => {
             clearError('questions');
         } catch (error) {
             console.error('Error deleting question:', error);
-            alert('Có lỗi xảy ra khi xóa câu hỏi. Vui lòng thử lại.');
+            showNotification('error', 'Có lỗi xảy ra khi xóa câu hỏi. Vui lòng thử lại.');
         }
     };
 
@@ -1088,7 +1095,7 @@ const CreateSurvey = () => {
             clearError(`question_${questionIndex}_options`);
         } catch (error) {
             console.error('Error deleting option:', error);
-            alert('Có lỗi xảy ra khi xóa lựa chọn. Vui lòng thử lại.');
+            showNotification('error', 'Có lỗi xảy ra khi xóa lựa chọn. Vui lòng thử lại.');
         }
     };
 
@@ -1670,7 +1677,7 @@ const CreateSurvey = () => {
                 ? 'Đã cập nhật khảo sát thành công!'
                 : (status === 'draft' ? 'Đã lưu bản nháp khảo sát!' : 'Đã xuất bản khảo sát thành công!');
 
-            alert(message);
+            showNotification('success', message);
 
             // Xóa draft từ localStorage sau khi đã lưu vào database
             if (draftStorageKey.current) {
@@ -1728,7 +1735,7 @@ const CreateSurvey = () => {
                 }
             }
 
-            alert(errorMessage);
+            showNotification('error', errorMessage);
         } finally {
             setLoading(false);
         }
@@ -1804,7 +1811,13 @@ const CreateSurvey = () => {
 
     const handleShareSurvey = async () => {
         if (!validateForm()) {
-            alert('Vui lòng hoàn thành tất cả thông tin bắt buộc trước khi chia sẻ khảo sát.');
+            showNotification('warning', 'Vui lòng hoàn thành tất cả thông tin bắt buộc trước khi chia sẻ khảo sát.');
+            return;
+        }
+
+        // Kiểm tra xem khảo sát đã được lưu chưa
+        if (!editSurveyId || editSurveyId.toString().startsWith('temp_')) {
+            showNotification('warning', 'Bạn chưa lưu khảo sát, vui lòng lưu khảo sát trước lúc chia sẻ.');
             return;
         }
 
@@ -1820,130 +1833,102 @@ const CreateSurvey = () => {
                 saveDraftToLocalStorage();
             }
 
-            // Lưu survey trước (nếu chưa có)
-            let surveyId = editSurveyId;
-            if (!surveyId || surveyId.toString().startsWith('temp_')) {
-                // Tạo survey mới với status published
-                const payload = {
-                    title: surveyData.title,
-                    description: surveyData.description,
-                    categoryId: surveyData.category_id ? parseInt(surveyData.category_id) : null,
-                    aiPrompt: null
-                };
+            // Khảo sát đã được lưu, chỉ cần cập nhật
+            const surveyId = editSurveyId;
 
-                const savedSurvey = await surveyService.createSurvey(payload);
-                if (!savedSurvey || !savedSurvey.id) {
-                    throw new Error('Không thể tạo khảo sát. Vui lòng thử lại.');
-                }
+            // Cập nhật survey hiện có thành published và lưu questions/options mới nhất
+            latestSurvey = await surveyService.updateSurvey(surveyId, {
+                status: 'published',
+                title: surveyData.title,
+                description: surveyData.description,
+                categoryId: surveyData.category_id ? parseInt(surveyData.category_id) : null
+            });
 
-                surveyId = savedSurvey.id;
-                setEditSurveyId(surveyId);
-                draftStorageKey.current = `survey_draft_${surveyId}`;
-
-                // Cập nhật status thành published
-                latestSurvey = await surveyService.updateSurvey(surveyId, { status: 'published' }) || savedSurvey;
-
-                // Lưu questions và options vào database
-                const savedQuestions = await saveQuestionsAndOptions(surveyId);
-                // Cập nhật state với questions có ID thực từ server
-                if (savedQuestions && savedQuestions.length > 0) {
-                    setQuestions(savedQuestions);
-                }
-            } else {
-                // Cập nhật survey hiện có thành published và lưu questions/options mới nhất
-                latestSurvey = await surveyService.updateSurvey(surveyId, {
-                    status: 'published',
-                    title: surveyData.title,
-                    description: surveyData.description,
-                    categoryId: surveyData.category_id ? parseInt(surveyData.category_id) : null
-                });
-
-                try {
-                    const serverQuestions = await questionService.getQuestionsBySurvey(surveyId);
-                    const currentQuestionIds = questions.map(q => q.id).filter(id => id && !id.toString().startsWith('temp_'));
-                    const deletedQuestions = serverQuestions.filter(sq => !currentQuestionIds.includes(sq.id));
-                    for (const deletedQuestion of deletedQuestions) {
-                        try {
-                            const options = await optionService.getOptionsByQuestion(deletedQuestion.id);
-                            for (const option of options) {
-                                await optionService.deleteOption(option.id);
-                            }
-                            await questionService.deleteQuestion(deletedQuestion.id);
-                        } catch (error) {
-                            console.warn(`Could not delete question ${deletedQuestion.id} (may have responses):`, error);
+            try {
+                const serverQuestions = await questionService.getQuestionsBySurvey(surveyId);
+                const currentQuestionIds = questions.map(q => q.id).filter(id => id && !id.toString().startsWith('temp_'));
+                const deletedQuestions = serverQuestions.filter(sq => !currentQuestionIds.includes(sq.id));
+                for (const deletedQuestion of deletedQuestions) {
+                    try {
+                        const options = await optionService.getOptionsByQuestion(deletedQuestion.id);
+                        for (const option of options) {
+                            await optionService.deleteOption(option.id);
                         }
+                        await questionService.deleteQuestion(deletedQuestion.id);
+                    } catch (error) {
+                        console.warn(`Could not delete question ${deletedQuestion.id} (may have responses):`, error);
                     }
-
-                    for (const question of questions) {
-                        if (question.id && !question.id.toString().startsWith('temp_') && needsOptions(question.question_type)) {
-                            try {
-                                const serverOptions = await optionService.getOptionsByQuestion(question.id);
-                                const currentOptionIds = question.options?.map(o => o.id).filter(id => id && !id.toString().startsWith('temp_option_')) || [];
-                                const deletedOptions = serverOptions.filter(so => !currentOptionIds.includes(so.id));
-                                for (const deletedOption of deletedOptions) {
-                                    await optionService.deleteOption(deletedOption.id);
-                                }
-                            } catch (error) {
-                                console.error(`Error processing options for question ${question.id}:`, error);
-                            }
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error processing deletions:', error);
                 }
 
                 for (const question of questions) {
-                    const backendType = mapTypeToBackend(question.question_type);
-                    const questionPayload = {
-                        surveyId: surveyId,
+                    if (question.id && !question.id.toString().startsWith('temp_') && needsOptions(question.question_type)) {
+                        try {
+                            const serverOptions = await optionService.getOptionsByQuestion(question.id);
+                            const currentOptionIds = question.options?.map(o => o.id).filter(id => id && !id.toString().startsWith('temp_option_')) || [];
+                            const deletedOptions = serverOptions.filter(so => !currentOptionIds.includes(so.id));
+                            for (const deletedOption of deletedOptions) {
+                                await optionService.deleteOption(deletedOption.id);
+                            }
+                        } catch (error) {
+                            console.error(`Error processing options for question ${question.id}:`, error);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error processing deletions:', error);
+            }
+
+            for (const question of questions) {
+                const backendType = mapTypeToBackend(question.question_type);
+                const questionPayload = {
+                    surveyId: surveyId,
+                    questionText: question.question_text,
+                    questionType: backendType,
+                    isRequired: question.is_required ?? true
+                };
+
+                let savedQuestion;
+                if (question.id && question.id.toString().startsWith('temp_')) {
+                    // Tạo question mới
+                    savedQuestion = await questionService.createQuestion(questionPayload);
+                } else if (question.id && !question.id.toString().startsWith('temp_')) {
+                    // Cập nhật question hiện có (không tạo mới) - ĐÂY LÀ KEY FIX
+                    savedQuestion = await questionService.updateQuestion(question.id, {
                         questionText: question.question_text,
                         questionType: backendType,
                         isRequired: question.is_required ?? true
-                    };
+                    });
+                } else {
+                    // Nếu không có ID, tạo question mới
+                    savedQuestion = await questionService.createQuestion(questionPayload);
+                }
 
-                    let savedQuestion;
-                    if (question.id && question.id.toString().startsWith('temp_')) {
-                        // Tạo question mới
-                        savedQuestion = await questionService.createQuestion(questionPayload);
-                    } else if (question.id && !question.id.toString().startsWith('temp_')) {
-                        // Cập nhật question hiện có (không tạo mới) - ĐÂY LÀ KEY FIX
-                        savedQuestion = await questionService.updateQuestion(question.id, {
-                            questionText: question.question_text,
-                            questionType: backendType,
-                            isRequired: question.is_required ?? true
-                        });
-                    } else {
-                        // Nếu không có ID, tạo question mới
-                        savedQuestion = await questionService.createQuestion(questionPayload);
-                    }
+                if (!savedQuestion || !savedQuestion.id) {
+                    console.error('Failed to save question:', question);
+                    throw new Error(`Không thể lưu câu hỏi: ${question.question_text}`);
+                }
 
-                    if (!savedQuestion || !savedQuestion.id) {
-                        console.error('Failed to save question:', question);
-                        throw new Error(`Không thể lưu câu hỏi: ${question.question_text}`);
-                    }
+                // Tạo/cập nhật options cho các loại câu hỏi cần options
+                if (needsOptions(question.question_type) && question.options?.length > 0) {
+                    for (const option of question.options) {
+                        if (option.option_text && option.option_text.trim()) {
+                            const optionPayload = {
+                                questionId: savedQuestion.id,
+                                optionText: option.option_text
+                            };
 
-                    // Tạo/cập nhật options cho các loại câu hỏi cần options
-                    if (needsOptions(question.question_type) && question.options?.length > 0) {
-                        for (const option of question.options) {
-                            if (option.option_text && option.option_text.trim()) {
-                                const optionPayload = {
-                                    questionId: savedQuestion.id,
+                            let savedOption;
+                            if (option.id && option.id.toString().startsWith('temp_option_')) {
+                                // Tạo option mới
+                                savedOption = await optionService.createOption(optionPayload);
+                            } else if (option.id && !option.id.toString().startsWith('temp_option_')) {
+                                // Cập nhật option hiện có (không tạo mới)
+                                savedOption = await optionService.updateOption(option.id, {
                                     optionText: option.option_text
-                                };
-
-                                let savedOption;
-                                if (option.id && option.id.toString().startsWith('temp_option_')) {
-                                    // Tạo option mới
-                                    savedOption = await optionService.createOption(optionPayload);
-                                } else if (option.id && !option.id.toString().startsWith('temp_option_')) {
-                                    // Cập nhật option hiện có (không tạo mới)
-                                    savedOption = await optionService.updateOption(option.id, {
-                                        optionText: option.option_text
-                                    });
-                                } else {
-                                    // Nếu không có ID, tạo option mới
-                                    savedOption = await optionService.createOption(optionPayload);
-                                }
+                                });
+                            } else {
+                                // Nếu không có ID, tạo option mới
+                                savedOption = await optionService.createOption(optionPayload);
                             }
                         }
                     }
@@ -1990,7 +1975,7 @@ const CreateSurvey = () => {
                 errorMessage = error.message;
             }
 
-            alert(errorMessage);
+            showNotification('error', errorMessage);
         } finally {
             setLoading(false);
         }
@@ -2000,7 +1985,7 @@ const CreateSurvey = () => {
         try {
             // Kiểm tra nếu đang edit mode và có surveyId
             if (!editSurveyId) {
-                alert('Vui lòng lưu khảo sát trước khi xem báo cáo.');
+                showNotification('warning', 'Vui lòng lưu khảo sát trước khi xem báo cáo.');
                 return;
             }
 
@@ -2009,7 +1994,7 @@ const CreateSurvey = () => {
             if (surveyId.toString().startsWith('temp_')) {
                 // Nếu đang ở draft mode, lưu survey trước
                 if (!validateForm()) {
-                    alert('Vui lòng hoàn thành tất cả thông tin bắt buộc trước khi xem báo cáo.');
+                    showNotification('warning', 'Vui lòng hoàn thành tất cả thông tin bắt buộc trước khi xem báo cáo.');
                     return;
                 }
 
@@ -2061,7 +2046,7 @@ const CreateSurvey = () => {
                 errorMessage = error.message;
             }
 
-            alert(errorMessage);
+            showNotification('error', errorMessage);
         }
     };
 
@@ -2158,6 +2143,16 @@ const CreateSurvey = () => {
                     </div>
                 </div>
             )}
+
+            {/* Notification Modal */}
+            {notification && (
+                <NotificationModal
+                    type={notification.type}
+                    message={notification.message}
+                    onClose={() => setNotification(null)}
+                />
+            )}
+
             <div className="create-survey-wrapper">
                 <div className="survey-toolbar">
                     <div className="survey-toolbar-left">

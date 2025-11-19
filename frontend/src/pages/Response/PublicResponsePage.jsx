@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useParams, useLocation } from "react-router-dom";
+import NotificationModal from "../../components/NotificationModal";
 import "./ResponseFormPage.css";
 import { responseService } from "../../services/responseService";
 import { getSurveyPublicInfo } from "../../services/dashboardReportService";
@@ -164,8 +165,14 @@ const PublicResponsePage = () => {
     const [loadingSurvey, setLoadingSurvey] = useState(false);
     const [loadedSurvey, setLoadedSurvey] = useState(null);
     const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+    const [notification, setNotification] = useState(null);
     const loadedSurveyIdRef = useRef(null);
     const surveyStartTimeRef = useRef(null);
+
+    // Hàm helper để hiển thị notification
+    const showNotification = (type, message) => {
+        setNotification({ type, message });
+    };
 
     const activeSurvey = useMemo(() => loadedSurvey, [loadedSurvey]);
 
@@ -561,7 +568,7 @@ const PublicResponsePage = () => {
 
         if (!activeSurvey) {
             console.error("❌ No survey loaded");
-            alert("Không tìm thấy khảo sát. Vui lòng làm mới trang và thử lại.");
+            showNotification('error', "Không tìm thấy khảo sát. Vui lòng làm mới trang và thử lại.");
             return;
         }
 
@@ -614,7 +621,7 @@ const PublicResponsePage = () => {
             console.error("❌ Submit failed:", err);
             console.error("❌ Error details:", err.response?.data);
             const errorMessage = err.response?.data?.message || err.message || "Có lỗi xảy ra khi gửi phản hồi. Vui lòng thử lại.";
-            alert(errorMessage);
+            showNotification('error', errorMessage);
         } finally {
             setLoading(false);
         }
@@ -815,91 +822,102 @@ const PublicResponsePage = () => {
     };
 
     return (
-        <div
-            className="response-container"
-            style={{
-                background:
-                    "radial-gradient(130% 140% at 10% 10%, rgba(59, 130, 246, 0.32), transparent 55%), radial-gradient(120% 120% at 90% 20%, rgba(139, 92, 246, 0.35), transparent 45%), linear-gradient(135deg, #eef2ff 0%, #f8fafc 40%, #eef2ff 100%)",
-            }}
-        >
-            <div className="survey-card">
-                {loadingSurvey ? (
-                    <div style={{ padding: 24, textAlign: "center" }}>
-                        Đang tải khảo sát...
-                    </div>
-                ) : !activeSurvey ? (
-                    <div style={{ padding: 24, textAlign: "center" }}>
-                        Không tìm thấy khảo sát.
-                    </div>
-                ) : alreadySubmitted ? (
-                    <div style={{ padding: 40, textAlign: "center" }}>
-                        <h2>Bạn đã hoàn thành khảo sát này 🎉</h2>
-                        <p>Cảm ơn bạn đã dành thời gian phản hồi!</p>
-                    </div>
-                ) : !success ? (
-                    <form onSubmit={handleSubmit}>
-                        <div className="survey-header">
-                            <img
-                                className="logo-smart-survey"
-                                src={logoSmartSurvey}
-                                alt="logoSmartSurvey"
-                            />
-                            <h1>{activeSurvey.title}</h1>
-                            <p>{activeSurvey.description}</p>
+        <>
+            {/* Notification Modal */}
+            {notification && (
+                <NotificationModal
+                    type={notification.type}
+                    message={notification.message}
+                    onClose={() => setNotification(null)}
+                />
+            )}
+
+            <div
+                className="response-container"
+                style={{
+                    background:
+                        "radial-gradient(130% 140% at 10% 10%, rgba(59, 130, 246, 0.32), transparent 55%), radial-gradient(120% 120% at 90% 20%, rgba(139, 92, 246, 0.35), transparent 45%), linear-gradient(135deg, #eef2ff 0%, #f8fafc 40%, #eef2ff 100%)",
+                }}
+            >
+                <div className="survey-card">
+                    {loadingSurvey ? (
+                        <div style={{ padding: 24, textAlign: "center" }}>
+                            Đang tải khảo sát...
                         </div>
-
-                        {activeSurvey.questions.map((q) => (
-                            <div
-                                key={q.id}
-                                className={`question-card ${errors[q.id] ? "error" : ""}`}
-                            >
-                                <h3>
-                                    {q.text}{" "}
-                                    {q.is_required && (
-                                        <span className="required">*</span>
-                                    )}
-                                </h3>
-                                {renderQuestion(q)}
-                                {errors[q.id] && (
-                                    <p className="error-message">{errors[q.id]}</p>
-                                )}
+                    ) : !activeSurvey ? (
+                        <div style={{ padding: 24, textAlign: "center" }}>
+                            Không tìm thấy khảo sát.
+                        </div>
+                    ) : alreadySubmitted ? (
+                        <div style={{ padding: 40, textAlign: "center" }}>
+                            <h2>Bạn đã hoàn thành khảo sát này 🎉</h2>
+                            <p>Cảm ơn bạn đã dành thời gian phản hồi!</p>
+                        </div>
+                    ) : !success ? (
+                        <form onSubmit={handleSubmit}>
+                            <div className="survey-header">
+                                <img
+                                    className="logo-smart-survey"
+                                    src={logoSmartSurvey}
+                                    alt="logoSmartSurvey"
+                                />
+                                <h1>{activeSurvey.title}</h1>
+                                <p>{activeSurvey.description}</p>
                             </div>
-                        ))}
 
-                        <div className="form-footer">
+                            {activeSurvey.questions.map((q) => (
+                                <div
+                                    key={q.id}
+                                    className={`question-card ${errors[q.id] ? "error" : ""}`}
+                                >
+                                    <h3>
+                                        {q.text}{" "}
+                                        {q.is_required && (
+                                            <span className="required">*</span>
+                                        )}
+                                    </h3>
+                                    {renderQuestion(q)}
+                                    {errors[q.id] && (
+                                        <p className="error-message">{errors[q.id]}</p>
+                                    )}
+                                </div>
+                            ))}
+
+                            <div className="form-footer">
+                                <button
+                                    type="submit"
+                                    disabled={loading || !activeSurvey}
+                                    style={{
+                                        pointerEvents: (loading || !activeSurvey) ? "none" : "auto",
+                                        cursor: (loading || !activeSurvey) ? "not-allowed" : "pointer",
+                                        opacity: (loading || !activeSurvey) ? 0.6 : 1
+                                    }}
+                                >
+                                    {loading ? "Đang gửi..." : "Gửi phản hồi"}
+                                </button>
+                                <p className="note">
+                                    Phản hồi của bạn sẽ được bảo mật và chỉ dùng để cải thiện dịch vụ
+                                </p>
+                            </div>
+                        </form>
+                    ) : (
+                        <div className="success-modal">
+                            <div className="checkmark">✔</div>
+                            <h2>Cảm ơn bạn đã hoàn thành khảo sát!</h2>
+                            <p>Phản hồi của bạn đã được ghi lại thành công.</p>
                             <button
-                                type="submit"
-                                disabled={loading || !activeSurvey}
-                                style={{
-                                    pointerEvents: (loading || !activeSurvey) ? "none" : "auto",
-                                    cursor: (loading || !activeSurvey) ? "not-allowed" : "pointer",
-                                    opacity: (loading || !activeSurvey) ? 0.6 : 1
+                                onClick={() => {
+                                    setSuccess(false);
+                                    setAlreadySubmitted(true);
                                 }}
                             >
-                                {loading ? "Đang gửi..." : "Gửi phản hồi"}
+                                Đóng
                             </button>
-                            <p className="note">
-                                Phản hồi của bạn sẽ được bảo mật và chỉ dùng để cải thiện dịch vụ
-                            </p>
                         </div>
-                    </form>
-                ) : (
-                    <div className="success-modal">
-                        <div className="checkmark">✔</div>
-                        <h2>Cảm ơn bạn đã hoàn thành khảo sát!</h2>
-                        <p>Phản hồi của bạn đã được ghi lại thành công.</p>
-                        <button
-                            onClick={() => {
-                                setSuccess(false);
-                                setAlreadySubmitted(true);
-                            }}
-                        >
-                            Đóng
-                        </button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
-        </div>
+        </>
     );
 };
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import NotificationModal from "../../components/NotificationModal";
 import "./ViewLinkSharePage.css";
 import { surveyService } from "../../services/surveyService";
 import { questionService, optionService } from "../../services/questionSurvey";
@@ -48,6 +49,12 @@ const ViewLinkSharePage = () => {
     const [responses, setResponses] = useState({});
     const [errors, setErrors] = useState({});
     const [success, setSuccess] = useState(false);
+    const [notification, setNotification] = useState(null);
+
+    // Hàm helper để hiển thị notification
+    const showNotification = (type, message) => {
+        setNotification({ type, message });
+    };
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -242,10 +249,10 @@ const ViewLinkSharePage = () => {
             const newShareUrl = `${origin}/response/${surveyId}?${newToken}`;
             setShareUrl(newShareUrl);
             await surveyService.updateSurvey(surveyId, { shareLink: newShareUrl });
-            alert("Đã tạo liên kết mới với token khác!");
+            showNotification('success', "Đã tạo liên kết mới với token khác!");
         } catch (error) {
             console.error("Error resetting share link:", error);
-            alert("Có lỗi khi tạo liên kết mới!");
+            showNotification('error', "Có lỗi khi tạo liên kết mới!");
         } finally {
             setLoading(false);
         }
@@ -550,111 +557,122 @@ const ViewLinkSharePage = () => {
 
 
     return (
-        <div
-            className="response-container"
-            style={{
-                background:
-                    "radial-gradient(130% 140% at 10% 10%, rgba(59, 130, 246, 0.32), transparent 55%), radial-gradient(120% 120% at 90% 20%, rgba(139, 92, 246, 0.35), transparent 45%), linear-gradient(135deg, #eef2ff 0%, #f8fafc 40%, #eef2ff 100%)",
-            }}
-        >
-            <div className="survey-card">
-                {loadingSurvey ? (
-                    <div style={{ padding: 24, textAlign: "center" }}>
-                        Đang tải khảo sát...
-                    </div>
-                ) : !loadedSurvey ? (
-                    <div style={{ padding: 24, textAlign: "center" }}>
-                        Không tìm thấy khảo sát.
-                    </div>
-                ) : (
-                    <>
-                        <div className="survey-header">
-                            <img
-                                className="logo-smart-survey"
-                                src={logoSmartSurvey}
-                                alt="logoSmartSurvey"
-                            />
+        <>
+            {/* Notification Modal */}
+            {notification && (
+                <NotificationModal
+                    type={notification.type}
+                    message={notification.message}
+                    onClose={() => setNotification(null)}
+                />
+            )}
 
-                            <h2>{loadedSurvey.title}</h2>
-                            <p>{loadedSurvey.description}</p>
+            <div
+                className="response-container"
+                style={{
+                    background:
+                        "radial-gradient(130% 140% at 10% 10%, rgba(59, 130, 246, 0.32), transparent 55%), radial-gradient(120% 120% at 90% 20%, rgba(139, 92, 246, 0.35), transparent 45%), linear-gradient(135deg, #eef2ff 0%, #f8fafc 40%, #eef2ff 100%)",
+                }}
+            >
+                <div className="survey-card">
+                    {loadingSurvey ? (
+                        <div style={{ padding: 24, textAlign: "center" }}>
+                            Đang tải khảo sát...
                         </div>
-
-                        <div className="share-link">
-                            <label>Liên kết khảo sát</label>
-                            <div className="link-box">
-                                <input
-                                    type="text"
-                                    value={shareUrl}
-                                    readOnly
-                                    className="survey-link"
+                    ) : !loadedSurvey ? (
+                        <div style={{ padding: 24, textAlign: "center" }}>
+                            Không tìm thấy khảo sát.
+                        </div>
+                    ) : (
+                        <>
+                            <div className="survey-header">
+                                <img
+                                    className="logo-smart-survey"
+                                    src={logoSmartSurvey}
+                                    alt="logoSmartSurvey"
                                 />
-                                <button className="btn-copy" onClick={handleCopy}>
-                                    <i className="fa-regular fa-copy" title="Sao chép liên kết"></i>
-                                    {copied ? 'Đã sao chép!' : 'Sao chép'}
-                                </button>
+
+                                <h2>{loadedSurvey.title}</h2>
+                                <p>{loadedSurvey.description}</p>
                             </div>
 
-                            <p>Chia sẻ nhanh</p>
-                            <div className="share-buttons">
-                                <button className="btn-email" onClick={handleShareEmail}>
-                                    <i className="fa-solid fa-envelope" title="Email"></i> Email
-                                </button>
-                                <button className="btn-social" onClick={handleShareSocial}>
-                                    <i className="fa-solid fa-globe" title="Mạng xã hội"></i> Mạng xã hội
-                                </button>
-                                <button className="btn-embed" onClick={() => window.open(shareUrl, '_blank')}>
-                                    <i className="fa-solid fa-external-link-alt" title="Mở link"></i> Mở link
-                                </button>
-                            </div>
-
-                        </div>
-
-                        {/* Hiển thị danh sách câu hỏi giống ResponseFormPage */}
-                        {questions.length > 0 && !success && (
-                            <form onSubmit={handleSubmit}>
-                                <div className="questions-preview">
-                                    <h3>Danh sách câu hỏi ({questions.length} câu)</h3>
-                                    <div className="questions-list">
-                                        {questions.map((q, index) => (
-                                            <div key={q.id} className={`question-card ${errors[q.id] ? "error" : ""}`}>
-                                                <h3>
-                                                    {q.text}{" "}
-                                                    {q.is_required && <span className="required">*</span>}
-                                                </h3>
-                                                {renderQuestionPreview(q)}
-                                                {errors[q.id] && (
-                                                    <p className="error-message">{errors[q.id]}</p>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="form-footer">
-                                    <button type="submit" disabled={loading}>
-                                        {loading ? "Đang gửi..." : "Gửi khảo sát"}
+                            <div className="share-link">
+                                <label>Liên kết khảo sát</label>
+                                <div className="link-box">
+                                    <input
+                                        type="text"
+                                        value={shareUrl}
+                                        readOnly
+                                        className="survey-link"
+                                    />
+                                    <button className="btn-copy" onClick={handleCopy}>
+                                        <i className="fa-regular fa-copy" title="Sao chép liên kết"></i>
+                                        {copied ? 'Đã sao chép!' : 'Sao chép'}
                                     </button>
-                                    <p className="note">
-                                        Phản hồi của bạn sẽ được bảo mật và chỉ dùng để cải thiện dịch vụ
-                                    </p>
                                 </div>
-                            </form>
-                        )}
 
-                        {success && (
-                            <div className="success-modal">
-                                <div className="checkmark">✔</div>
-                                <h2>Cảm ơn bạn đã hoàn thành khảo sát!</h2>
-                                <p>Phản hồi của bạn đã được ghi lại thành công.</p>
-                                <button onClick={() => setSuccess(false)}>Đóng</button>
+                                <p>Chia sẻ nhanh</p>
+                                <div className="share-buttons">
+                                    <button className="btn-email" onClick={handleShareEmail}>
+                                        <i className="fa-solid fa-envelope" title="Email"></i> Email
+                                    </button>
+                                    <button className="btn-social" onClick={handleShareSocial}>
+                                        <i className="fa-solid fa-globe" title="Mạng xã hội"></i> Mạng xã hội
+                                    </button>
+                                    <button className="btn-embed" onClick={() => window.open(shareUrl, '_blank')}>
+                                        <i className="fa-solid fa-external-link-alt" title="Mở link"></i> Mở link
+                                    </button>
+                                </div>
+
                             </div>
-                        )}
+
+                            {/* Hiển thị danh sách câu hỏi giống ResponseFormPage */}
+                            {questions.length > 0 && !success && (
+                                <form onSubmit={handleSubmit}>
+                                    <div className="questions-preview">
+                                        <h3>Danh sách câu hỏi ({questions.length} câu)</h3>
+                                        <div className="questions-list">
+                                            {questions.map((q, index) => (
+                                                <div key={q.id} className={`question-card ${errors[q.id] ? "error" : ""}`}>
+                                                    <h3>
+                                                        {q.text}{" "}
+                                                        {q.is_required && <span className="required">*</span>}
+                                                    </h3>
+                                                    {renderQuestionPreview(q)}
+                                                    {errors[q.id] && (
+                                                        <p className="error-message">{errors[q.id]}</p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="form-footer">
+                                        <button type="submit" disabled={loading}>
+                                            {loading ? "Đang gửi..." : "Gửi khảo sát"}
+                                        </button>
+                                        <p className="note">
+                                            Phản hồi của bạn sẽ được bảo mật và chỉ dùng để cải thiện dịch vụ
+                                        </p>
+                                    </div>
+                                </form>
+                            )}
+
+                            {success && (
+                                <div className="success-modal">
+                                    <div className="checkmark">✔</div>
+                                    <h2>Cảm ơn bạn đã hoàn thành khảo sát!</h2>
+                                    <p>Phản hồi của bạn đã được ghi lại thành công.</p>
+                                    <button onClick={() => setSuccess(false)}>Đóng</button>
+                                </div>
+                            )}
 
 
-                    </>
-                )}
+                        </>
+                    )}
+                </div>
             </div>
-        </div>
+        </>
     );
 };
 

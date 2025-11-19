@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams, useLocation } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
+import NotificationModal from '../../components/NotificationModal';
 import "./ResponseFormPage.css";
 import { responseService } from '../../services/responseService';
 import { surveyService } from '../../services/surveyService';
@@ -47,8 +48,14 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
   const [success, setSuccess] = useState(false);
   const [loadingSurvey, setLoadingSurvey] = useState(false);
   const [loadedSurvey, setLoadedSurvey] = useState(null);
+  const [notification, setNotification] = useState(null);
   const isView = typeof isViewProp === 'boolean' ? isViewProp : mode === 'view';
-  
+
+  // Hàm helper để hiển thị notification
+  const showNotification = (type, message) => {
+    setNotification({ type, message });
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
@@ -139,7 +146,7 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
   // Initialize ranking questions with their options
   useEffect(() => {
     if (!activeSurvey || !activeSurvey.questions) return;
-    
+
     setResponses(prev => {
       const newResponses = { ...prev };
       activeSurvey.questions.forEach(q => {
@@ -175,10 +182,10 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
     activeSurvey.questions.forEach((q) => {
       if (q.is_required) {
         const value = responses[q.id];
-        
+
         // Kiểm tra theo từng loại câu hỏi
         let isValid = false;
-        
+
         if (q.type === "file_upload") {
           // File upload: kiểm tra xem có File object không
           isValid = value instanceof File;
@@ -199,7 +206,7 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
           // Các giá trị khác (number, boolean, etc.)
           isValid = true;
         }
-        
+
         if (!isValid) {
           newErrors[q.id] = "Câu hỏi này là bắt buộc";
         }
@@ -213,18 +220,18 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
   const handleSubmit = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (!activeSurvey) {
       console.error("❌ No survey loaded");
-      alert("Không tìm thấy khảo sát. Vui lòng làm mới trang và thử lại.");
+      showNotification('error', "Không tìm thấy khảo sát. Vui lòng làm mới trang và thử lại.");
       return;
     }
-    
+
     if (!validateForm()) {
       console.warn("⚠️ Validation failed");
       return;
     }
-    
+
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const isCreator = user?.role === 'creator';
     setLoading(true);
@@ -251,7 +258,7 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
     } catch (err) {
       console.error("Submit failed:", err);
       const errorMessage = err.response?.data?.message || err.message || "Có lỗi xảy ra khi gửi phản hồi. Vui lòng thử lại.";
-      alert(errorMessage);
+      showNotification('error', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -310,10 +317,10 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
         // responses[q.id] is array of option IDs
         const rankingOptionIds = responses[q.id] || [];
         // Map IDs back to options for display
-        const rankingOptionsList = rankingOptionIds.map(id => 
+        const rankingOptionsList = rankingOptionIds.map(id =>
           q.options?.find(opt => String(opt.id) === String(id))
         ).filter(Boolean);
-        
+
         if (!rankingOptionsList || rankingOptionsList.length === 0) {
           return <div className="ranking-hint">Chưa có lựa chọn để xếp hạng</div>;
         }
@@ -329,7 +336,7 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
 
                 const oldIndex = rankingOptionsList.findIndex(opt => String(opt.id) === String(active.id));
                 const newIndex = rankingOptionsList.findIndex(opt => String(opt.id) === String(over.id));
-                
+
                 const newOrder = arrayMove(rankingOptionsList, oldIndex, newIndex);
                 handleChange(q.id, newOrder.map(opt => opt.id));
               }}
@@ -383,13 +390,13 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
       case "date_time":
         // Parse combined value or separate date/time
         const dateTimeValue = responses[q.id] || { date: '', time: '' };
-        const dateValue = typeof dateTimeValue === 'string' 
-          ? (dateTimeValue.match(/(\d{4}-\d{2}-\d{2})/) || ['', ''])[1] 
+        const dateValue = typeof dateTimeValue === 'string'
+          ? (dateTimeValue.match(/(\d{4}-\d{2}-\d{2})/) || ['', ''])[1]
           : dateTimeValue.date || '';
         const timeValue = typeof dateTimeValue === 'string'
           ? (dateTimeValue.match(/(\d{2}:\d{2})/) || ['', ''])[1]
           : dateTimeValue.time || '';
-        
+
         return (
           <div className="date-time-inputs">
             <input
@@ -467,6 +474,15 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
 
   return (
     <MainLayout>
+      {/* Notification Modal */}
+      {notification && (
+        <NotificationModal
+          type={notification.type}
+          message={notification.message}
+          onClose={() => setNotification(null)}
+        />
+      )}
+
       <div className="response-container" style={{ background: "radial-gradient(130% 140% at 10% 10%, rgba(59, 130, 246, 0.32), transparent 55%), radial-gradient(120% 120% at 90% 20%, rgba(139, 92, 246, 0.35), transparent 45%), linear-gradient(135deg, #eef2ff 0%, #f8fafc 40%, #eef2ff 100%)" }}>
         <div className="survey-card">
           {loadingSurvey ? (
@@ -499,10 +515,10 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
               ))}
 
               <div className="form-footer">
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={loading || !activeSurvey}
-                  style={{ 
+                  style={{
                     pointerEvents: (loading || !activeSurvey) ? "none" : "auto",
                     cursor: (loading || !activeSurvey) ? "not-allowed" : "pointer",
                     opacity: (loading || !activeSurvey) ? 0.6 : 1
