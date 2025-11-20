@@ -117,6 +117,36 @@ def call_gemini_json(url: str, key: str, payload: dict, timeout: float, max_retr
             back = min(3.0, (0.2 * (2**attempt))) + random.uniform(0, 0.2)
             _t.sleep(back)
 
+def _gen_answer_from_ctx(question: str, contexts: list[str]) -> str:
+    if not contexts:
+        return "Chưa đủ ngữ cảnh để trả lời."
+    max_chars = int(os.getenv("RAG_MAX_CTX_CHARS","5000"))
+    ctx = contexts[:]
+    # gộp & cắt theo giới hạn ký tự
+    joined = "\n- ".join(ctx)
+    if len(joined) > max_chars:
+        joined = joined[:max_chars]
+    prompt = (
+        "Bạn là trợ lý phân tích phản hồi khảo sát TIẾNG VIỆT.\n"
+        "Chỉ dùng NGỮ CẢNH bên dưới để trả lời ngắn gọn, có căn cứ. "
+        "Nếu không đủ thông tin, hãy nói 'Chưa đủ thông tin'.\n\n"
+        f"CÂU HỎI: {question}\n\nNGỮ CẢNH:\n- {joined}"
+    )
+    data = call_gemini_json(
+        os.getenv("EXT_SUMM_URL"),
+        os.getenv("EXT_SENTI_KEY"),
+        {"contents":[{"parts":[{"text": prompt}]}]},
+        timeout=float(os.getenv("EXT_SENTI_TIMEOUT","12.0")),
+        max_retry=int(os.getenv("EXT_SENTI_MAX_RETRY","4")),
+    )
+    try:
+        cand = (data.get("candidates") or [{}])[0]
+        parts = (cand.get("content") or {}).get("parts") or [{}]
+        txt = (parts[0].get("text") or "").strip()
+        return txt or "Chưa đủ thông tin."
+    except Exception:
+        return "Chưa đủ thông tin."
+
 # --- Token-bucket rate limiting ---
 class TokenBucket:
     def __init__(self, rate_per_sec: float, burst: int):
@@ -291,28 +321,25 @@ def sql_exec(q: str, args=None):
 # ============================================================
 
 def call_external_sentiment(text: str, retries: int | None = None) -> Tuple[int, float, Dict[str, Any]]:
+    """
+    Backward-compatible:
+      returns (label_id: 0/1/2, confidence: float, extra: dict)
+      0=negative, 1=neutral, 2=positive
+    """
     if not EXT_URL or not EXT_KEY:
-        return 1, 0.0, {"error": "Missing EXT_SENTI_URL or EXT_SENTI_KEY in env"}
+        return 1, 0.0, {"error": "Missing EXT_SUMM_URL/EXT_SENTI_KEY"}
 
-    headers = {
-        "x-goog-api-key": EXT_KEY,
-        "Content-Type": "application/json",
-    }
     body = {
         "contents": [{
             "parts": [{"text": (
                 "Bạn là bộ phân tích cảm xúc tiếng Việt.\n"
-                "Trả về JSON đúng schema với các khóa {label, confidence}.\n"
-                "label ∈ [negative, neutral, positive]. "
-                "confidence ∈ [0,1].\n"
+                "Hãy trả về JSON đúng schema {label, confidence}.\n"
+                "label ∈ [negative, neutral, positive]; confidence ∈ [0,1].\n"
                 f"Văn bản: {text}"
             )}]
         }],
         "generationConfig": {
-            "temperature": 0,
-            "topP": 1,
-            "topK": 1,
-            "candidateCount": 1,
+            "temperature": 0, "topP": 1, "topK": 1, "candidateCount": 1,
             "responseMimeType": "application/json",
             "responseSchema": {
                 "type": "object",
@@ -325,35 +352,57 @@ def call_external_sentiment(text: str, retries: int | None = None) -> Tuple[int,
         }
     }
 
-    import time
     use_retries = EXT_MAX_RETRY if retries is None else retries
-    last_err = None
-    for attempt in range(int(use_retries) + 1):
-        try:
-            r = requests.post(EXT_URL, headers=headers, json=body, timeout=EXT_TIMEOUT)
-            if r.status_code == 200:
-                j = r.json()
-                # Gemini trả về JSON trong candidates[0].content.parts[0].text
-                try:
-                    txt = j["candidates"][0]["content"]["parts"][0]["text"]
-                    data = json.loads(txt)
-                    lab = str(data.get("label","neutral")).lower()
-                    conf = float(data.get("confidence", 0.0))
-                    lid = {"negative":0,"neutral":1,"positive":2}.get(lab, 1)
-                    return lid, conf, {"api": j, "parsed": data}
-                except Exception as parse_e:
-                    last_err = f"parse_error: {parse_e}"
-            elif r.status_code in (429, 500, 503):
-                last_err = f"http_{r.status_code}"
-            else:
-                last_err = f"http_{r.status_code}: {r.text[:200]}"
-        except Exception as e:
-            last_err = str(e)
+    try:
+        # dùng wrapper httpx (có retry/backoff/circuit-breaker)
+        j = call_gemini_json(
+            EXT_URL, EXT_KEY, body,
+            timeout=EXT_TIMEOUT, max_retry=int(use_retries)
+        )
+        txt = j["candidates"][0]["content"]["parts"][0]["text"]
+        parsed = json.loads(txt)
+        label = str(parsed.get("label", "neutral")).lower()
+        conf  = float(parsed.get("confidence", 0.0))
+        label_id = {"negative":0, "neutral":1, "positive":2}.get(label, 1)
+        return label_id, conf, {"api": j, "parsed": parsed}
+    except Exception as e:
+        # giữ kiểu trả về để backward-compatible
+        return 1, 0.0, {"error": f"external_call_failed: {e}"}
 
-        # backoff nhẹ 0.2s * (attempt+1)
-        time.sleep(0.2 * (attempt + 1))
 
-    return 1, 0.0, {"error": last_err}
+# ============== Embedding (Gemini text-embedding-004) ==============
+EXT_EMB_URL   = os.getenv("EXT_EMB_URL")
+EXT_EMB_KEY   = os.getenv("EXT_EMB_KEY") or os.getenv("EXT_SENTI_KEY")
+EXT_EMB_MODEL = os.getenv("EXT_EMB_MODEL", "text-embedding-004")
+EXT_EMB_DIM   = int(os.getenv("EXT_EMB_DIM", "768"))
+
+def _embed_vi(text: str) -> list[float]:
+    if not text or not EXT_EMB_URL or not EXT_EMB_KEY:
+        return []
+    payload = {"model": EXT_EMB_MODEL, "content": {"parts": [{"text": text[:4000]}]}}
+    data = call_gemini_json(
+        EXT_EMB_URL, EXT_EMB_KEY, payload,
+        timeout=float(os.getenv("EXT_SENTI_TIMEOUT","12.0")),
+        max_retry=int(os.getenv("EXT_SENTI_MAX_RETRY","4"))
+    )
+    try:
+        vals = None
+        emb = data.get("embedding")
+        if isinstance(emb, dict):
+            vals = emb.get("values")
+        elif isinstance(emb, list) and emb and isinstance(emb[0], dict):
+            vals = emb[0].get("values")
+
+        if vals is None:
+            embs = data.get("embeddings")
+            if isinstance(embs, list) and embs and isinstance(embs[0], dict):
+                vals = embs[0].get("values")
+
+        vec = [float(x) for x in (vals or [])][:EXT_EMB_DIM]
+        return vec if vec else []
+    except Exception:
+        return []
+
 
 # ============================================================
 # FastAPI app
@@ -479,6 +528,221 @@ def classify_and_log(survey_id: int, question_id: Optional[int], answer_id: Opti
     )
     # Trả nhãn dựa vào external luôn (hoặc NEU nếu lỗi)
     return int(lid if status=="ok" else 1)
+
+def _embed_upsert(survey_id: int, answer_id: int, text_norm: str, vec: list[float]):
+    sql_exec(
+        """
+        INSERT INTO ai_embed(survey_id, answer_id, text_norm, text_hash, vec_json)
+        VALUES (%s,%s,%s,%s,%s)
+        ON DUPLICATE KEY UPDATE text_norm=VALUES(text_norm),
+                                text_hash=VALUES(text_hash),
+                                vec_json=VALUES(vec_json),
+                                created_at=NOW()
+        """,
+        (survey_id, answer_id, text_norm, sha256(text_norm), json.dumps(vec)),
+    )
+
+def _embed_rows_by_survey(survey_id: int) -> list[dict]:
+    return sql_all(
+        "SELECT answer_id, text_norm, vec_json FROM ai_embed WHERE survey_id=%s",
+        (survey_id,)
+    )
+
+
+# ============================================================
+# Rule-based Stats Chat (VI)
+# ============================================================
+
+import statistics as _stats
+from collections import Counter as _Counter
+
+# cache siêu nhẹ theo survey cho thống kê đơn giản
+_STATS_CACHE: dict[tuple[int, str], tuple[float, str]] = {}
+# nhớ intent gần nhất theo user_id để follow-up
+_USER_CTX: dict[int, dict] = {}
+
+def _total_responses(db: Session, survey_id: int) -> int:
+    return db.execute(text("""
+        SELECT COUNT(*) FROM answers a
+        JOIN responses r ON r.response_id = a.response_id
+        WHERE r.survey_id = :sid AND TRIM(COALESCE(a.answer_text,'')) <> ''
+    """), {"sid": survey_id}).scalar() or 0
+
+def _count_contains(db: Session, survey_id: int, kw: str) -> int:
+    return db.execute(text("""
+        SELECT COUNT(*) FROM answers a
+        JOIN responses r ON r.response_id = a.response_id
+        WHERE r.survey_id = :sid AND a.answer_text LIKE :kw
+    """), {"sid": survey_id, "kw": f"%{kw}%"}).scalar() or 0
+
+def _top1_answer(db: Session, survey_id: int) -> tuple[str, int]:
+    row = db.execute(text("""
+        SELECT LOWER(TRIM(a.answer_text)) AS t, COUNT(*) AS c
+        FROM answers a JOIN responses r ON r.response_id = a.response_id
+        WHERE r.survey_id = :sid AND TRIM(COALESCE(a.answer_text,'')) <> ''
+        GROUP BY t ORDER BY c DESC LIMIT 1
+    """), {"sid": survey_id}).mappings().fetchone()
+    return (row["t"], int(row["c"])) if row else ("", 0)
+
+def _topn_answers(db: Session, survey_id: int, n: int = 3) -> list[tuple[str,int]]:
+    rows = db.execute(text("""
+        SELECT LOWER(TRIM(a.answer_text)) AS t, COUNT(*) AS c
+        FROM answers a JOIN responses r ON r.response_id = a.response_id
+        WHERE r.survey_id = :sid AND TRIM(COALESCE(a.answer_text,'')) <> ''
+        GROUP BY t ORDER BY c DESC LIMIT :n
+    """), {"sid": survey_id, "n": n}).mappings().fetchall()
+    return [(r["t"], int(r["c"])) for r in rows or []]
+
+def _numeric_series(db, survey_id: int) -> list[float]:
+    rows = db.execute(text("""
+        SELECT a.answer_text
+        FROM answers a
+        JOIN responses r ON r.response_id = a.response_id
+        WHERE r.survey_id = :sid
+    """), {"sid": survey_id}).mappings().fetchall()  # dùng mappings()
+    out = []
+    for r in rows or []:
+        txt = (r.get("answer_text") or "").strip()
+        m = re.search(r"(-?\d+(?:[.,]\d+)?)", txt)
+        if m:
+            try:
+                out.append(float(m.group(1).replace(",", ".")))
+            except:
+                pass
+    return out
+
+def _nps_score(db: Session, survey_id: int) -> tuple[float,int,int,int,int]:
+    """Giả định thang 0–10: 9–10 = promoter; 0–6 = detractor; 7–8 = passive"""
+    arr = _numeric_series(db, survey_id)
+    n = len(arr)
+    if not n: return (0.0, 0, 0, 0, 0)
+    promoters  = sum(1 for x in arr if x >= 9)
+    detractors = sum(1 for x in arr if x <= 6)
+    passives   = n - promoters - detractors
+    nps = (promoters/n - detractors/n) * 100.0
+    return (nps, n, promoters, passives, detractors)
+
+# —— Parser intent rất thực dụng (không cần NLP nặng) ——
+def parse_query_vi(q: str) -> dict:
+    q = (q or "").lower().strip()
+    # tổng số
+    if re.search(r"\b(có bao nhiêu|tổng(?: số)? (?:câu )?trả lời|bao nhiêu người)\b", q):
+        return {"intent": "total"}
+    # hài lòng / không hài lòng / yes / no
+    if re.search(r"\b(tỷ lệ|ti le|tỉ lệ)\b.*\b(hài lòng|hai long|thoả mãn|thoa man|tốt|tot|ổn|on)\b", q):
+        return {"intent": "ratio_contains", "kw": "hài lòng"}
+    if re.search(r"\b(tỷ lệ|ti le|tỉ lệ)\b.*\b(không hài lòng|khong hai long|tệ|te|không|khong)\b", q):
+        return {"intent": "ratio_contains", "kw": "không"}
+    if re.search(r"\b(tỷ lệ|ti le|tỉ lệ)\b.*\b(đồng ý|dong y|yes)\b", q):
+        return {"intent": "ratio_contains", "kw": "đồng ý"}
+    if re.search(r"\b(tỷ lệ|ti le|tỉ lệ)\b.*\b(không|khong|no)\b", q):
+        return {"intent": "ratio_contains", "kw": "không"}
+    # phổ biến nhất / top n
+    if re.search(r"(phổ biến nhất|pho bien nhat|câu trả lời phổ biến|cau tra loi pho bien|hay gặp nhất)", q):
+        m = re.search(r"top\s*(\d+)", q)
+        return {"intent": "topn", "n": int(m.group(1)) if m else 1}
+    # trung bình / trung vị / mode / min / max
+    if re.search(r"(trung bình|trung binh|average|mean)", q): return {"intent": "avg"}
+    if re.search(r"(trung vị|trung vi|median)", q):         return {"intent": "median"}
+    if re.search(r"(mode|phương thức|gia trị lặp nhiều)", q): return {"intent": "mode"}
+    if re.search(r"(cao nhất|max|lớn nhất)", q):            return {"intent": "max"}
+    if re.search(r"(thấp nhất|min|nhỏ nhất)", q):           return {"intent": "min"}
+    # NPS
+    if re.search(r"\b(nps|net promoter)\b", q):              return {"intent": "nps"}
+    # đếm chứa từ khoá tuỳ biến: "bao nhiêu ... 'abc'"
+    m = re.search(r"bao nhiêu.*?(?:chứa|co|có)\s+['\"]?([a-z0-9à-ỹ\s]+)['\"]?", q)
+    if m: return {"intent": "count_contains", "kw": m.group(1).strip()}
+    m = re.search(r"(top\s*\d+|phổ biến|hay gặp).*(không hài lòng|không|lỗi|lag|chậm|khó|tệ|kém)", q, re.I)
+    if m:
+        n = re.search(r"top\s*(\d+)", q, re.I)
+        return {"intent": "topn_negative", "n": int(n.group(1)) if n else 3}
+
+    m = re.search(r"(top\s*\d+|phổ biến|hay gặp).*(hài lòng|tốt|đẹp|nhanh|ổn|ưng|mượt)", q, re.I)
+    if m:
+        n = re.search(r"top\s*(\d+)", q, re.I)
+        return {"intent": "topn_positive", "n": int(n.group(1)) if n else 3}
+    return {"intent": "unknown"}
+
+def _answer_stat_query(db: Session, survey_id: int, q: str) -> Optional[str]:
+    it = parse_query_vi(q)
+    intent = it.get("intent")
+    if intent == "unknown": 
+        return None
+    elif intent in {"topn_negative", "topn_positive"}:
+        n = max(1, min(int(it.get("n", 3)), 10))
+        target = 0 if intent == "topn_negative" else 2  # 0=NEG, 2=POS
+        rows = db.execute(text("""
+            SELECT LOWER(TRIM(a.answer_text)) AS t, COUNT(*) AS c
+            FROM answers a
+            JOIN responses r   ON r.response_id = a.response_id
+            JOIN ai_inference inf ON inf.answer_id=a.answer_id AND inf.survey_id=r.survey_id
+            WHERE r.survey_id=:sid
+            AND TRIM(COALESCE(a.answer_text,'')) <> ''
+            AND COALESCE(inf.final_label, inf.pred_label)=:lbl
+            GROUP BY t HAVING t <> ''
+            ORDER BY c DESC
+            LIMIT :n
+        """), {"sid": survey_id, "lbl": target, "n": n}).mappings().fetchall()
+        items = [(r["t"], int(r["c"])) for r in rows or []]
+        if not items:
+            return "Không có câu trả lời phù hợp."
+        bullets = [f"“{t}” ({c} lần)" for t,c in items]
+        return f"Top {n} lý do {'không hài lòng' if target==0 else 'hài lòng'}: " + "; ".join(bullets) + "."
+
+
+    # follow-up: nếu user không truyền filter mới, dùng lại intent trước đó
+    # (chỉ hoạt động khi có user_id, xử lý ở endpoint)
+    # cache theo (survey_id, intent_repr)
+    key = (survey_id, json.dumps(it, ensure_ascii=False))
+    if key in _STATS_CACHE:
+        return _STATS_CACHE[key][1]
+
+    total = _total_responses(db, survey_id)
+    if total == 0:
+        ans = "Chưa có câu trả lời hợp lệ trong survey này."
+        _STATS_CACHE[key] = (_time.time(), ans); return ans
+
+    if intent == "total":
+        ans = f"Tổng cộng có {total} câu trả lời."
+    elif intent == "ratio_contains":
+        kw = it["kw"]
+        n = _count_contains(db, survey_id, kw)
+        pct = round(n * 100.0 / total, 2)
+        ans = f"Tỷ lệ câu trả lời chứa “{kw}” là {pct}% ({n}/{total})."
+    elif intent == "count_contains":
+        kw = it["kw"]; n = _count_contains(db, survey_id, kw)
+        ans = f"Có {n} câu trả lời chứa “{kw}”."
+    elif intent == "topn":
+        n = max(1, min(int(it.get("n", 1)), 10))
+        items = _topn_answers(db, survey_id, n)
+        if not items:
+            ans = "Không có câu trả lời phổ biến."
+        else:
+            bullets = "; ".join([f"“{t}” ({c} lần)" for t, c in items])
+            ans = f"Các câu trả lời phổ biến nhất: {bullets}."
+    elif intent in {"avg","median","mode","min","max"}:
+        arr = _numeric_series(db, survey_id)
+        if not arr:
+            ans = "Không có dữ liệu số để tính."
+        else:
+            if intent == "avg":    ans = f"Điểm trung bình là {round(_stats.fmean(arr),2)} (n={len(arr)})."
+            if intent == "median": ans = f"Trung vị là {round(_stats.median(arr),2)}."
+            if intent == "mode":
+                try: ans = f"Mode là {round(_stats.mode(arr),2)}."
+                except:  # multiple modes
+                    cnt = _Counter(arr).most_common(1)[0]
+                    ans = f"Mode là {round(cnt[0],2)} (xuất hiện {cnt[1]} lần)."
+            if intent == "min":    ans = f"Giá trị nhỏ nhất là {round(min(arr),2)}."
+            if intent == "max":    ans = f"Giá trị lớn nhất là {round(max(arr),2)}."
+    elif intent == "nps":
+        nps, n, pro, pas, det = _nps_score(db, survey_id)
+        ans = f"NPS = {round(nps,1)} (promoters={pro}, passives={pas}, detractors={det}, n={n})."
+    else:
+        return None
+
+    _STATS_CACHE[key] = (_time.time(), ans)
+    return ans
+
 
 # ============================================================
 # Endpoints sentiment
@@ -640,17 +904,74 @@ def answer_count_query(db: Session, survey_id: int, question_text: str) -> Optio
     return None
 
 
-@app.post("/ai/chat", response_model=ChatResponse)
+@app.post("/ai/chat", response_model=ChatResponse, tags=["Chat AI/RAG"])
 def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
     try:
-        q_norm = norm_text(req.question_text)
-        count_answer = answer_count_query(db, req.survey_id, q_norm)
-        if count_answer:
-            answer, topk_ctx = count_answer, []
+        user_id = int(req.user_id) if req.user_id is not None else 0
+        q_raw = req.question_text or ""
+        q_norm = norm_text(q_raw)
+
+        # 1) Follow-up cơ bản: nếu user hỏi kiểu "còn ... thì sao?"
+        if user_id and re.search(r"\b(còn|theo|vậy)\b", q_norm):
+            last = _USER_CTX.get(user_id)
+            if last and last.get("survey_id") == req.survey_id and last.get("last_q"):
+                # ghép lại để parser có thêm ngữ cảnh (rất đơn giản)
+                q_norm = (last["last_q"] + " " + q_norm).strip()
+
+        # 2) Ưu tiên rule-based stats
+        stat_ans = _answer_stat_query(db, req.survey_id, q_norm)
+        if stat_ans:
+            answer, topk_ctx = stat_ans, []
+            if user_id:
+                _USER_CTX[user_id] = {"survey_id": req.survey_id, "last_q": q_norm, "intent": "stats"}
         else:
-            texts = [r.answer_text for r in fetch_answer_rows(db, req.survey_id)]
-            topk_ctx = retrieve_topk(texts, q_norm, req.top_k)
-            answer = craft_answer(q_norm, topk_ctx)
+            # 3) NEW — RAG theo Embeddings (đúng kiến trúc mentor duyệt)
+            #    - yêu cầu đã ingest trước đó: POST /ai/rag/ingest/{survey_id}
+            #    - nếu chưa ingest hoặc không có vec -> tự fallback TF-IDF
+            vec_q = _embed_vi(q_norm)
+            rows = _embed_rows_by_survey(req.survey_id)
+            scored: list[tuple[float, str]] = []
+
+            for row in rows:
+                try:
+                    v = json.loads(row["vec_json"])
+                except Exception:
+                    v = []
+                if v:
+                    scored.append((_cosine(vec_q, v), row["text_norm"]))
+
+            scored.sort(key=lambda x: x[0], reverse=True)
+            min_sim = float(os.getenv("RAG_MIN_SIM", "0.25"))
+            scored = [(s, t) for (s, t) in scored if s >= min_sim]
+
+            env_topk = int(os.getenv("RAG_TOP_K", "5"))
+            topk = max(1, min(int(req.top_k or env_topk), 20))
+            topk_ctx = [t for _, t in scored[:topk]]
+
+            # cắt độ dài ngữ cảnh nếu cần
+            max_chars = int(os.getenv("RAG_MAX_CTX_CHARS", "5000"))
+            cur = 0; trimmed_ctx = []
+            for c in topk_ctx:
+                if cur + len(c) <= max_chars:
+                    trimmed_ctx.append(c); cur += len(c)
+                else:
+                    break
+            topk_ctx = trimmed_ctx
+
+            if topk_ctx:
+                # template answer nhẹ (không phát sinh chi phí LLM). Nếu muốn full RAG,
+                answer = _gen_answer_from_ctx(q_norm, topk_ctx)
+                if user_id:
+                    _USER_CTX[user_id] = {"survey_id": req.survey_id, "last_q": q_norm, "intent": "rag-emb"}
+            else:
+                # 4) Fallback — RAG TF-IDF (giữ nguyên logic cũ)
+                texts = [r.answer_text for r in fetch_answer_rows(db, req.survey_id)]
+                topk_ctx = retrieve_topk(texts, q_norm, req.top_k)
+                answer = craft_answer(q_norm, topk_ctx)
+                if user_id:
+                    _USER_CTX[user_id] = {"survey_id": req.survey_id, "last_q": q_norm, "intent": "rag"}
+
+        # 5) Log & trả kết quả
         now = datetime.utcnow()
         chat = AiChatLog(
             survey_id=req.survey_id,
@@ -672,6 +993,7 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
             top_k=req.top_k, created_at=now,
         )
     except Exception as e:
+        db.rollback()
         db.add(ActivityLog(
             user_id=req.user_id, action_type="ai_query_error",
             target_id=None, target_table="ai_chat_logs",
@@ -682,6 +1004,22 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
 
 print("[startup] EXT_SENTI_URL =", os.getenv("EXT_SENTI_URL"))
 print("[startup] EXT_SENTI_KEY set? ", bool(os.getenv("EXT_SENTI_KEY")))
+
+@app.post("/ai/rag/ingest/{survey_id}", tags=["Chat AI/RAG"])
+def rag_ingest(survey_id: int, db: Session = Depends(get_db)):
+    rows = fetch_answer_rows(db, survey_id)
+    if not rows:
+        return {"ok": False, "message": "Không có câu trả lời hợp lệ."}
+    added = 0
+    for r in rows:
+        raw = r.answer_text or ""
+        nt = norm_text(raw)
+        vec = _embed_vi(nt)
+        if not vec:
+            continue
+        _embed_upsert(survey_id, int(r.answer_id), nt, vec)
+        added += 1
+    return {"ok": True, "ingested": added, "survey_id": survey_id}
 
 # ============================================================
 # ===================== SPRINT 4 ADDITIONS ====================
@@ -846,7 +1184,20 @@ def gemini_classify_batch(texts: List[str], variant: str | None = None) -> List[
 
     return labels
 
+def _cosine(a: list[float], b: list[float]) -> float:
+    if not a or not b: return 0.0
+    import numpy as np
+    va = np.array(a, dtype=float); vb = np.array(b, dtype=float)
+    na = np.linalg.norm(va); nb = np.linalg.norm(vb)
+    if na == 0 or nb == 0: return 0.0
+    return float(va.dot(vb) / (na*nb))
 
+def _build_rag_answer(question: str, contexts: list[str]) -> str:
+    # Có thể dùng Gemini generate; để tiết kiệm, mình dùng template nhẹ (không tốn token).
+    if not contexts:
+        return "Hiện chưa có ngữ cảnh phù hợp để trả lời."
+    bullets = "\n".join(f"- {c}" for c in contexts[:3])
+    return f"Dưới đây là thông tin liên quan tới câu hỏi “{question}”:\n{bullets}\nTóm lại, câu trả lời dựa trên các phản hồi tiêu biểu ở trên."
 
 @app.post("/ai/basic-sentiment/{survey_id}", tags=["Analysis Service"])
 def ai_basic_senti(survey_id: int):
