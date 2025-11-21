@@ -16,7 +16,6 @@ import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveyTextAnalysi
 import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveySentimentResponseDTO;
 import vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum;
 import vn.duytan.c1se09.smartsurvey.repository.*;
-
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 
 import java.time.LocalDateTime;
@@ -30,6 +29,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("null")
 public class StatisticsService {
 
     private final SurveyRepository surveyRepository;
@@ -39,6 +39,7 @@ public class StatisticsService {
     private final QuestionRepository questionRepository;
     private final SurveyViewRepository surveyViewRepository;
     private final AuthService authService;
+    private final SurveyPermissionService surveyPermissionService;
 
     // AI service configuration
     private static final String AI_SERVICE_BASE_URL = "http://localhost:8000";
@@ -53,7 +54,7 @@ public class StatisticsService {
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
 
         User currentUser = authService.getCurrentUser();
-        if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
+        if (!surveyPermissionService.canViewResults(survey, currentUser)) {
             throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này");
         }
 
@@ -110,7 +111,7 @@ public class StatisticsService {
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
 
         User currentUser = authService.getCurrentUser();
-        if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
+        if (!surveyPermissionService.canViewResults(survey, currentUser)) {
             throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này");
         }
 
@@ -145,7 +146,7 @@ public class StatisticsService {
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
 
         User currentUser = authService.getCurrentUser();
-        if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
+        if (!surveyPermissionService.canViewResults(survey, currentUser)) {
             throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này");
         }
 
@@ -541,7 +542,7 @@ public class StatisticsService {
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
 
         User currentUser = authService.getCurrentUser();
-        if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
+        if (!surveyPermissionService.canViewResults(survey, currentUser)) {
             throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này");
         }
 

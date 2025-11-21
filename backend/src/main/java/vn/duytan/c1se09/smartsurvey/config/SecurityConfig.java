@@ -31,6 +31,7 @@ import java.util.Arrays;
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class SecurityConfig {
 
     private final UserDetailsServiceImpl userDetailsService;
@@ -83,11 +84,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers("/auth/login", "/auth/register", "/auth/forgot-password").permitAll()
                         .requestMatchers("/auth/change-password", "/auth/me", "/auth/test-token").authenticated()
-                        .requestMatchers("/api/users").authenticated()
+                        .requestMatchers("/api/users/**").authenticated()
                         .requestMatchers("/users/profile").authenticated()
                         .requestMatchers("/dashboard/**").authenticated()
                         .requestMatchers("/surveys/{id}/public", "/surveys/{id}/status").permitAll()
                         .requestMatchers(HttpMethod.POST, "/responses").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/responses/with-files").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/responses/with-files").authenticated()
                         .requestMatchers("/api/responses/**").authenticated()
                         .requestMatchers("/surveys/**").authenticated()

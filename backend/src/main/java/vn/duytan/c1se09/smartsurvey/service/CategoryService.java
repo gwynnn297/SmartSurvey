@@ -11,6 +11,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class CategoryService {
     private final CategoryRepository categoryRepository;
 

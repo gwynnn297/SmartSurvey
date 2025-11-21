@@ -32,6 +32,7 @@ import java.time.format.DateTimeFormatter;
 
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class ResponseService {
 	private final ResponseRepository responseRepository;
 	private final AnswerRepository answerRepository;
@@ -43,6 +44,7 @@ public class ResponseService {
 	private final AuthService authService;
 	private final ActivityLogService activityLogService;
 	private final AnswerDataHelper answerDataHelper;
+	private final SurveyPermissionService surveyPermissionService;
 
 	@Value("${app.upload.dir:uploads}")
 	private String uploadDir;
@@ -52,11 +54,23 @@ public class ResponseService {
 		Survey survey = surveyRepository.findById(request.getSurveyId())
 				.orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
 
-		// Kiểm tra survey có published không
+		// Lấy user hiện tại (có thể null nếu user ngoài)
+		User current = tryGetCurrentUserOrNull();
+		
+		// Kiểm tra quyền trả lời survey:
+		// - Chỉ survey published mới cho phép nộp response
+		// - Draft và archived KHÔNG CHO PHÉP nộp response (kể cả có permission)
 		if (survey.getStatus() != SurveyStatusEnum.published) {
-			throw new IdInvalidException("Khảo sát không khả dụng để trả lời. Trạng thái hiện tại: " +
-					(survey.getStatus() != null ? survey.getStatus().name() : "null"));
+			if (survey.getStatus() == SurveyStatusEnum.draft) {
+				throw new IdInvalidException("Khảo sát đang ở trạng thái bản nháp, chưa thể nộp phản hồi");
+			} else if (survey.getStatus() == SurveyStatusEnum.archived) {
+				throw new IdInvalidException("Khảo sát đã được lưu trữ, không thể nộp phản hồi");
+			} else {
+				throw new IdInvalidException("Khảo sát không ở trạng thái cho phép nộp phản hồi");
+			}
 		}
+		// Survey published = Public = Ai cũng có thể trả lời (không cần check permission)
+		// current có thể null (user ngoài) hoặc có giá trị (user đã đăng nhập)
 
 		List<Question> questions = questionRepository.findBySurvey(survey);
 		if (questions.isEmpty()) {
@@ -74,7 +88,7 @@ public class ResponseService {
 		Response response = new Response();
 		response.setSurvey(survey);
 
-		User current = tryGetCurrentUserOrNull();
+		// current đã được lấy ở trên khi check permission
 		if (current != null) {
 			response.setUser(current);
 		}
@@ -138,8 +152,7 @@ public class ResponseService {
 					break;
 
 				case multiple_choice:
-					// Multiple option selection - create separate Answer record for each selected
-					// option
+					// Multiple option selection - create separate Answer record for each selected option
 					List<Long> selectedOptionIds = null;
 
 					if (dto.getSelectedOptionIds() != null && !dto.getSelectedOptionIds().isEmpty()) {
@@ -173,8 +186,7 @@ public class ResponseService {
 						selectedOptionIds = resolvedIds;
 					}
 
-					// Validate all selected option ids belong to this question and create separate
-					// Answer records
+					// Validate all selected option ids belong to this question and create separate Answer records
 					if (selectedOptionIds != null && !selectedOptionIds.isEmpty()) {
 						for (Long optionId : selectedOptionIds) {
 							Option option = optionRepository.findById(optionId)
@@ -203,10 +215,10 @@ public class ResponseService {
 						for (int i = 0; i < dto.getRankingOptionIds().size(); i++) {
 							Long optionId = dto.getRankingOptionIds().get(i);
 							int rank = i + 1; // Rank starts from 1
-
+							
 							Option option = optionRepository.findById(optionId)
 									.orElseThrow(() -> new IdInvalidException("Không tìm thấy optionId: " + optionId));
-
+							
 							Answer rankingAnswer = new Answer();
 							rankingAnswer.setResponse(savedResponse);
 							rankingAnswer.setQuestion(question);
@@ -267,38 +279,36 @@ public class ResponseService {
 		dto.setUserId(savedResponse.getUser() != null ? savedResponse.getUser().getUserId() : null);
 		dto.setRequestToken(savedResponse.getRequestToken());
 		dto.setSubmittedAt(savedResponse.getSubmittedAt());
-
-		// Group answers by question for multiple choice handling
+		
+		// Group answers by question for multiple choice handling  
 		Map<Long, List<Answer>> submitAnswersByQuestion = savedAnswers.stream()
 				.collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
 
 		List<AnswerDTO> answerDTOs = new ArrayList<>();
-
+		
 		for (Map.Entry<Long, List<Answer>> entry : submitAnswersByQuestion.entrySet()) {
 			Long questionId = entry.getKey();
 			List<Answer> questionAnswers = entry.getValue();
-
-			if (questionAnswers.isEmpty())
-				continue;
-
+			
+			if (questionAnswers.isEmpty()) continue;
+			
 			Answer firstAnswer = questionAnswers.get(0);
 			Question question = firstAnswer.getQuestion();
-
+			
 			AnswerDTO ad = new AnswerDTO();
 			ad.setQuestionId(questionId);
 			ad.setQuestionText(question.getQuestionText());
 			ad.setCreatedAt(firstAnswer.getCreatedAt());
-
+			
 			// Handle different question types
 			if (question.getQuestionType() == QuestionTypeEnum.multiple_choice) {
-				// For multiple choice: collect all selected option IDs from multiple Answer
-				// records
+				// For multiple choice: collect all selected option IDs from multiple Answer records
 				List<Long> selectedOptionIds = questionAnswers.stream()
 						.filter(a -> a.getOption() != null)
 						.map(a -> a.getOption().getOptionId())
 						.distinct()
 						.toList();
-
+				
 				ad.setSelectedOptionIds(selectedOptionIds);
 				ad.setAnswerId(firstAnswer.getAnswerId()); // Use first answer's ID as representative
 				// Don't set optionId or answerText for multiple choice
@@ -310,7 +320,7 @@ public class ResponseService {
 				ad.setAnswerId(firstAnswer.getAnswerId());
 				ad.setOptionId(firstAnswer.getOption() != null ? firstAnswer.getOption().getOptionId() : null);
 				ad.setAnswerText(firstAnswer.getAnswerText());
-
+				
 				// Parse special answer formats
 				if (firstAnswer.getAnswerText() != null && question.getQuestionType() != null) {
 					switch (question.getQuestionType()) {
@@ -332,7 +342,7 @@ public class ResponseService {
 					}
 				}
 			}
-
+			
 			// For all question types: check if there are uploaded files
 			if (question.getQuestionType() == QuestionTypeEnum.file_upload) {
 				List<FileUpload> files = fileUploadRepository.findByAnswer(firstAnswer);
@@ -343,7 +353,7 @@ public class ResponseService {
 					ad.setUploadedFiles(fileInfos);
 				}
 			}
-
+			
 			answerDTOs.add(ad);
 		}
 
@@ -351,8 +361,8 @@ public class ResponseService {
 		return dto;
 	}
 
-	@Transactional(readOnly = true)
-	public List<ResponseWithAnswersDTO> getResponsesBySurvey(Long surveyId) throws IdInvalidException {
+    @Transactional(readOnly = true)
+    public List<ResponseWithAnswersDTO> getResponsesBySurvey(Long surveyId) throws IdInvalidException {
 		Survey survey = surveyRepository.findById(surveyId)
 				.orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
 		List<Response> responses = responseRepository.findBySurvey(survey);
@@ -369,38 +379,36 @@ public class ResponseService {
 
 			// Get all answers for this response
 			List<Answer> allAnswers = answerRepository.findByResponse(r);
-
+			
 			// Group answers by question for multiple choice handling
 			Map<Long, List<Answer>> answersByQuestion = allAnswers.stream()
 					.collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
 
 			List<AnswerDTO> answers = new ArrayList<>();
-
+			
 			for (Map.Entry<Long, List<Answer>> entry : answersByQuestion.entrySet()) {
 				Long questionId = entry.getKey();
 				List<Answer> questionAnswers = entry.getValue();
-
-				if (questionAnswers.isEmpty())
-					continue;
-
+				
+				if (questionAnswers.isEmpty()) continue;
+				
 				Answer firstAnswer = questionAnswers.get(0);
 				Question question = firstAnswer.getQuestion();
-
+				
 				AnswerDTO ad = new AnswerDTO();
 				ad.setQuestionId(questionId);
 				ad.setQuestionText(question.getQuestionText());
 				ad.setCreatedAt(firstAnswer.getCreatedAt());
-
+				
 				// Handle different question types
 				if (question.getQuestionType() == QuestionTypeEnum.multiple_choice) {
-					// For multiple choice: collect all selected option IDs from multiple Answer
-					// records
+					// For multiple choice: collect all selected option IDs from multiple Answer records
 					List<Long> selectedOptionIds = questionAnswers.stream()
 							.filter(a -> a.getOption() != null)
 							.map(a -> a.getOption().getOptionId())
 							.distinct()
 							.toList();
-
+					
 					ad.setSelectedOptionIds(selectedOptionIds);
 					ad.setAnswerId(firstAnswer.getAnswerId()); // Use first answer's ID as representative
 					// Don't set optionId or answerText for multiple choice
@@ -410,7 +418,7 @@ public class ResponseService {
 					ad.setOptionId(firstAnswer.getOption() != null ? firstAnswer.getOption().getOptionId() : null);
 					ad.setAnswerText(firstAnswer.getAnswerText());
 				}
-
+				
 				answers.add(ad);
 			}
 
@@ -420,31 +428,27 @@ public class ResponseService {
 	}
 
 	@Transactional(readOnly = true)
-	public ResponsePageDTO<ResponseSummaryDTO> listResponses(Long surveyId, ResponseFilterRequestDTO filter)
-			throws IdInvalidException {
+	public ResponsePageDTO<ResponseSummaryDTO> listResponses(Long surveyId, ResponseFilterRequestDTO filter) throws IdInvalidException {
 		Survey survey = surveyRepository.findById(surveyId)
 				.orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
 
 		User currentUser = authService.getCurrentUser();
-		if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
-			throw new IdInvalidException("Bạn không có quyền xem responses của khảo sát này");
+		if (!surveyPermissionService.canViewResults(survey, currentUser)) {
+			throw new IdInvalidException("Bạn không có quyền xem kết quả khảo sát này");
 		}
 
-		org.springframework.data.domain.Pageable pageable = buildPageable(filter.getPage(), filter.getSize(),
-				filter.getSort());
+		org.springframework.data.domain.Pageable pageable = buildPageable(filter.getPage(), filter.getSize(), filter.getSort());
 
 		var page = responseRepository.findPageBySurveyWithFilters(
 				survey,
 				filter.getFrom(),
 				filter.getTo(),
 				filter.getUserId(),
-				filter.getRequestToken() != null && !filter.getRequestToken().isBlank() ? filter.getRequestToken()
-						: null,
+				filter.getRequestToken() != null && !filter.getRequestToken().isBlank() ? filter.getRequestToken() : null,
 				filter.getSearch() != null && !filter.getSearch().isBlank() ? filter.getSearch() : null,
-				filter.getCompletionStatus() != null && !filter.getCompletionStatus().isBlank()
-						? filter.getCompletionStatus()
-						: null,
-				pageable);
+				filter.getCompletionStatus() != null && !filter.getCompletionStatus().isBlank() ? filter.getCompletionStatus() : null,
+				pageable
+		);
 
 		List<Question> requiredQuestions = questionRepository.findBySurveyAndIsRequiredTrue(survey);
 
@@ -478,7 +482,7 @@ public class ResponseService {
 				.orElseThrow(() -> new IdInvalidException("Không tìm thấy response"));
 
 		User currentUser = authService.getCurrentUser();
-		if (!response.getSurvey().getUser().getUserId().equals(currentUser.getUserId())) {
+		if (!surveyPermissionService.canViewResults(response.getSurvey(), currentUser)) {
 			throw new IdInvalidException("Bạn không có quyền xem response này");
 		}
 
@@ -486,19 +490,17 @@ public class ResponseService {
 	}
 
 	@Transactional(readOnly = true)
-	public org.springframework.http.ResponseEntity<byte[]> exportResponses(Long surveyId,
-			ResponseFilterRequestDTO filter, String format, boolean includeAnswers) throws IdInvalidException {
+	public org.springframework.http.ResponseEntity<byte[]> exportResponses(Long surveyId, ResponseFilterRequestDTO filter, String format, boolean includeAnswers) throws IdInvalidException {
 		Survey survey = surveyRepository.findById(surveyId)
 				.orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
 
 		User currentUser = authService.getCurrentUser();
-		if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
+		if (!surveyPermissionService.canViewResults(survey, currentUser)) {
 			throw new IdInvalidException("Bạn không có quyền export responses của khảo sát này");
 		}
 
 		// Fetch all (no pagination) with filters
-		org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0,
-				Integer.MAX_VALUE);
+		org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, Integer.MAX_VALUE);
 		var page = responseRepository.findPageBySurveyWithFilters(
 				survey,
 				filter.getFrom(),
@@ -514,8 +516,7 @@ public class ResponseService {
 
 		if ("xlsx".equalsIgnoreCase(format)) {
 			byte[] bytes = exportXlsx(survey, responses, includeAnswers, requiredQuestions);
-			return buildDownload(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-					"responses_" + surveyId + ".xlsx");
+			return buildDownload(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "responses_" + surveyId + ".xlsx");
 		}
 		// default CSV
 		byte[] bytes = exportCsv(survey, responses, includeAnswers, requiredQuestions);
@@ -527,17 +528,15 @@ public class ResponseService {
 		Survey survey = surveyRepository.findById(surveyId)
 				.orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
 		User currentUser = authService.getCurrentUser();
-		if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
-			throw new IdInvalidException("Bạn không có quyền xoá responses của khảo sát này");
+		if (!surveyPermissionService.canDelete(survey, currentUser)) {
+			throw new IdInvalidException("Chỉ chủ sở hữu mới có quyền xóa responses");
 		}
 
 		int deleted = 0;
 		for (Long id : responseIds) {
 			Response r = responseRepository.findById(id).orElse(null);
-			if (r == null)
-				continue;
-			if (!r.getSurvey().getSurveyId().equals(surveyId))
-				continue;
+			if (r == null) continue;
+			if (!r.getSurvey().getSurveyId().equals(surveyId)) continue;
 			// delete answers first (cascade might handle, but do explicitly)
 			List<Answer> answers = answerRepository.findByResponse(r);
 			answerRepository.deleteAll(answers);
@@ -550,22 +549,19 @@ public class ResponseService {
 	private org.springframework.data.domain.Pageable buildPageable(Integer page, Integer size, String sort) {
 		int p = page != null && page >= 0 ? page : 0;
 		int s = size != null && size > 0 ? size : 10;
-		org.springframework.data.domain.Sort sortSpec = org.springframework.data.domain.Sort.by("submittedAt")
-				.descending();
+		org.springframework.data.domain.Sort sortSpec = org.springframework.data.domain.Sort.by("submittedAt").descending();
 		if (sort != null && !sort.isBlank()) {
 			String[] parts = sort.split(",");
 			String field = parts[0];
 			boolean asc = parts.length < 2 || !"desc".equalsIgnoreCase(parts[1]);
-			sortSpec = asc ? org.springframework.data.domain.Sort.by(field).ascending()
-					: org.springframework.data.domain.Sort.by(field).descending();
+			sortSpec = asc ? org.springframework.data.domain.Sort.by(field).ascending() : org.springframework.data.domain.Sort.by(field).descending();
 		}
 		return org.springframework.data.domain.PageRequest.of(p, s, sortSpec);
 	}
 
 	private String determineCompletionStatus(Response r, List<Question> requiredQuestions) {
 		List<Answer> answers = answerRepository.findByResponse(r);
-		if (answers.isEmpty())
-			return "dropped";
+		if (answers.isEmpty()) return "dropped";
 		Set<Long> answeredRequired = answers.stream()
 				.filter(a -> a.getQuestion() != null && Boolean.TRUE.equals(a.getQuestion().getIsRequired()))
 				.map(a -> a.getQuestion().getQuestionId())
@@ -574,15 +570,13 @@ public class ResponseService {
 		return answeredRequired.size() >= requiredCount && requiredCount > 0 ? "completed" : "partial";
 	}
 
-	private byte[] exportCsv(Survey survey, List<Response> responses, boolean includeAnswers,
-			List<Question> questions) {
+	private byte[] exportCsv(Survey survey, List<Response> responses, boolean includeAnswers, List<Question> questions) {
 		StringBuilder sb = new StringBuilder();
 		// header
 		sb.append("responseId,surveyId,userId,requestToken,submittedAt,durationSeconds,completionStatus");
 		if (includeAnswers) {
 			for (Question q : questions) {
-				sb.append(',').append(
-						escapeCsv(q.getQuestionText() != null ? q.getQuestionText() : ("Q" + q.getQuestionId())));
+				sb.append(',').append(escapeCsv(q.getQuestionText() != null ? q.getQuestionText() : ("Q" + q.getQuestionId())));
 			}
 		}
 		sb.append("\n");
@@ -600,8 +594,7 @@ public class ResponseService {
 					.append(status);
 			if (includeAnswers) {
 				List<Answer> answers = answerRepository.findByResponse(r);
-				Map<Long, List<Answer>> byQ = answers.stream()
-						.collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
+				Map<Long, List<Answer>> byQ = answers.stream().collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
 				for (Question q : questions) {
 					List<Answer> list = byQ.getOrDefault(q.getQuestionId(), List.of());
 					String val;
@@ -610,12 +603,9 @@ public class ResponseService {
 								.map(a -> a.getOption().getOptionText())
 								.filter(Objects::nonNull)
 								.collect(Collectors.joining("; "));
-					} else if (q.getQuestionType() == QuestionTypeEnum.single_choice
-							|| q.getQuestionType() == QuestionTypeEnum.boolean_
-							|| q.getQuestionType() == QuestionTypeEnum.rating) {
+					} else if (q.getQuestionType() == QuestionTypeEnum.single_choice || q.getQuestionType() == QuestionTypeEnum.boolean_ || q.getQuestionType() == QuestionTypeEnum.rating) {
 						Answer a = list.isEmpty() ? null : list.get(0);
-						val = a != null ? (a.getOption() != null ? a.getOption().getOptionText() : a.getAnswerText())
-								: "";
+						val = a != null ? (a.getOption() != null ? a.getOption().getOptionText() : a.getAnswerText()) : "";
 					} else {
 						Answer a = list.isEmpty() ? null : list.get(0);
 						val = a != null ? a.getAnswerText() : "";
@@ -628,8 +618,7 @@ public class ResponseService {
 		return sb.toString().getBytes(StandardCharsets.UTF_8);
 	}
 
-	private byte[] exportXlsx(Survey survey, List<Response> responses, boolean includeAnswers,
-			List<Question> questions) {
+	private byte[] exportXlsx(Survey survey, List<Response> responses, boolean includeAnswers, List<Question> questions) {
 		try {
 			org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
 			org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Responses");
@@ -646,8 +635,7 @@ public class ResponseService {
 			header.createCell(col++).setCellValue("completionStatus");
 			if (includeAnswers) {
 				for (Question q : questions) {
-					header.createCell(col++).setCellValue(
-							q.getQuestionText() != null ? q.getQuestionText() : ("Q" + q.getQuestionId()));
+					header.createCell(col++).setCellValue(q.getQuestionText() != null ? q.getQuestionText() : ("Q" + q.getQuestionId()));
 				}
 			}
 
@@ -666,8 +654,7 @@ public class ResponseService {
 				row.createCell(c++).setCellValue(status);
 				if (includeAnswers) {
 					List<Answer> answers = answerRepository.findByResponse(r);
-					Map<Long, List<Answer>> byQ = answers.stream()
-							.collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
+					Map<Long, List<Answer>> byQ = answers.stream().collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
 					for (Question q : questions) {
 						List<Answer> list = byQ.getOrDefault(q.getQuestionId(), List.of());
 						String val;
@@ -676,13 +663,9 @@ public class ResponseService {
 									.map(a -> a.getOption().getOptionText())
 									.filter(Objects::nonNull)
 									.collect(Collectors.joining("; "));
-						} else if (q.getQuestionType() == QuestionTypeEnum.single_choice
-								|| q.getQuestionType() == QuestionTypeEnum.boolean_
-								|| q.getQuestionType() == QuestionTypeEnum.rating) {
+						} else if (q.getQuestionType() == QuestionTypeEnum.single_choice || q.getQuestionType() == QuestionTypeEnum.boolean_ || q.getQuestionType() == QuestionTypeEnum.rating) {
 							Answer a = list.isEmpty() ? null : list.get(0);
-							val = a != null
-									? (a.getOption() != null ? a.getOption().getOptionText() : a.getAnswerText())
-									: "";
+							val = a != null ? (a.getOption() != null ? a.getOption().getOptionText() : a.getAnswerText()) : "";
 						} else {
 							Answer a = list.isEmpty() ? null : list.get(0);
 							val = a != null ? a.getAnswerText() : "";
@@ -701,22 +684,21 @@ public class ResponseService {
 		}
 	}
 
-	private org.springframework.http.ResponseEntity<byte[]> buildDownload(byte[] bytes, String contentType,
-			String filename) {
+	private org.springframework.http.ResponseEntity<byte[]> buildDownload(byte[] bytes, String contentType, String filename) {
 		org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-		headers.add(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
-				"attachment; filename=\"" + filename + "\"");
+		headers.add(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
 		headers.add(org.springframework.http.HttpHeaders.CONTENT_TYPE, contentType);
 		return org.springframework.http.ResponseEntity.ok().headers(headers).body(bytes);
 	}
 
 	private String escapeCsv(String v) {
-		if (v == null)
-			return "";
+		if (v == null) return "";
 		boolean needQuotes = v.contains(",") || v.contains("\n") || v.contains("\r") || v.contains("\"");
 		String s = v.replace("\"", "\"\"");
 		return needQuotes ? ("\"" + s + "\"") : s;
 	}
+
+
 
 	private void validateSingleAnswer(Question question, AnswerSubmitDTO dto) throws IdInvalidException {
 		QuestionTypeEnum type = question.getQuestionType();
@@ -752,13 +734,13 @@ public class ResponseService {
 					List<Long> validOptionIds = questionOptions.stream()
 							.map(Option::getOptionId)
 							.collect(Collectors.toList());
-
+					
 					for (Long optionId : dto.getRankingOptionIds()) {
 						if (!validOptionIds.contains(optionId)) {
 							throw new IdInvalidException("Option ID " + optionId + " không thuộc câu hỏi ranking này");
 						}
 					}
-
+					
 					// Check if all options are ranked (optional - depends on business logic)
 					if (dto.getRankingOptionIds().size() != validOptionIds.size()) {
 						throw new IdInvalidException("Phải xếp hạng tất cả các options cho câu hỏi ranking");
@@ -766,8 +748,7 @@ public class ResponseService {
 				} else if (dto.getRankingOrder() == null || dto.getRankingOrder().isEmpty()) {
 					// Allow answerText for advanced ranking questions
 					if (dto.getAnswerText() == null || dto.getAnswerText().isBlank()) {
-						throw new IdInvalidException(
-								"Câu hỏi xếp hạng yêu cầu rankingOptionIds, rankingOrder hoặc answerText JSON");
+						throw new IdInvalidException("Câu hỏi xếp hạng yêu cầu rankingOptionIds, rankingOrder hoặc answerText JSON");
 					}
 				}
 				break;
@@ -802,7 +783,7 @@ public class ResponseService {
 		}
 	}
 
-	// Removed old counting helpers no longer exposed via API
+    // Removed old counting helpers no longer exposed via API
 
 	private User tryGetCurrentUserOrNull() {
 		try {
@@ -914,9 +895,8 @@ public class ResponseService {
 						}
 					}
 				}
-
-				// After all files are processed, regenerate the response DTO to include file
-				// info
+				
+				// After all files are processed, regenerate the response DTO to include file info
 				Response savedResponse = responseRepository.findById(response.getResponseId())
 						.orElseThrow(() -> new IdInvalidException("Response not found"));
 				return buildResponseWithAnswersDTO(savedResponse);
@@ -940,16 +920,15 @@ public class ResponseService {
 		info.setFileType(fileUpload.getFileType());
 		info.setFileSize(fileUpload.getFileSize());
 		info.setUploadedAt(fileUpload.getCreatedAt());
-
+		
 		// Create download URL (assuming base URL from properties)
 		info.setDownloadUrl("/api/files/download/" + fileUpload.getFileId());
-
+		
 		return info;
 	}
 
 	/**
-	 * Build complete ResponseWithAnswersDTO from Response entity including file
-	 * info
+	 * Build complete ResponseWithAnswersDTO from Response entity including file info
 	 */
 	private ResponseWithAnswersDTO buildResponseWithAnswersDTO(Response response) {
 		ResponseWithAnswersDTO dto = new ResponseWithAnswersDTO();
@@ -961,38 +940,36 @@ public class ResponseService {
 
 		// Get all answers for this response
 		List<Answer> allAnswers = answerRepository.findByResponse(response);
-
+		
 		// Group answers by question for multiple choice handling
 		Map<Long, List<Answer>> answersByQuestion = allAnswers.stream()
 				.collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
 
 		List<AnswerDTO> answerDTOs = new ArrayList<>();
-
+		
 		for (Map.Entry<Long, List<Answer>> entry : answersByQuestion.entrySet()) {
 			Long questionId = entry.getKey();
 			List<Answer> questionAnswers = entry.getValue();
-
-			if (questionAnswers.isEmpty())
-				continue;
-
+			
+			if (questionAnswers.isEmpty()) continue;
+			
 			Answer firstAnswer = questionAnswers.get(0);
 			Question question = firstAnswer.getQuestion();
-
+			
 			AnswerDTO ad = new AnswerDTO();
 			ad.setQuestionId(questionId);
 			ad.setQuestionText(question.getQuestionText());
 			ad.setCreatedAt(firstAnswer.getCreatedAt());
-
+			
 			// Handle different question types
 			if (question.getQuestionType() == QuestionTypeEnum.multiple_choice) {
-				// For multiple choice: collect all selected option IDs from multiple Answer
-				// records
+				// For multiple choice: collect all selected option IDs from multiple Answer records
 				List<Long> selectedOptionIds = questionAnswers.stream()
 						.filter(a -> a.getOption() != null)
 						.map(a -> a.getOption().getOptionId())
 						.distinct()
 						.toList();
-
+				
 				ad.setSelectedOptionIds(selectedOptionIds);
 				ad.setAnswerId(firstAnswer.getAnswerId()); // Use first answer's ID as representative
 				// Don't set optionId or answerText for multiple choice
@@ -1004,7 +981,7 @@ public class ResponseService {
 				ad.setAnswerId(firstAnswer.getAnswerId());
 				ad.setOptionId(firstAnswer.getOption() != null ? firstAnswer.getOption().getOptionId() : null);
 				ad.setAnswerText(firstAnswer.getAnswerText());
-
+				
 				// Parse special answer formats
 				if (firstAnswer.getAnswerText() != null && question.getQuestionType() != null) {
 					switch (question.getQuestionType()) {
@@ -1026,7 +1003,7 @@ public class ResponseService {
 					}
 				}
 			}
-
+			
 			// For all question types: check if there are uploaded files
 			if (question.getQuestionType() == QuestionTypeEnum.file_upload) {
 				List<FileUpload> files = fileUploadRepository.findByAnswer(firstAnswer);
@@ -1037,7 +1014,7 @@ public class ResponseService {
 					ad.setUploadedFiles(fileInfos);
 				}
 			}
-
+			
 			answerDTOs.add(ad);
 		}
 
@@ -1050,12 +1027,11 @@ public class ResponseService {
 	 */
 	private void processRankingAnswer(List<Answer> questionAnswers, AnswerDTO ad) {
 		Answer firstAnswer = questionAnswers.get(0);
-
-		// Check if we have multiple Answer records with option_id and ranks (new
-		// format)
+		
+		// Check if we have multiple Answer records with option_id and ranks (new format)
 		boolean hasRankingRecords = questionAnswers.stream()
 				.allMatch(a -> a.getOption() != null && a.getAnswerText() != null);
-
+		
 		if (hasRankingRecords && questionAnswers.size() > 1) {
 			// New ranking format: multiple records with option_id and rank
 			List<Long> rankingOptionIds = questionAnswers.stream()
@@ -1071,7 +1047,7 @@ public class ResponseService {
 					})
 					.map(a -> a.getOption().getOptionId())
 					.toList();
-
+			
 			ad.setRankingOptionIds(rankingOptionIds);
 			ad.setAnswerId(firstAnswer.getAnswerId()); // Use first answer's ID as representative
 		} else {
@@ -1083,45 +1059,44 @@ public class ResponseService {
 			}
 		}
 	}
-
-	/**
-	 * Convert Answer entity to AnswerDTO
-	 */
-	private AnswerDTO convertToAnswerDTO(Answer answer) {
-		AnswerDTO dto = new AnswerDTO();
-		dto.setAnswerId(answer.getAnswerId());
-		dto.setQuestionId(answer.getQuestion().getQuestionId());
-		dto.setQuestionText(answer.getQuestion().getQuestionText());
-		dto.setAnswerText(answer.getAnswerText());
-		dto.setCreatedAt(answer.getCreatedAt());
-
-		if (answer.getOption() != null) {
-			dto.setOptionId(answer.getOption().getOptionId());
-		}
-
-		// Handle file uploads
-		if (answer.getQuestion().getQuestionType() == QuestionTypeEnum.file_upload) {
-			List<FileUpload> files = fileUploadRepository.findByAnswer(answer);
-			if (!files.isEmpty()) {
-				List<AnswerDTO.FileUploadInfo> fileInfos = files.stream()
-						.map(this::mapToFileUploadInfo)
-						.toList();
-				dto.setUploadedFiles(fileInfos);
-			}
-		}
-
-		return dto;
-	}
-
+/**
+     * Convert Answer entity to AnswerDTO
+     */
+    private AnswerDTO convertToAnswerDTO(Answer answer) {
+        AnswerDTO dto = new AnswerDTO();
+        dto.setAnswerId(answer.getAnswerId());
+        dto.setQuestionId(answer.getQuestion().getQuestionId());
+        dto.setQuestionText(answer.getQuestion().getQuestionText());
+        dto.setAnswerText(answer.getAnswerText());
+        dto.setCreatedAt(answer.getCreatedAt());
+        
+        if (answer.getOption() != null) {
+            dto.setOptionId(answer.getOption().getOptionId());
+        }
+        
+        // Handle file uploads
+        if (answer.getQuestion().getQuestionType() == QuestionTypeEnum.file_upload) {
+            List<FileUpload> files = fileUploadRepository.findByAnswer(answer);
+            if (!files.isEmpty()) {
+                List<AnswerDTO.FileUploadInfo> fileInfos = files.stream()
+                        .map(this::mapToFileUploadInfo)
+                        .toList();
+                dto.setUploadedFiles(fileInfos);
+            }
+        }
+        
+        return dto;
+    }
 	/**
 	 * Lấy chi tiết response với tất cả answers
 	 */
-	// Removed response detail per request
+    // Removed response detail per request
 
-	// Removed export per request
+    // Removed export per request
 
-	// Removed old paginated method; FE will handle pagination if needed
+    // Removed old paginated method; FE will handle pagination if needed
 
-	// Removed bulk delete per request
+    // Removed bulk delete per request
+
 
 }

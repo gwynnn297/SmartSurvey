@@ -1,4 +1,4 @@
--- V15: Update AI inference confidence thresholds
+-- V18: Update AI inference confidence thresholds
 -- Tự động xử lý các kết quả AI inference dựa trên confidence score
 
 -- 5.1 Khóa các ca rất tự tin (confidence >= 0.90)

@@ -15,6 +15,7 @@ import vn.duytan.c1se09.smartsurvey.repository.UserRepository;
  */
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class UserService {
 
     private final UserRepository userRepository;

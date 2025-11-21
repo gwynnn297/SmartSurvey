@@ -19,11 +19,13 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class OptionService {
     private final OptionRepository optionRepository;
     private final QuestionRepository questionRepository;
     private final AuthService authService;
     private final ActivityLogService activityLogService;
+    private final SurveyPermissionService surveyPermissionService;
 
     public Option getOptionEntityById(Long optionId) throws IdInvalidException {
         return optionRepository.findById(optionId)
@@ -42,14 +44,33 @@ public class OptionService {
         return dto;
     }
 
-    private void validateUserPermission(Question question) throws IdInvalidException {
+    /**
+     * Validate permission để EDIT (create/update/delete options)
+     * Chỉ OWNER và EDITOR được phép
+     */
+    private void validateEditPermission(Question question) throws IdInvalidException {
         User currentUser = authService.getCurrentUser();
         if (currentUser == null) {
             throw new IdInvalidException("Người dùng chưa xác thực");
         }
 
-        if (!question.getSurvey().getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền thực hiện thao tác này");
+        if (!surveyPermissionService.canEdit(question.getSurvey(), currentUser)) {
+            throw new IdInvalidException("Bạn không có quyền chỉnh sửa khảo sát này");
+        }
+    }
+
+    /**
+     * Validate permission để VIEW (xem options)
+     * OWNER, EDITOR, ANALYST, VIEWER đều được phép
+     */
+    private void validateViewPermission(Question question) throws IdInvalidException {
+        User currentUser = authService.getCurrentUser();
+        if (currentUser == null) {
+            throw new IdInvalidException("Người dùng chưa xác thực");
+        }
+
+        if (!surveyPermissionService.canViewSurvey(question.getSurvey(), currentUser)) {
+            throw new IdInvalidException("Bạn không có quyền xem khảo sát này");
         }
     }
 
@@ -66,7 +87,7 @@ public class OptionService {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
 
-        validateUserPermission(question);
+        validateEditPermission(question);
 
         Option option = new Option();
         option.setQuestion(question);
@@ -116,7 +137,7 @@ public class OptionService {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy câu hỏi"));
 
-        validateUserPermission(question);
+        validateViewPermission(question);
 
         List<Option> options = optionRepository.findByQuestion(question);
         return options.stream().map(this::toOptionResponseDTO).toList();
@@ -124,7 +145,7 @@ public class OptionService {
 
     public OptionResponseDTO getOptionById(Long optionId) throws IdInvalidException {
         Option option = getOptionEntityById(optionId);
-        validateUserPermission(option.getQuestion());
+        validateViewPermission(option.getQuestion());
         return toOptionResponseDTO(option);
     }
 
@@ -138,7 +159,7 @@ public class OptionService {
     @Transactional
     public OptionResponseDTO updateOption(Long optionId, OptionUpdateRequestDTO request) throws IdInvalidException {
         Option option = getOptionEntityById(optionId);
-        validateUserPermission(option.getQuestion());
+        validateEditPermission(option.getQuestion());
 
         if (request.getOptionText() != null && !request.getOptionText().isEmpty()) {
             option.setOptionText(request.getOptionText());
@@ -185,7 +206,7 @@ public class OptionService {
     @Transactional
     public void deleteOption(Long optionId) throws IdInvalidException {
         Option option = getOptionEntityById(optionId);
-        validateUserPermission(option.getQuestion());
+        validateEditPermission(option.getQuestion());
 
         optionRepository.delete(option);
 

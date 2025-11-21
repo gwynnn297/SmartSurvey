@@ -12,10 +12,14 @@ import vn.duytan.c1se09.smartsurvey.domain.AiSentiment;
 import vn.duytan.c1se09.smartsurvey.domain.Response;
 import vn.duytan.c1se09.smartsurvey.domain.Survey;
 import vn.duytan.c1se09.smartsurvey.domain.response.ai.SentimentAnalysisResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.User;
 import vn.duytan.c1se09.smartsurvey.repository.AiSentimentRepository;
 import vn.duytan.c1se09.smartsurvey.repository.ResponseRepository;
 import vn.duytan.c1se09.smartsurvey.repository.SurveyRepository;
 import vn.duytan.c1se09.smartsurvey.service.ActivityLogService;
+import vn.duytan.c1se09.smartsurvey.service.AuthService;
+import vn.duytan.c1se09.smartsurvey.service.SurveyPermissionService;
+import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -29,6 +33,7 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("null")
 public class AiSentimentService {
 
     private final RestTemplate restTemplate;
@@ -37,6 +42,8 @@ public class AiSentimentService {
     private final AiSentimentRepository aiSentimentRepository;
     private final ActivityLogService activityLogService;
     private final ObjectMapper objectMapper;
+    private final AuthService authService;
+    private final SurveyPermissionService surveyPermissionService;
 
     @Value("${ai.sentiment.base-url:http://localhost:8000}")
     private String aiServiceBaseUrl;
@@ -46,10 +53,19 @@ public class AiSentimentService {
 
     /**
      * Phân tích sentiment cho survey
+     * Chỉ OWNER và ANALYST mới có quyền sử dụng AI sentiment analysis
      */
-    public SentimentAnalysisResponseDTO analyzeSentiment(Long surveyId, Long questionId) {
+    public SentimentAnalysisResponseDTO analyzeSentiment(Long surveyId, Long questionId) throws IdInvalidException {
         try {
             log.info("Bắt đầu phân tích sentiment cho survey: {}, question: {}", surveyId, questionId);
+
+            // 0. Kiểm tra permission: chỉ OWNER và ANALYST mới được sử dụng
+            Survey survey = surveyRepository.findById(surveyId)
+                    .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
+            User currentUser = authService.getCurrentUser();
+            if (!surveyPermissionService.canViewResults(survey, currentUser)) {
+                throw new IdInvalidException("Bạn không có quyền sử dụng AI sentiment analysis cho survey này");
+            }
 
             // 1. Validate survey exists và có responses
             validateSurveyAndResponses(surveyId);
@@ -82,6 +98,8 @@ public class AiSentimentService {
             log.info("Hoàn thành phân tích sentiment cho survey: {}", surveyId);
             return aiResponse;
 
+        } catch (IdInvalidException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Lỗi khi phân tích sentiment: {}", e.getMessage(), e);
             return SentimentAnalysisResponseDTO.error(surveyId,
@@ -91,14 +109,19 @@ public class AiSentimentService {
 
     /**
      * Lấy kết quả sentiment gần nhất
+     * Chỉ OWNER và ANALYST mới có quyền xem kết quả AI sentiment analysis
      */
-    public SentimentAnalysisResponseDTO getLatestSentiment(Long surveyId) {
+    public SentimentAnalysisResponseDTO getLatestSentiment(Long surveyId) throws IdInvalidException {
         try {
             log.info("Lấy kết quả sentiment gần nhất cho survey: {}", surveyId);
 
-            // 1. Validate survey exists
+            // 0. Kiểm tra permission: chỉ OWNER và ANALYST mới được xem
             Survey survey = surveyRepository.findById(surveyId)
-                    .orElseThrow(() -> new IllegalArgumentException("Survey không tồn tại"));
+                    .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
+            User currentUser = authService.getCurrentUser();
+            if (!surveyPermissionService.canViewResults(survey, currentUser)) {
+                throw new IdInvalidException("Bạn không có quyền xem kết quả AI sentiment analysis cho survey này");
+            }
 
             // 2. Lấy từ bảng ai_sentiment
             List<AiSentiment> sentimentAnalyses = aiSentimentRepository.findBySurveyOrderByCreatedAtDesc(survey);
@@ -113,6 +136,8 @@ public class AiSentimentService {
                 return SentimentAnalysisResponseDTO.error(surveyId, "Không tìm thấy kết quả sentiment");
             }
 
+        } catch (IdInvalidException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Lỗi khi lấy kết quả sentiment: {}", e.getMessage(), e);
             return SentimentAnalysisResponseDTO.error(surveyId,

@@ -28,6 +28,7 @@ import java.nio.file.Paths;
 @RestController
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("null")
 public class FileController {
 
     private final FileUploadRepository fileUploadRepository;

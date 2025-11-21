@@ -21,11 +21,13 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class QuestionService {
     private final QuestionRepository questionRepository;
     private final SurveyRepository surveyRepository;
     private final AuthService authService;
     private final ActivityLogService activityLogService;
+    private final SurveyPermissionService surveyPermissionService;
 
     // lấy thông tin câu hỏi
     public Question getQuestionEntityById(Long questionId) throws IdInvalidException {
@@ -49,19 +51,42 @@ public class QuestionService {
         return dto;
     }
 
-    private void validateUserPermission(Survey survey) throws IdInvalidException {
+    /**
+     * Validate permission để EDIT (create/update/delete questions)
+     * Chỉ OWNER và EDITOR được phép
+     */
+    private void validateEditPermission(Survey survey) throws IdInvalidException {
         User currentUser = authService.getCurrentUser();
         if (currentUser == null) {
             throw new IdInvalidException("Người dùng chưa xác thực");
         }
 
-        if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền thực hiện thao tác này");
+        if (!surveyPermissionService.canEdit(survey, currentUser)) {
+            throw new IdInvalidException("Bạn không có quyền chỉnh sửa khảo sát này");
         }
     }
 
-    private void validateUserPermission(Question question) throws IdInvalidException {
-        validateUserPermission(question.getSurvey());
+    private void validateEditPermission(Question question) throws IdInvalidException {
+        validateEditPermission(question.getSurvey());
+    }
+
+    /**
+     * Validate permission để VIEW (xem questions)
+     * OWNER, EDITOR, ANALYST, VIEWER đều được phép
+     */
+    private void validateViewPermission(Survey survey) throws IdInvalidException {
+        User currentUser = authService.getCurrentUser();
+        if (currentUser == null) {
+            throw new IdInvalidException("Người dùng chưa xác thực");
+        }
+
+        if (!surveyPermissionService.canViewSurvey(survey, currentUser)) {
+            throw new IdInvalidException("Bạn không có quyền xem khảo sát này");
+        }
+    }
+
+    private void validateViewPermission(Question question) throws IdInvalidException {
+        validateViewPermission(question.getSurvey());
     }
 
     // tạo câu hỏi
@@ -82,7 +107,7 @@ public class QuestionService {
         Survey survey = surveyRepository.findById(surveyId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
 
-        validateUserPermission(survey);
+        validateEditPermission(survey);
 
         Question question = new Question();
         question.setSurvey(survey);
@@ -142,7 +167,7 @@ public class QuestionService {
         Survey survey = surveyRepository.findById(surveyId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
 
-        validateUserPermission(survey);
+        validateViewPermission(survey);
 
         List<Question> questions = questionRepository.findBySurveyOrderByDisplayOrderAsc(survey);
         return questions.stream().map(this::toQuestionResponseDTO).toList();
@@ -150,7 +175,7 @@ public class QuestionService {
 
     public QuestionResponseDTO getQuestionById(Long questionId) throws IdInvalidException {
         Question question = getQuestionEntityById(questionId);
-        validateUserPermission(question);
+        validateViewPermission(question);
         return toQuestionResponseDTO(question);
     }
 
@@ -161,7 +186,7 @@ public class QuestionService {
     public void reorderQuestions(Long surveyId, List<Long> orderedQuestionIds) throws IdInvalidException {
         Survey survey = surveyRepository.findById(surveyId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
-        validateUserPermission(survey);
+        validateEditPermission(survey);
 
         List<Question> questions = questionRepository.findBySurvey(survey);
         if (orderedQuestionIds.size() != questions.size()) {
@@ -204,7 +229,7 @@ public class QuestionService {
     public QuestionResponseDTO updateQuestion(Long questionId, QuestionUpdateRequestDTO request)
             throws IdInvalidException {
         Question question = getQuestionEntityById(questionId);
-        validateUserPermission(question);
+        validateEditPermission(question);
 
         if (request.getQuestionText() != null && !request.getQuestionText().isEmpty()) {
             question.setQuestionText(request.getQuestionText());
@@ -262,7 +287,7 @@ public class QuestionService {
     @Transactional
     public void deleteQuestion(Long questionId) throws IdInvalidException {
         Question question = getQuestionEntityById(questionId);
-        validateUserPermission(question);
+        validateEditPermission(question);
 
         questionRepository.delete(question);
 

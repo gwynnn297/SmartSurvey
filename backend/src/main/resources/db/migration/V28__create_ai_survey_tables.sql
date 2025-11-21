@@ -1,4 +1,4 @@
--- V32: Create AI survey tables for industry, rules, and generation history
+-- V28: Create AI survey tables for industry, rules, and generation history
 
 -- 1. Create ai_survey_industry table
 CREATE TABLE ai_survey_industry (

@@ -69,10 +69,11 @@ public class SurveyViewController {
     /**
      * Lấy thống kê viewership của survey
      * GET /api/surveys/{surveyId}/viewership
+     * Permission check được thực hiện trong SurveyViewService
      */
     @GetMapping("/{surveyId}/viewership")
     @ApiMessage("Get survey viewership statistics")
-    public ResponseEntity<Map<String, Object>> getViewershipStats(@PathVariable Long surveyId) {
+    public ResponseEntity<Map<String, Object>> getViewershipStats(@PathVariable Long surveyId) throws IdInvalidException {
         try {
             long totalViews = surveyViewService.getTotalViews(surveyId);
             long uniqueViews = surveyViewService.getUniqueViews(surveyId);

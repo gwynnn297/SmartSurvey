@@ -48,7 +48,7 @@ public class ActivityLog {
         login, logout, create_survey, edit_survey, delete_survey,
         add_question, edit_question, delete_question,
         add_option, edit_option, delete_option,
-        submit_response, ai_generate, ai_refresh_one, ai_refresh_all, chat_ai
+        submit_response, ai_generate, ai_refresh_one, ai_refresh_all, chat_ai, ai_query
     }
 
     @PrePersist

@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.duytan.c1se09.smartsurvey.domain.Survey;
 import vn.duytan.c1se09.smartsurvey.domain.SurveyView;
+import vn.duytan.c1se09.smartsurvey.domain.User;
 import vn.duytan.c1se09.smartsurvey.repository.SurveyRepository;
 import vn.duytan.c1se09.smartsurvey.repository.SurveyViewRepository;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
@@ -19,10 +20,13 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("null")
 public class SurveyViewService {
     
     private final SurveyRepository surveyRepository;
     private final SurveyViewRepository surveyViewRepository;
+    private final AuthService authService;
+    private final SurveyPermissionService surveyPermissionService;
     
     /**
      * Track một lượt xem survey
@@ -77,6 +81,13 @@ public class SurveyViewService {
     public long getTotalViews(Long surveyId) throws IdInvalidException {
         Survey survey = surveyRepository.findById(surveyId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
+        
+        // Kiểm tra quyền: chỉ OWNER và ANALYST được xem viewership
+        User currentUser = authService.getCurrentUser();
+        if (!surveyPermissionService.canViewResults(survey, currentUser)) {
+            throw new IdInvalidException("Bạn không có quyền xem thống kê lượt xem khảo sát này");
+        }
+        
         return surveyViewRepository.countBySurvey(survey);
     }
     
@@ -88,6 +99,13 @@ public class SurveyViewService {
     public long getUniqueViews(Long surveyId) throws IdInvalidException {
         Survey survey = surveyRepository.findById(surveyId)
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
+        
+        // Kiểm tra quyền: chỉ OWNER và ANALYST được xem viewership
+        User currentUser = authService.getCurrentUser();
+        if (!surveyPermissionService.canViewResults(survey, currentUser)) {
+            throw new IdInvalidException("Bạn không có quyền xem thống kê lượt xem khảo sát này");
+        }
+        
         return surveyViewRepository.countDistinctViewsBySurvey(survey);
     }
     

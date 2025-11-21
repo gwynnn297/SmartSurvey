@@ -25,6 +25,7 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("null")
 public class SurveyGeneratorService {
 
     private final RestTemplate restTemplate;
@@ -92,7 +93,7 @@ public class SurveyGeneratorService {
                         : "none");
 
         // 1. Validate user exists
-        User currentUser = validateUser(username);
+        validateUser(username);
 
         // 2. Kiểm tra AI service health
         validateAiServiceHealth();

@@ -9,6 +9,7 @@ import org.springframework.web.multipart.MultipartFile;
 import vn.duytan.c1se09.smartsurvey.domain.Answer;
 import vn.duytan.c1se09.smartsurvey.domain.FileUpload;
 import vn.duytan.c1se09.smartsurvey.domain.Response;
+import vn.duytan.c1se09.smartsurvey.domain.response.file.FileInfoDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.response.FileUploadResponseDTO;
 import vn.duytan.c1se09.smartsurvey.repository.AnswerRepository;
 import vn.duytan.c1se09.smartsurvey.repository.FileUploadRepository;
@@ -19,7 +20,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
@@ -28,11 +28,14 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@SuppressWarnings("null")
 public class FileUploadService {
 
     private final FileUploadRepository fileUploadRepository;
     private final AnswerRepository answerRepository;
     private final ResponseRepository responseRepository;
+    private final AuthService authService;
+    private final SurveyPermissionService surveyPermissionService;
 
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
@@ -97,6 +100,60 @@ public class FileUploadService {
         return fileUploads.stream()
                 .map(this::toFileUploadResponseDTO)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Lấy thông tin file với permission check
+     */
+    public FileInfoDTO getFileInfo(Long fileId) throws IdInvalidException {
+        FileUpload fileUpload = fileUploadRepository.findById(fileId)
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy file"));
+
+        // Kiểm tra quyền: user phải có quyền xem results của survey chứa file này
+        var currentUser = authService.getCurrentUser();
+        if (currentUser == null) {
+            throw new IdInvalidException("Người dùng chưa xác thực");
+        }
+        
+        // Lấy survey từ answer -> response -> survey
+        var survey = fileUpload.getAnswer().getResponse().getSurvey();
+        if (!surveyPermissionService.canViewResults(survey, currentUser)) {
+            throw new IdInvalidException("Bạn không có quyền xem thông tin file này");
+        }
+
+        // Map to DTO
+        FileInfoDTO fileInfo = new FileInfoDTO();
+        fileInfo.setFileId(fileUpload.getFileId());
+        fileInfo.setOriginalFileName(fileUpload.getOriginalFileName());
+        fileInfo.setFileName(fileUpload.getFileName());
+        fileInfo.setFileType(fileUpload.getFileType());
+        fileInfo.setFileSize(fileUpload.getFileSize());
+        fileInfo.setUploadedAt(fileUpload.getCreatedAt());
+        fileInfo.setDownloadUrl("/api/files/download/" + fileUpload.getFileId());
+
+        return fileInfo;
+    }
+
+    /**
+     * Validate permission để download file
+     */
+    public FileUpload validateFileDownloadPermission(Long fileId) throws IdInvalidException {
+        FileUpload fileUpload = fileUploadRepository.findById(fileId)
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy file"));
+
+        // Kiểm tra quyền: user phải có quyền xem results của survey chứa file này
+        var currentUser = authService.getCurrentUser();
+        if (currentUser == null) {
+            throw new IdInvalidException("Người dùng chưa xác thực");
+        }
+        
+        // Lấy survey từ answer -> response -> survey
+        var survey = fileUpload.getAnswer().getResponse().getSurvey();
+        if (!surveyPermissionService.canViewResults(survey, currentUser)) {
+            throw new IdInvalidException("Bạn không có quyền tải file này");
+        }
+
+        return fileUpload;
     }
 
     private FileUploadResponseDTO toFileUploadResponseDTO(FileUpload fileUpload) {

@@ -8,8 +8,11 @@ import org.springframework.web.bind.annotation.*;
 
 import vn.duytan.c1se09.smartsurvey.domain.request.UserRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.UserResponseDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.dashboard.UserDashboardResponseDTO;
 import vn.duytan.c1se09.smartsurvey.service.UserService;
+import vn.duytan.c1se09.smartsurvey.service.DashboardService;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
+import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 
 import jakarta.validation.Valid;
 
@@ -22,6 +25,7 @@ import jakarta.validation.Valid;
 public class UserController {
 
     private final UserService userService;
+    private final DashboardService dashboardService;
 
     /**
      * Tạo user mới
@@ -39,5 +43,16 @@ public class UserController {
         }
         UserResponseDTO createdUser = userService.createUser(userRequest);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
+    }
+
+    /**
+     * Lấy dashboard của user hiện tại
+     * Endpoint: GET /api/users/me/dashboard
+     */
+    @GetMapping("/me/dashboard")
+    @ApiMessage("Get user dashboard")
+    public ResponseEntity<UserDashboardResponseDTO> getUserDashboard() throws IdInvalidException {
+        UserDashboardResponseDTO dashboard = dashboardService.getUserDashboard();
+        return ResponseEntity.ok(dashboard);
     }
 }

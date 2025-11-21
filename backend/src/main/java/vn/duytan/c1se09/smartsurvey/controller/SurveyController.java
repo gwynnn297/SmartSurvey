@@ -17,7 +17,13 @@ import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyPublicResponseD
 import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyStatusResponseDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.survey.SurveyCreateRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.survey.SurveyUpdateRequestDTO;
+import vn.duytan.c1se09.smartsurvey.domain.request.survey.SurveyPermissionUpdateRequestDTO;
+import vn.duytan.c1se09.smartsurvey.domain.response.survey.SurveyPermissionResponseDTO;
 import vn.duytan.c1se09.smartsurvey.service.SurveyService;
+import vn.duytan.c1se09.smartsurvey.service.SurveyPermissionService;
+import vn.duytan.c1se09.smartsurvey.service.AuthService;
+import vn.duytan.c1se09.smartsurvey.domain.User;
+import vn.duytan.c1se09.smartsurvey.domain.Survey;
 
 import jakarta.validation.Valid;
 
@@ -30,6 +36,8 @@ import jakarta.validation.Valid;
 public class SurveyController {
     private final SurveyService surveyService;
     private final SurveyViewService surveyViewService;
+    private final SurveyPermissionService surveyPermissionService;
+    private final AuthService authService;
 
     // Endpoint hợp nhất: luôn trả về danh sách phân trang
     @GetMapping
@@ -161,6 +169,59 @@ public class SurveyController {
         }
         
         return request.getRemoteAddr();
+    }
+
+    /**
+     * Get all permissions for a survey
+     * Endpoint: GET /surveys/{id}/permissions
+     */
+    @GetMapping("/{id}/permissions")
+    @ApiMessage("Get survey permissions")
+    public ResponseEntity<SurveyPermissionResponseDTO> getSurveyPermissions(@PathVariable("id") Long id)
+            throws IdInvalidException {
+        Survey survey = surveyService.getSurveyEntityById(id);
+        User currentUser = authService.getCurrentUser();
+        
+        // Check permission: chỉ OWNER mới có thể xem permissions
+        if (!surveyPermissionService.canManagePermissions(survey, currentUser)) {
+            throw new IdInvalidException("Bạn không có quyền xem permissions của survey này");
+        }
+
+        SurveyPermissionResponseDTO response = surveyPermissionService.getSurveyPermissions(survey);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Update permissions for a survey (create/update/delete)
+     * Endpoint: PUT /surveys/{id}/permissions
+     */
+    @PutMapping("/{id}/permissions")
+    @ApiMessage("Update survey permissions")
+    public ResponseEntity<SurveyPermissionResponseDTO> updateSurveyPermissions(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody SurveyPermissionUpdateRequestDTO request) throws IdInvalidException {
+        Survey survey = surveyService.getSurveyEntityById(id);
+        User currentUser = authService.getCurrentUser();
+
+        SurveyPermissionResponseDTO response = surveyPermissionService.updatePermissions(survey, request, currentUser);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Delete a specific permission
+     * Endpoint: DELETE /surveys/{id}/permissions/{permissionId}
+     */
+    @DeleteMapping("/{id}/permissions/{permissionId}")
+    @ApiMessage("Delete survey permission")
+    public ResponseEntity<?> deleteSurveyPermission(
+            @PathVariable("id") Long id,
+            @PathVariable("permissionId") Long permissionId) throws IdInvalidException {
+        // Validate survey exists
+        surveyService.getSurveyEntityById(id);
+        User currentUser = authService.getCurrentUser();
+
+        surveyPermissionService.deletePermission(permissionId, currentUser);
+        return ResponseEntity.ok().build();
     }
 
 }

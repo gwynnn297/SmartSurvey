@@ -34,4 +34,16 @@ public interface SurveyRepository extends JpaRepository<Survey, Long> {
 
     @Query("SELECT s FROM Survey s WHERE LOWER(s.title) LIKE LOWER(CONCAT('%', :title, '%'))")
     List<Survey> findByTitleContainingIgnoreCase(@Param("title") String title);
+
+    /**
+     * Tìm tất cả surveys mà user có quyền truy cập (owned + shared)
+     * Bao gồm: surveys mà user là owner HOẶC có permission qua SurveyPermission
+     */
+    @Query("""
+        SELECT DISTINCT s FROM Survey s
+        LEFT JOIN SurveyPermission sp ON sp.survey = s AND sp.user = :user
+        WHERE s.user = :user OR sp.survey IS NOT NULL
+        ORDER BY s.createdAt DESC
+        """)
+    Page<Survey> findAccessibleSurveysByUser(@Param("user") User user, Pageable pageable);
 }
