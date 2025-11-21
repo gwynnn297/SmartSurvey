@@ -5,6 +5,11 @@ import ToolbarResult from "../../components/ToolbarResult";
 import "./SentimentPage.css";
 import { aiAnalysisService } from "../../services/aiAnalysisService";
 import { responseService } from "../../services/responseService";
+import { statisticsService } from "../../services/statisticsService";
+import MultipleChoiceChart from "../../components/Results/MultipleChoiceChart";
+import RatingChart from "../../components/Results/RatingChart";
+import BooleanChart from "../../components/Results/BooleanChart";
+import RankingChart from "../../components/Results/RankingChart";
 import {
   PieChart,
   Pie,
@@ -29,6 +34,11 @@ const SentimentPage = () => {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const isFetchingSummaryRef = useRef(false);
   const hasLoadedSummaryRef = useRef(false);
+
+  const [chartsData, setChartsData] = useState(null);
+  const [chartsLoading, setChartsLoading] = useState(false);
+  const isFetchingChartsRef = useRef(false);
+  const hasLoadedChartsRef = useRef(false);
 
   // Dữ liệu mặc định khi chưa có dữ liệu thật
   const defaultStats = {
@@ -277,11 +287,43 @@ const SentimentPage = () => {
     }
   };
 
+  const loadChartsData = async () => {
+    if (isFetchingChartsRef.current) return;
+
+    try {
+      isFetchingChartsRef.current = true;
+      setChartsLoading(true);
+
+      let surveyId =
+        location.state?.surveyId ||
+        JSON.parse(localStorage.getItem('userSurveys') || '[]')[0]?.id ||
+        1;
+
+      console.log('📊 Loading charts data for survey:', surveyId);
+      const data = await statisticsService.getSurveyCharts(surveyId);
+      setChartsData(data);
+      console.log('✅ Charts data loaded:', data);
+    } catch (error) {
+      console.error('❌ Error loading charts data:', error);
+      setChartsData(null);
+    } finally {
+      setChartsLoading(false);
+      isFetchingChartsRef.current = false;
+    }
+  };
+
   // Tự động tải dữ liệu khi component mount (chặn StrictMode gọi 2 lần)
   useEffect(() => {
     if (hasLoadedRef.current) return;
     hasLoadedRef.current = true;
     loadSentimentData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (hasLoadedChartsRef.current) return;
+    hasLoadedChartsRef.current = true;
+    loadChartsData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -513,6 +555,96 @@ const SentimentPage = () => {
               </p>
             )}
           </div>
+        </section>
+        {/* Phần thống kê biểu đồ các câu hỏi */}
+        <section className="survey-charts-section">
+          <h2>📊 Thống kê các câu hỏi</h2>
+
+          {chartsLoading ? (
+            <div className="loading-charts">
+              <p>Đang tải dữ liệu biểu đồ...</p>
+            </div>
+          ) : chartsData ? (
+            <div className="charts-content">
+              {/* Multiple Choice Charts */}
+              {chartsData.multipleChoiceData && chartsData.multipleChoiceData.length > 0 && (
+                <div className="charts-category">
+                  <h3 className="category-title">
+                    <i className="fa-solid fa-list-check"></i> Câu hỏi lựa chọn
+                  </h3>
+                  <div className="charts-grid">
+                    {chartsData.multipleChoiceData.map((item) => {
+                      // ✅ Phân biệt ranking: Backend trả về ranking với chartType === "bar"
+                      // Multiple choice thường có chartType === "pie" hoặc undefined
+                      const isRanking = item.chartType === "bar";
+
+                      if (isRanking) {
+                        return (
+                          <div key={item.questionId} className="chart-card-item ranking-card">
+                            <RankingChart
+                              data={item}
+                              surveyId={location.state?.surveyId || JSON.parse(localStorage.getItem('userSurveys') || '[]')[0]?.id || 1}
+                            />
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={item.questionId} className="chart-card-item">
+                          <MultipleChoiceChart data={item} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Rating Charts */}
+              {chartsData.ratingData && chartsData.ratingData.length > 0 && (
+                <div className="charts-category">
+                  <h3 className="category-title">
+                    <i className="fa-solid fa-star"></i> Câu hỏi đánh giá
+                  </h3>
+                  <div className="charts-grid">
+                    {chartsData.ratingData.map((item) => (
+                      <div key={item.questionId} className="chart-card-item">
+                        <RatingChart data={item} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Boolean Charts */}
+              {chartsData.booleanData && chartsData.booleanData.length > 0 && (
+                <div className="charts-category">
+                  <h3 className="category-title">
+                    <i className="fa-solid fa-circle-check"></i> Câu hỏi Yes/No
+                  </h3>
+                  <div className="charts-grid">
+                    {chartsData.booleanData.map((item) => (
+                      <div key={item.questionId} className="chart-card-item">
+                        <BooleanChart data={item} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty State */}
+              {(!chartsData.multipleChoiceData || chartsData.multipleChoiceData.length === 0) &&
+                (!chartsData.ratingData || chartsData.ratingData.length === 0) &&
+                (!chartsData.booleanData || chartsData.booleanData.length === 0) && (
+                  <div className="no-charts-message">
+                    <p>Chưa có dữ liệu biểu đồ. Vui lòng đợi có phản hồi từ người tham gia khảo sát.</p>
+                  </div>
+                )}
+            </div>
+          ) : (
+            <div className="no-charts-message">
+              <p>Không thể tải dữ liệu biểu đồ. Vui lòng thử lại sau.</p>
+            </div>
+          )}
         </section>
 
         {/* Chi tiết phản hồi */}

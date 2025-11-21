@@ -27,9 +27,37 @@ const ToolbarResult = ({ surveyId, surveyTitle, surveyDescription }) => {
         });
     };
 
+    const handleGoBack = () => {
+        // Quay lại trang create-survey với survey đang xem báo cáo
+        if (surveyId) {
+            navigate('/create-survey', {
+                state: {
+                    editSurvey: {
+                        id: surveyId,
+                        title: surveyTitle || 'Khảo sát',
+                        description: surveyDescription || ''
+                    }
+                }
+            });
+        } else {
+            // Fallback: quay lại trang trước nếu không có surveyId
+            navigate(-1);
+        }
+    };
+
     return (
         <div className="toolbar-result">
             <div className="toolbar-result-content">
+                {/* Nút Quay lại */}
+                <button
+                    className="toolbar-result-btn toolbar-result-btn-back"
+                    onClick={handleGoBack}
+                    title="Quay lại trang chỉnh sửa khảo sát"
+                >
+                    <i className="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                    <span>Quay lại khảo sát </span>
+                </button>
+
                 <button
                     className={`toolbar-result-btn ${isDashboard ? 'active' : ''}`}
                     onClick={() => handleNavigate('/report')}
@@ -60,4 +88,3 @@ const ToolbarResult = ({ surveyId, surveyTitle, surveyDescription }) => {
 };
 
 export default ToolbarResult;
-

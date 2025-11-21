@@ -2174,8 +2174,8 @@ const CreateSurvey = () => {
                         </button>
                     </div>
                     <div className="survey-toolbar-right">
-                        {/* Auto-save status indicator */}
-                        {editSurveyId && autoSaveStatus !== 'idle' && (
+                        {/* Auto-save status indicator - Đã ẩn nhưng vẫn hoạt động */}
+                        {/* {editSurveyId && autoSaveStatus !== 'idle' && (
                             <div className="auto-save-status">
                                 {autoSaveStatus === 'saving' && (
                                     <>
@@ -2196,7 +2196,7 @@ const CreateSurvey = () => {
                                     </>
                                 )}
                             </div>
-                        )}
+                        )} */}
                         <div className="preview-dropdown-wrapper">
                             <button
                                 className="btn-view"

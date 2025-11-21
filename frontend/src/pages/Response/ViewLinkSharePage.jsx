@@ -132,7 +132,8 @@ const ViewLinkSharePage = () => {
                     const backendType = q.questionType || q.question_type;
 
                     if (backendType === "multiple_choice") {
-                        type = q.choiceType === "multiple" ? "multiple-choice-multiple" : "multiple-choice-single";
+                        const choiceType = q.choiceType || q.choice_type || "multiple";
+                        type = choiceType === "multiple" ? "multiple-choice-multiple" : "multiple-choice-single";
                     } else if (backendType === "single_choice") {
                         type = "multiple-choice-single";
                     } else if (backendType === "boolean" || backendType === "boolean_" || backendType === "yes_no") {
