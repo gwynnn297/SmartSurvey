@@ -102,13 +102,17 @@ const SentimentPage = () => {
   // Sử dụng basicSentiment từ aiAnalysisService
   const loadSentimentData = async () => {
     if (isFetchingRef.current) return;
+
+    // Chỉ chạy khi có surveyId từ location.state
+    const surveyId = location.state?.surveyId;
+    if (!surveyId) {
+      console.warn('⚠️ Không có surveyId từ location.state');
+      return;
+    }
+
     try {
       isFetchingRef.current = true;
       setLoading(true);
-
-      let surveyId = location.state?.surveyId
-        || JSON.parse(localStorage.getItem('userSurveys') || '[]')[0]?.id
-        || 1;
 
       console.log('📊 Bắt đầu tải dữ liệu basic sentiment cho survey:', surveyId);
 
@@ -208,13 +212,17 @@ const SentimentPage = () => {
   // Hàm để tải dữ liệu summary (có chặn gọi trùng)
   const loadSummaryData = async () => {
     if (isFetchingSummaryRef.current) return;
+
+    // Chỉ chạy khi có surveyId từ location.state
+    const surveyId = location.state?.surveyId;
+    if (!surveyId) {
+      console.warn('⚠️ Không có surveyId từ location.state');
+      return;
+    }
+
     try {
       isFetchingSummaryRef.current = true;
       setSummaryLoading(true);
-
-      let surveyId = location.state?.surveyId
-        || JSON.parse(localStorage.getItem('userSurveys') || '[]')[0]?.id
-        || 1;
 
       console.log('📝 Bắt đầu tải dữ liệu summary cho survey:', surveyId);
 
@@ -290,14 +298,16 @@ const SentimentPage = () => {
   const loadChartsData = async () => {
     if (isFetchingChartsRef.current) return;
 
+    // Chỉ chạy khi có surveyId từ location.state
+    const surveyId = location.state?.surveyId;
+    if (!surveyId) {
+      console.warn('⚠️ Không có surveyId từ location.state');
+      return;
+    }
+
     try {
       isFetchingChartsRef.current = true;
       setChartsLoading(true);
-
-      let surveyId =
-        location.state?.surveyId ||
-        JSON.parse(localStorage.getItem('userSurveys') || '[]')[0]?.id ||
-        1;
 
       console.log('📊 Loading charts data for survey:', surveyId);
       const data = await statisticsService.getSurveyCharts(surveyId);
@@ -408,27 +418,42 @@ const SentimentPage = () => {
   const summaryText = summaryData?.summary || null;
   const parsedSummary = summaryText ? parseSummaryText(summaryText) : null;
 
+  // Kiểm tra có surveyId từ location.state không
+  const surveyId = location.state?.surveyId;
+  const surveyTitle = location.state?.surveyTitle;
+  const surveyDescription = location.state?.surveyDescription;
+
+  // Nếu không có surveyId, hiển thị thông báo
+  if (!surveyId) {
+    return (
+      <MainLayout>
+        <div className="sentiment-container">
+          <div style={{ padding: '2rem', textAlign: 'center' }}>
+            <h2>Không tìm thấy khảo sát</h2>
+            <p>Vui lòng chọn một khảo sát để xem thống kê.</p>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
+
   return (
     <MainLayout>
 
       <div className="sentiment-container">
         <ToolbarResult
-          surveyId={location.state?.surveyId}
-          surveyTitle={location.state?.surveyTitle}
-          surveyDescription={location.state?.surveyDescription}
+          surveyId={surveyId}
+          surveyTitle={surveyTitle}
+          surveyDescription={surveyDescription}
         />
         <h1 className="page-title">
-          {location.state?.surveyTitle ?
-            `Phân tích cảm xúc: ${location.state.surveyTitle}` :
-            'Phân tích cảm xúc tổng quan'
-          }
+          {surveyTitle ? `${surveyTitle}` : 'Thống kê khảo sát'}
         </h1>
-        <p className="page-subtitle">
-          {location.state?.surveyDescription ?
-            location.state.surveyDescription :
-            'AI phân tích cảm xúc dựa trên phản hồi khảo sát'
-          }
-        </p>
+        {surveyDescription && (
+          <p className="page-subtitle">
+            {surveyDescription}
+          </p>
+        )}
 
         <div className="sentiment-summary-grid">
           {/* Biểu đồ tròn phân bố cảm xúc */}
@@ -583,7 +608,7 @@ const SentimentPage = () => {
                           <div key={item.questionId} className="chart-card-item ranking-card">
                             <RankingChart
                               data={item}
-                              surveyId={location.state?.surveyId || JSON.parse(localStorage.getItem('userSurveys') || '[]')[0]?.id || 1}
+                              surveyId={surveyId}
                             />
                           </div>
                         );
