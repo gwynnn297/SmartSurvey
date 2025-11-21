@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { surveyService } from '../services/surveyService';
 import { responseService } from '../services/responseService';
+import { questionService } from '../services/questionSurvey';
 import ShareSurveyPage from "../pages/Survey/ShareSurveyPage";
 import NotificationModal from './NotificationModal';
+import CloseSurvey from './CloseSurvey';
 import './ListSurvey.css';
 
 const ListSurvey = () => {
@@ -16,10 +18,73 @@ const ListSurvey = () => {
     const [responseCounts, setResponseCounts] = useState({});
     const [loadingResponseCounts, setLoadingResponseCounts] = useState(false);
     const [notification, setNotification] = useState(null);
+    const [isCloseSurveyModalOpen, setIsCloseSurveyModalOpen] = useState(false);
+    const [surveyToClose, setSurveyToClose] = useState(null);
+    const [isClosingSurvey, setIsClosingSurvey] = useState(false);
 
     // Hàm helper để hiển thị notification
     const showNotification = (type, message) => {
         setNotification({ type, message });
+    };
+
+    // Hàm helper để lấy statusMeta
+    const getStatusMeta = (status) => {
+        const map = {
+            published: {
+                label: "Đang mở",
+                className: "status-active",
+                dotColor: "#22c55e"
+            },
+            draft: {
+                label: "Bản nháp",
+                className: "status-draft",
+                dotColor: "#d97706"
+            },
+            archived: {
+                label: "Đã đóng",
+                className: "status-archived",
+                dotColor: "#6b7280"
+            }
+        };
+        return map[status] || {
+            label: status || "Không xác định",
+            className: "status-unknown",
+            dotColor: "#6b7280"
+        };
+    };
+
+    // Hàm xử lý đóng khảo sát
+    const handleCloseSurvey = async () => {
+        if (!surveyToClose?.id) return;
+        try {
+            setIsClosingSurvey(true);
+            const surveyId = surveyToClose.id;
+            const updated = await surveyService.updateSurvey(surveyId, { status: "archived" });
+
+            // Cập nhật trạng thái trong danh sách hiện tại
+            const updatedSurveys = surveys.map((item) =>
+                (item.id === surveyId ? { ...item, status: "archived" } : item)
+            );
+            setSurveys(updatedSurveys);
+
+            // Cập nhật localStorage nếu có
+            const localSurveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
+            if (Array.isArray(localSurveys) && localSurveys.length > 0) {
+                const updatedLocal = localSurveys.map((item) =>
+                    (item.id === surveyId ? { ...item, status: "archived" } : item)
+                );
+                localStorage.setItem('userSurveys', JSON.stringify(updatedLocal));
+            }
+
+            showNotification('success', "Khảo sát đã được đóng. Người tham gia sẽ không thể gửi phản hồi mới.");
+            setIsCloseSurveyModalOpen(false);
+            setSurveyToClose(null);
+        } catch (error) {
+            console.error("Error closing survey:", error);
+            showNotification('error', "Không thể đóng khảo sát. Vui lòng thử lại sau.");
+        } finally {
+            setIsClosingSurvey(false);
+        }
     };
 
     // Pagination state
@@ -260,6 +325,34 @@ const ListSurvey = () => {
                                     >
                                         <i className="fa-solid fa-share"></i>
                                     </button>
+                                    {s.status === 'published' && (
+                                        <button
+                                            className="action-btn"
+                                            onClick={async (e) => {
+                                                e.stopPropagation();
+                                                const surveyId = s.id || s._id;
+                                                // Lấy số câu hỏi cho survey
+                                                let totalQuestions = 0;
+                                                try {
+                                                    const questions = await questionService.getQuestionsBySurvey(surveyId);
+                                                    totalQuestions = Array.isArray(questions) ? questions.length : 0;
+                                                } catch (error) {
+                                                    console.error('Error fetching questions:', error);
+                                                    totalQuestions = s.questions?.length || 0;
+                                                }
+
+                                                setSurveyToClose({
+                                                    id: surveyId,
+                                                    totalQuestions: totalQuestions,
+                                                    status: s.status
+                                                });
+                                                setIsCloseSurveyModalOpen(true);
+                                            }}
+                                            title="Đóng khảo sát"
+                                        >
+                                            <i className="fa-solid fa-circle-xmark" title="Đóng khảo sát"></i>
+                                        </button>
+                                    )}
                                     <button
                                         className="action-btn"
                                         onClick={async (e) => {
@@ -461,6 +554,21 @@ const ListSurvey = () => {
                             </div>
                         </div>
                     </div>
+                )}
+
+                {/* Modal đóng khảo sát */}
+                {surveyToClose && (
+                    <CloseSurvey
+                        isOpen={isCloseSurveyModalOpen}
+                        onClose={() => {
+                            setIsCloseSurveyModalOpen(false);
+                            setSurveyToClose(null);
+                        }}
+                        survey={surveyToClose}
+                        statusMeta={getStatusMeta(surveyToClose.status)}
+                        onConfirm={handleCloseSurvey}
+                        isClosingSurvey={isClosingSurvey}
+                    />
                 )}
             </div>
         </>

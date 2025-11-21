@@ -77,10 +77,10 @@ const ToolbarResult = ({ surveyId, surveyTitle, surveyDescription }) => {
                 <button
                     className={`toolbar-result-btn ${isSentiment ? 'active' : ''}`}
                     onClick={() => handleNavigate('/report/sentiment')}
-                    title="Phân tích cảm xúc"
+                    title="Thống kê"
                 >
-                    <i className="fa-solid fa-face-smile" aria-hidden="true"></i>
-                    <span>Phân tích cảm xúc</span>
+                    <i class="fa-solid fa-chart-simple"></i>
+                    <span>Thống kê</span>
                 </button>
             </div>
         </div>
