@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import { dashboardReportService } from '../../services/dashboardReportService';
+import { surveyService } from '../../services/surveyService';
 import ToolbarResult from '../../components/ToolbarResult';
 
 import './DashboardReportPage.css';
@@ -45,12 +46,22 @@ export default function DashboardReportPage() {
     const surveyData = location.state || {};
     const {
         surveyId,
-        surveyTitle = 'Khảo sát không có tiêu đề',
-        surveyDescription = '',
+        surveyTitle: initialSurveyTitle,
+        surveyDescription: initialSurveyDescription,
         questions = [],
         questionsCount = 0,
         isFromCreateSurvey = false
     } = surveyData;
+
+    // State để lưu survey info đã load từ API
+    const [surveyInfo, setSurveyInfo] = useState({
+        title: initialSurveyTitle || null,
+        description: initialSurveyDescription || null
+    });
+
+    // Sử dụng survey info từ API nếu có, nếu không thì dùng từ location.state hoặc giá trị mặc định
+    const surveyTitle = surveyInfo.title || initialSurveyTitle || 'Khảo sát không có tiêu đề';
+    const surveyDescription = surveyInfo.description || initialSurveyDescription || '';
 
     // State cho dữ liệu thống kê dashboard
     const [dashboardStats, setDashboardStats] = useState({
@@ -94,6 +105,27 @@ export default function DashboardReportPage() {
         };
         return stats;
     }, [questions, questionsCount]);
+
+    // Effect để load survey info nếu chưa có
+    useEffect(() => {
+        const loadSurveyInfo = async () => {
+            if (!surveyId) return;
+            // Nếu đã có surveyTitle từ location.state, không cần load lại
+            if (initialSurveyTitle) return;
+
+            try {
+                const survey = await surveyService.getSurveyById(surveyId);
+                setSurveyInfo({
+                    title: survey.title || 'Khảo sát',
+                    description: survey.description || ''
+                });
+            } catch (error) {
+                console.error('Error loading survey info:', error);
+            }
+        };
+
+        loadSurveyInfo();
+    }, [surveyId, initialSurveyTitle]);
 
     // Effect để lấy dữ liệu thống kê từ API
     useEffect(() => {
@@ -456,8 +488,11 @@ export default function DashboardReportPage() {
     };
 
     return (
-        <MainLayout>
-
+        <MainLayout
+            surveyId={surveyId}
+            surveyTitle={surveyTitle}
+            surveyDescription={surveyDescription}
+        >
             <div className="report-container">
                 <ToolbarResult
                     surveyId={surveyId}

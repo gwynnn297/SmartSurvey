@@ -5,6 +5,7 @@ import { surveyService } from '../../services/surveyService';
 import { questionService, optionService } from '../../services/questionSurvey';
 import { aiSurveyService } from '../../services/aiSurveyService';
 import NotificationModal from '../../components/NotificationModal';
+import AddUserSurvey from '../../components/AddUserSurvey';
 import './CreateSurvey.css';
 import '../Response/ResponseFormPage.css';
 import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
@@ -720,6 +721,7 @@ const CreateSurvey = () => {
     const [showDraftModal, setShowDraftModal] = useState(false);
     const isNavigatingToPreviewOrShare = React.useRef(false); // Để theo dõi navigation tới preview/share
     const [notification, setNotification] = useState(null); // State để quản lý notification
+    const [showInviteModal, setShowInviteModal] = useState(false);
 
     const [surveyData, setSurveyData] = useState({
         title: '',
@@ -1219,6 +1221,7 @@ const CreateSurvey = () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [showPreviewDropdown]);
+
 
     useEffect(() => {
         loadCategories();
@@ -2106,7 +2109,11 @@ const CreateSurvey = () => {
     };
 
     return (
-        <MainLayout>
+        <MainLayout
+            surveyId={editSurveyId}
+            surveyTitle={surveyData.title}
+            surveyDescription={surveyData.description}
+        >
             {/* Modal hỏi người dùng về draft */}
             {showDraftModal && (
                 <div className="draft-modal-overlay" onClick={() => setShowDraftModal(false)}>
@@ -2152,6 +2159,14 @@ const CreateSurvey = () => {
                     onClose={() => setNotification(null)}
                 />
             )}
+
+            {/* Invite User Modal */}
+            <AddUserSurvey
+                surveyId={editSurveyId}
+                isOpen={showInviteModal}
+                onClose={() => setShowInviteModal(false)}
+                onNotification={showNotification}
+            />
 
             <div className="create-survey-wrapper">
                 <div className="survey-toolbar">
@@ -2199,6 +2214,22 @@ const CreateSurvey = () => {
                         )} */}
                         <div className="preview-dropdown-wrapper">
                             <button
+                                className="btn-add-user"
+                                type="button"
+                                onClick={() => {
+                                    if (!editSurveyId || editSurveyId.toString().startsWith('temp_')) {
+                                        showNotification('warning', 'Vui lòng lưu khảo sát trước khi mời người dùng.');
+                                        return;
+                                    }
+                                    setShowInviteModal(true);
+                                }}
+                                disabled={loading}
+                                title="Mời người dùng"
+                            >
+                                <i className="fa-solid fa-user-plus" aria-hidden="true"></i>
+                                <span> Mời</span>
+                            </button>
+                            <button
                                 className="btn-view"
                                 type="button"
                                 onClick={() => setShowPreviewDropdown(!showPreviewDropdown)}
@@ -2206,7 +2237,7 @@ const CreateSurvey = () => {
                                 title="Xem trước khảo sát"
                             >
                                 <i className="fa-regular fa-eye" aria-hidden="true"></i>
-                                <span> Xem trước</span>
+                                <span> Xem</span>
                                 <i className="fa-solid fa-chevron-down" style={{ marginLeft: '8px', fontSize: '0.75rem' }}></i>
                             </button>
                             {showPreviewDropdown && (
@@ -2232,6 +2263,7 @@ const CreateSurvey = () => {
                                 </div>
                             )}
                         </div>
+
                         <button
                             className="btn-report"
                             type="button"

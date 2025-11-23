@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import Notification from './Notification';
 import './HeaderComponent.css';
 import logoSmartSurvey from '../assets/logoSmartSurvey.png';
-const HeaderComponent = ({ showUserInfo = false, username }) => {
+const HeaderComponent = ({ showUserInfo = false, username, surveyId = null, surveyTitle = null, surveyDescription = null }) => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [showDropdown, setShowDropdown] = useState(false);
     const userInfoRef = useRef(null);
 
@@ -16,6 +18,56 @@ const HeaderComponent = ({ showUserInfo = false, username }) => {
         } else {
             // Nếu chưa đăng nhập, chuyển về trang chủ
             navigate('/');
+        }
+    };
+
+    const handleSurveyClick = () => {
+        if (surveyId) {
+            navigate('/create-survey', {
+                state: {
+                    editSurvey: {
+                        id: surveyId,
+                        title: surveyTitle,
+                        description: surveyDescription
+                    }
+                }
+            });
+        }
+    };
+
+    const handleReportClick = async () => {
+        if (surveyId) {
+            // Nếu có surveyTitle từ props, sử dụng luôn
+            if (surveyTitle) {
+                navigate('/report', {
+                    state: {
+                        surveyId: surveyId,
+                        surveyTitle: surveyTitle,
+                        surveyDescription: surveyDescription || ''
+                    }
+                });
+            } else {
+                // Nếu không có, thử load từ API
+                try {
+                    const { surveyService } = await import('../services/surveyService');
+                    const survey = await surveyService.getSurveyById(surveyId);
+                    navigate('/report', {
+                        state: {
+                            surveyId: surveyId,
+                            surveyTitle: survey.title || 'Khảo sát',
+                            surveyDescription: survey.description || ''
+                        }
+                    });
+                } catch (error) {
+                    console.error('Error loading survey info:', error);
+                    // Fallback: chỉ truyền surveyId
+                    navigate('/report', {
+                        state: {
+                            surveyId: surveyId
+                        }
+                    });
+                }
+            }
         }
     };
 
@@ -58,6 +110,13 @@ const HeaderComponent = ({ showUserInfo = false, username }) => {
     const displayName = (username && username.trim()) ? username : storedName;
     const avatarInitial = (displayName || 'U').trim().charAt(0).toUpperCase();
 
+    // Kiểm tra xem có đang ở trang CreateSurvey hoặc Report (bao gồm các trang con) và có surveyId không
+    const isSurveyPage = surveyId && (
+        location.pathname === '/create-survey' ||
+        location.pathname === '/report' ||
+        location.pathname.startsWith('/report/')
+    );
+
     return (
         <header className="header-component">
             <div className="header-left">
@@ -66,8 +125,34 @@ const HeaderComponent = ({ showUserInfo = false, username }) => {
                 </div>
             </div>
 
+            {isSurveyPage && (
+                <nav className="header-center">
+                    <a
+                        href="#"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            handleSurveyClick();
+                        }}
+                        className={location.pathname === '/create-survey' ? 'active' : ''}
+                    >
+                        Khảo sát
+                    </a>
+                    <a
+                        href="#"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            handleReportClick();
+                        }}
+                        className={location.pathname === '/report' || location.pathname.startsWith('/report/') ? 'active' : ''}
+                    >
+                        Báo cáo
+                    </a>
+                </nav>
+            )}
+
             {showUserInfo && (
                 <div className="header-right">
+                    <Notification />
                     <div className="user-info" ref={userInfoRef}>
                         <div className="user-avatar" onClick={() => { navigate('/profile'); setShowDropdown(false); }}>
                             <span>{avatarInitial}</span>

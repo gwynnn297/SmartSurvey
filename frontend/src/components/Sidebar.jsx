@@ -74,11 +74,11 @@ const Sidebar = () => {
 
                 <div className="nav-item">
                     <div
-                        className={`nav-link ${isActive('/responses') ? 'active' : ''}`}
-                        onClick={() => navigate('#')}
+                        className={`nav-link ${isActive('/team-management') ? 'active' : ''}`}
+                        onClick={() => navigate('/team-management')}
                     >
                         <div className="nav-icon">
-                            <i className="fa-solid fa-signal" title="Phản hồi/Kết quả"></i>
+                            <i className="fa-solid fa-users" title="Quản lý Team"></i>
                         </div>
                         <div className="nav-content">
                             <div className="nav-title">

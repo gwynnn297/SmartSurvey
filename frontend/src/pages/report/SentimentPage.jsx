@@ -426,7 +426,7 @@ const SentimentPage = () => {
   // Nếu không có surveyId, hiển thị thông báo
   if (!surveyId) {
     return (
-      <MainLayout>
+      <MainLayout surveyId={null}>
         <div className="sentiment-container">
           <div style={{ padding: '2rem', textAlign: 'center' }}>
             <h2>Không tìm thấy khảo sát</h2>
@@ -438,8 +438,11 @@ const SentimentPage = () => {
   }
 
   return (
-    <MainLayout>
-
+    <MainLayout
+      surveyId={surveyId}
+      surveyTitle={surveyTitle}
+      surveyDescription={surveyDescription}
+    >
       <div className="sentiment-container">
         <ToolbarResult
           surveyId={surveyId}

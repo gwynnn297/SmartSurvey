@@ -391,7 +391,7 @@ const IndividualResponsesPage = () => {
 
     if (!surveyId) {
         return (
-            <MainLayout>
+            <MainLayout surveyId={null}>
                 <ToolbarResult
                     surveyId={surveyId}
                     surveyTitle={surveyTitle}
@@ -408,7 +408,11 @@ const IndividualResponsesPage = () => {
 
     if (loading && responses.length === 0) {
         return (
-            <MainLayout>
+            <MainLayout
+                surveyId={surveyId}
+                surveyTitle={surveyTitle}
+                surveyDescription={surveyDescription}
+            >
                 <ToolbarResult
                     surveyId={surveyId}
                     surveyTitle={surveyTitle}
@@ -425,7 +429,11 @@ const IndividualResponsesPage = () => {
 
     if (error && responses.length === 0) {
         return (
-            <MainLayout>
+            <MainLayout
+                surveyId={surveyId}
+                surveyTitle={surveyTitle}
+                surveyDescription={surveyDescription}
+            >
                 <ToolbarResult
                     surveyId={surveyId}
                     surveyTitle={surveyTitle}
@@ -441,8 +449,11 @@ const IndividualResponsesPage = () => {
     }
 
     return (
-        <MainLayout>
-
+        <MainLayout
+            surveyId={surveyId}
+            surveyTitle={surveyInfo?.title || surveyTitle}
+            surveyDescription={surveyInfo?.description || surveyDescription}
+        >
             <div className="individual-responses-container">
                 <ToolbarResult
                     surveyId={surveyId}

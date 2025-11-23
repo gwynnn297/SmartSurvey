@@ -137,7 +137,7 @@ const ChartCard = ({ title, type, description, icon }) => (
 );
 
 const RecentSurveyItem = ({ survey, index, onOpen, responseCounts, loadingResponseCounts }) => {
-  const statusLabel = survey.status === "published" ? "Đã xuất bản" : survey.status === "archived" ? "Đã lưu trữ" : "Bản nháp";
+  const statusLabel = survey.status === "published" ? "Đang mở" : survey.status === "archived" ? "Đã đóng" : "Bản nháp";
   const statusClass = survey.status || "draft";
   const createdDate = new Date(survey.createdAt || survey.created_at || Date.now()).toLocaleDateString("vi-VN");
   const totalResponses = responseCounts[survey.id || survey._id] ?? survey.responses ?? survey.responseCount ?? 0;
