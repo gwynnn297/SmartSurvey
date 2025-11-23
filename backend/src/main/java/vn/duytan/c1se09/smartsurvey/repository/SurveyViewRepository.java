@@ -25,7 +25,7 @@ public interface SurveyViewRepository extends JpaRepository<SurveyView, Long> {
      * Đếm số lượt xem duy nhất của một survey (theo IP address)
      */
     @Query("SELECT COUNT(DISTINCT sv.ipAddress) FROM SurveyView sv WHERE sv.survey = :survey")
-    long countDistinctViewsBySurvey(@Param("survey") Survey survey);
+    long countDistinctViewsBySurvey(@Param("survey") Survey survey);    
     
     /**
      * Đếm số lượt xem duy nhất của một survey trong khoảng thời gian

@@ -175,8 +175,68 @@ public class SurveyPermissionService {
                     .filter(Objects::nonNull)
                     .collect(Collectors.toSet());
 
-            // Xóa các permissions không còn trong request
+            // Lấy tất cả permissions hiện tại để kiểm tra conflict TRƯỚC KHI xóa
             List<SurveyPermission> existingPermissions = surveyPermissionRepository.findBySurvey(survey);
+            Map<Long, SurveyPermission> existingPermissionsByUserId = existingPermissions.stream()
+                    .collect(Collectors.toMap(
+                            perm -> perm.getUser().getUserId(),
+                            perm -> perm,
+                            (existing, replacement) -> existing // Nếu có duplicate, giữ cái đầu tiên
+                    ));
+
+            // KIỂM TRA CONFLICT TRƯỚC: Validate tất cả permissions trong request trước khi xóa bất kỳ permission nào
+            for (SurveyPermissionUpdateRequestDTO.TeamAccessDTO access : request.getTeamAccess()) {
+                User targetUser = null;
+                
+                // Tìm user theo userId hoặc email
+                if (access.getUserId() != null) {
+                    targetUser = userRepository.findById(access.getUserId())
+                            .orElseThrow(() -> new IdInvalidException("Không tìm thấy user với ID: " + access.getUserId()));
+                } else if (access.getEmail() != null) {
+                    targetUser = userRepository.findByEmail(access.getEmail())
+                            .orElseThrow(() -> new IdInvalidException("Không tìm thấy user với email: " + access.getEmail()));
+                } else {
+                    continue; // Bỏ qua, sẽ được xử lý sau
+                }
+
+                // Validate team nếu có restrictedTeamId
+                Team restrictedTeam = null;
+                if (access.getRestrictedTeamId() != null) {
+                    restrictedTeam = teamRepository.findById(access.getRestrictedTeamId())
+                            .orElseThrow(() -> new IdInvalidException("Không tìm thấy team với ID: " + access.getRestrictedTeamId()));
+                    
+                    // Validate user phải là member của team
+                    if (!isUserStillInTeam(targetUser, restrictedTeam)) {
+                        warnings.add("User " + targetUser.getEmail() + " không phải là member của team " + restrictedTeam.getName());
+                        continue;
+                    }
+                }
+
+                // KIỂM TRA CONFLICT: Nếu user đã có permission từ team khác
+                SurveyPermission existingPerm = existingPermissionsByUserId.get(targetUser.getUserId());
+                if (existingPerm != null) {
+                    Team oldRestrictedTeam = existingPerm.getRestrictedTeam();
+                    
+                    // Nếu user đã có permission từ team khác, không cho phép team khác share
+                    if (oldRestrictedTeam != null && restrictedTeam != null 
+                            && !oldRestrictedTeam.getTeamId().equals(restrictedTeam.getTeamId())) {
+                        throw new IdInvalidException(
+                            String.format(
+                                "User %s đã có quyền %s trên survey '%s' từ team '%s'. " +
+                                "Không thể chia sẻ survey '%s' cho user này từ team khác. " +
+                                "Vui lòng xóa permission từ team cũ trước khi chia sẻ với team mới.",
+                                targetUser.getEmail(),
+                                getPermissionDisplayName(existingPerm.getPermission()),
+                                survey.getTitle(),
+                                oldRestrictedTeam.getName(),
+                                survey.getTitle()
+                            )
+                        );
+                    }
+                }
+            }
+
+            // Xóa các permissions không còn trong request (SAU KHI đã validate conflict)
             for (SurveyPermission perm : existingPermissions) {
                 if (!requestedUserIds.contains(perm.getUser().getUserId())) {
                     // Lưu thông tin trước khi xóa để gửi notification
@@ -281,8 +341,22 @@ public class SurveyPermissionService {
                     if (permission.getRestrictedTeam() != null && restrictedTeam == null) {
                         throw new IdInvalidException("Không thể chuyển từ team-restricted sang permission độc lập cho user: " + targetUser.getEmail());
                     }
-                    if (teamChanged && oldRestrictedTeam != null && restrictedTeam != null) {
-                        warnings.add("Đang chuyển user " + targetUser.getEmail() + " từ team " + oldRestrictedTeam.getName() + " sang team " + restrictedTeam.getName());
+                    
+                    // QUAN TRỌNG: Nếu user đã có permission từ team khác, không cho phép team khác share survey này
+                    // Chỉ cho phép update nếu cùng team hoặc chưa có permission từ team nào
+                    if (oldRestrictedTeam != null && restrictedTeam != null && !oldRestrictedTeam.getTeamId().equals(restrictedTeam.getTeamId())) {
+                        throw new IdInvalidException(
+                            String.format(
+                                "User %s đã có quyền %s trên survey '%s' từ team '%s'. " +
+                                "Không thể chia sẻ survey '%s' cho user này từ team khác. " +
+                                "Vui lòng xóa permission từ team cũ trước khi chia sẻ với team mới.",
+                                targetUser.getEmail(),
+                                getPermissionDisplayName(oldPermission),
+                                survey.getTitle(),
+                                oldRestrictedTeam.getName(),
+                                survey.getTitle()
+                            )
+                        );
                     }
                     
                     permission.setPermission(access.getPermission());

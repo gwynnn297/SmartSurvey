@@ -265,6 +265,9 @@ public class TeamService {
         User removedUser = member.getUser();
         teamMemberRepository.delete(member);
 
+        // Xóa tất cả permissions của user này trên các survey được share với team này
+        surveyPermissionRepository.deleteByUserAndRestrictedTeam(removedUser, team);
+
         notificationService.createNotification(
                 removedUser,
                 Notification.NotificationType.TEAM_MEMBER_REMOVED,
@@ -274,6 +277,87 @@ public class TeamService {
                 team.getTeamId());
 
         return toTeamResponseDTO(team);
+    }
+
+    /**
+     * User tự rời team (không thể rời nếu là OWNER)
+     */
+    @Transactional
+    public void leaveTeam(Long teamId) throws IdInvalidException {
+        User currentUser = getCurrentUserOrThrow();
+        Team team = getTeamOrThrow(teamId);
+
+        TeamMember member = teamMemberRepository.findByTeamAndUser(team, currentUser)
+                .orElseThrow(() -> new IdInvalidException("Bạn không phải là thành viên của team này"));
+
+        if (member.getRole() == SurveyPermissionRole.OWNER) {
+            throw new IdInvalidException("OWNER không thể rời team. Vui lòng chuyển quyền OWNER cho người khác trước.");
+        }
+
+        // Xóa member khỏi team
+        teamMemberRepository.delete(member);
+
+        // Xóa tất cả permissions của user này trên các survey được share với team này
+        surveyPermissionRepository.deleteByUserAndRestrictedTeam(currentUser, team);
+
+        // Gửi thông báo cho owner
+        notificationService.createNotification(
+                team.getOwner(),
+                Notification.NotificationType.TEAM_MEMBER_LEFT,
+                currentUser.getFullName() + " đã rời team " + team.getName(),
+                "Thành viên đã tự rời khỏi team",
+                RELATED_ENTITY_TEAM,
+                team.getTeamId());
+    }
+
+    /**
+     * Xóa team và tất cả dữ liệu liên quan (chỉ OWNER mới có quyền)
+     * - Xóa tất cả permissions liên quan đến team
+     * - Xóa tất cả team members
+     * - Xóa tất cả team invitations
+     * - Xóa team
+     */
+    @Transactional
+    public void deleteTeam(Long teamId) throws IdInvalidException {
+        User currentUser = getCurrentUserOrThrow();
+        Team team = getTeamOrThrow(teamId);
+        ensureOwner(team, currentUser);
+
+        // Lưu thông tin team trước khi xóa để dùng cho thông báo
+        String teamName = team.getName();
+        Long savedTeamId = team.getTeamId();
+
+        // Lấy danh sách members để gửi thông báo
+        List<TeamMember> members = teamMemberRepository.findByTeam(team);
+        List<User> memberUsers = members.stream()
+                .map(TeamMember::getUser)
+                .filter(user -> !user.getUserId().equals(currentUser.getUserId())) // Không gửi thông báo cho chính owner
+                .toList();
+
+        // 1. Xóa tất cả permissions liên quan đến team
+        List<SurveyPermission> teamPermissions = surveyPermissionRepository.findByRestrictedTeam(team);
+        surveyPermissionRepository.deleteAll(teamPermissions);
+
+        // 2. Xóa tất cả team members
+        teamMemberRepository.deleteAll(members);
+
+        // 3. Xóa tất cả team invitations
+        List<TeamInvitation> invitations = teamInvitationRepository.findByTeam(team);
+        teamInvitationRepository.deleteAll(invitations);
+
+        // 4. Xóa team
+        teamRepository.delete(team);
+
+        // 5. Gửi thông báo cho tất cả members (trừ owner)
+        for (User memberUser : memberUsers) {
+            notificationService.createNotification(
+                    memberUser,
+                    Notification.NotificationType.TEAM_DELETED,
+                    "Team " + teamName + " đã bị xóa",
+                    "Team mà bạn là thành viên đã bị xóa bởi chủ team",
+                    RELATED_ENTITY_TEAM,
+                    savedTeamId);
+        }
     }
 
     /**

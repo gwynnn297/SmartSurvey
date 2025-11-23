@@ -59,9 +59,11 @@ public class Notification {
         TEAM_MEMBER_ADDED,        // Bạn đã được thêm vào team
         TEAM_MEMBER_ROLE_CHANGED, // Role của bạn trong team đã thay đổi
         TEAM_MEMBER_REMOVED,      // Bạn đã bị xóa khỏi team
+        TEAM_MEMBER_LEFT,         // Thành viên đã rời team (gửi cho owner)
         TEAM_CREATED,             // Team mới được tạo
         TEAM_INVITATION,          // Lời mời tham gia team
         TEAM_INVITATION_REJECTED, // Lời mời tham gia team đã bị từ chối
+        TEAM_DELETED,             // Team đã bị xóa
         SURVEY_SHARED,            // Survey được share với bạn
         SURVEY_PERMISSION_CHANGED, // Quyền của bạn trên survey đã thay đổi
         NEW_RESPONSE,             // Có response mới cho survey của bạn

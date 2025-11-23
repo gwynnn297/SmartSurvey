@@ -42,6 +42,11 @@ public interface SurveyPermissionRepository extends JpaRepository<SurveyPermissi
     List<Survey> findSurveysAccessibleByUser(@Param("user") User user);
 
     void deleteByUserAndRestrictedTeam(User user, Team restrictedTeam);
+    
+    /**
+     * Xóa tất cả permissions có restricted_team_id = team
+     */
+    void deleteByRestrictedTeam(Team restrictedTeam);
 }
 
 

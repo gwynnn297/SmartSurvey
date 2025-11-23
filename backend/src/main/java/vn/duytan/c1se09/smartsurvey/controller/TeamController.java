@@ -54,6 +54,18 @@ public class TeamController {
     }
 
     /**
+     * DELETE /api/teams/{teamId}
+     * Xóa team và tất cả dữ liệu liên quan (permissions, members, invitations)
+     * Chỉ OWNER của team được phép xóa
+     */
+    @DeleteMapping("/{teamId}")
+    @ApiMessage("Delete team")
+    public ResponseEntity<Void> deleteTeam(@PathVariable Long teamId) throws IdInvalidException {
+        teamService.deleteTeam(teamId);
+        return ResponseEntity.ok().build();
+    }
+
+    /**
      * POST /api/teams/{teamId}/invitations
      * Gửi lời mời tham gia team
      * Chỉ OWNER của team được phép gửi invitation
@@ -80,6 +92,18 @@ public class TeamController {
             @PathVariable Long memberId) throws IdInvalidException {
         TeamResponseDTO team = teamService.removeMember(teamId, memberId);
         return ResponseEntity.ok(team);
+    }
+
+    /**
+     * DELETE /api/teams/{teamId}/leave
+     * User tự rời team
+     * OWNER không thể rời team
+     */
+    @DeleteMapping("/{teamId}/leave")
+    @ApiMessage("Leave team")
+    public ResponseEntity<Void> leaveTeam(@PathVariable Long teamId) throws IdInvalidException {
+        teamService.leaveTeam(teamId);
+        return ResponseEntity.ok().build();
     }
 
     /**
