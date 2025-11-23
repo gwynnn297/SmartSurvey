@@ -888,7 +888,7 @@ const TeamManagementPage = () => {
                                                         ></i>
                                                     </>
                                                 )}
-                                                <i className="fa-solid fa-chevron-right" title="icon mũi tên"></i>
+                                                {/* <i className="fa-solid fa-chevron-right" title="icon mũi tên"></i> */}
                                             </div>
                                         </div>
                                     );

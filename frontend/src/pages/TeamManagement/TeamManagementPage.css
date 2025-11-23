@@ -114,6 +114,8 @@
 
 .team-list-info {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .team-list-name {
@@ -121,6 +123,9 @@
     color: #1a202c;
     margin-bottom: 4px;
     font-size: 15px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .team-list-meta {
