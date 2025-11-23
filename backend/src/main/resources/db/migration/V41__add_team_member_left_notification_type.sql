@@ -17,3 +17,5 @@ MODIFY COLUMN type ENUM(
 ) NOT NULL;
 
 
+
+

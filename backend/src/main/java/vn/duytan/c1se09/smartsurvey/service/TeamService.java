@@ -7,8 +7,6 @@ import vn.duytan.c1se09.smartsurvey.domain.*;
 import vn.duytan.c1se09.smartsurvey.domain.request.team.TeamCreateRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.team.TeamInvitationRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.response.team.*;
-import vn.duytan.c1se09.smartsurvey.domain.TeamMember;
-import vn.duytan.c1se09.smartsurvey.domain.TeamInvitation;
 import vn.duytan.c1se09.smartsurvey.repository.*;
 import vn.duytan.c1se09.smartsurvey.util.constant.SurveyPermissionRole;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
@@ -257,9 +255,6 @@ public class TeamService {
 
         if (!member.getTeam().getTeamId().equals(teamId)) {
             throw new IdInvalidException("Thành viên không thuộc team này");
-        }
-        if (member.getRole() == SurveyPermissionRole.OWNER) {
-            throw new IdInvalidException("Không thể xóa OWNER khỏi team");
         }
 
         User removedUser = member.getUser();

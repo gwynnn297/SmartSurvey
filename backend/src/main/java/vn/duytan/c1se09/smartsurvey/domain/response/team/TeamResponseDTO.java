@@ -22,4 +22,3 @@ public class TeamResponseDTO {
     private LocalDateTime updatedAt;
     private Integer memberCount;
 }
-
