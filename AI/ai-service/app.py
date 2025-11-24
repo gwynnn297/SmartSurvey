@@ -4,6 +4,7 @@ import os
 import json
 import re
 import hashlib
+import threading
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
 
@@ -16,6 +17,45 @@ from sqlalchemy import func
 from sqlalchemy.sql import text
 from dotenv import load_dotenv
 load_dotenv()
+
+# === ChromaDB (vector store) — LAZY LOAD ===
+# Không import chromadb ở global scope để tránh crash khi server chưa cài.
+CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_db")
+CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "survey_answers")
+_CHROMA_CLIENT = None  # lazy singleton
+
+def _get_chroma_client():
+    """Khởi tạo PersistentClient khi cần; không làm app crash ở startup."""
+    global _CHROMA_CLIENT
+    if _CHROMA_CLIENT is not None:
+        return _CHROMA_CLIENT
+    try:
+        import chromadb  # import khi cần
+        _CHROMA_CLIENT = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+        return _CHROMA_CLIENT
+    except Exception as e:
+        print(f"[chroma] init error (lazy): {e}")
+        return None
+
+def get_chroma_collection():
+    """
+    Lấy (hoặc tạo) collection 'survey_answers' với cosine distance.
+    Metadata store: survey_id, answer_id, question_id ...
+    """
+    client = _get_chroma_client()
+    if client is None:
+        return None
+    try:
+        return client.get_collection(name=CHROMA_COLLECTION)
+    except Exception:
+        try:
+            return client.create_collection(
+                name=CHROMA_COLLECTION,
+                metadata={"hnsw:space": "cosine"}  # cosine similarity
+            )
+        except Exception as e:
+            print(f"[chroma] create_collection error: {e}")
+            return None
 
 # ====== ML/NLP (không cần train) ======
 from typing import List as _List
@@ -369,7 +409,6 @@ def call_external_sentiment(text: str, retries: int | None = None) -> Tuple[int,
         # giữ kiểu trả về để backward-compatible
         return 1, 0.0, {"error": f"external_call_failed: {e}"}
 
-
 # ============== Embedding (Gemini text-embedding-004) ==============
 EXT_EMB_URL   = os.getenv("EXT_EMB_URL")
 EXT_EMB_KEY   = os.getenv("EXT_EMB_KEY") or os.getenv("EXT_SENTI_KEY")
@@ -403,12 +442,9 @@ def _embed_vi(text: str) -> list[float]:
     except Exception:
         return []
 
-
 # ============================================================
 # FastAPI app
 # ============================================================
-
-
 def get_db():
     db = SessionLocal()
     try:
@@ -416,12 +452,43 @@ def get_db():
     finally:
         db.close()
 
-
+# ==== on_startup (cập nhật) ====
 @app.on_event("startup")
 def on_startup():
     init_db()
     print("[startup] DB =", settings.DB_URL)
     print("[startup] External sentiment only (Gemini)")
+
+    # Tự động migrate Chroma nếu bật cờ MIGRATE_ON_BOOT=1
+    try:
+        migrate_flag = os.getenv("MIGRATE_ON_BOOT", "0")
+        if migrate_flag == "1":
+            print("[startup] MIGRATE_ON_BOOT=1 → spawning migrate thread...")
+
+            # import hàm main từ migrate_chroma.py ngay tại đây
+            try:
+                from migrate_chroma import main as migrate_main
+            except Exception as e:
+                print(f"[startup][migrate] cannot import migrate_chroma.main: {e}")
+            else:
+                def _run_migrate():
+                    try:
+                        print("[startup][migrate] BEGIN")
+                        migrate_main()  # chạy migrate (upsert theo batch, idempotent)
+                        print("[startup][migrate] DONE")
+                    except Exception as ex:
+                        print(f"[startup][migrate] ERROR: {ex}")
+
+                t = threading.Thread(
+                    target=_run_migrate,
+                    name="migrate_chroma_thread",
+                    daemon=True,   # không chặn quá trình tắt server
+                )
+                t.start()
+        else:
+            print(f"[startup] MIGRATE_ON_BOOT={migrate_flag} → skip migrate.")
+    except Exception as e:
+        print(f"[startup] migrate bootstrap error: {e}")
 
 @app.get("/health")
 def health_check():
@@ -911,11 +978,10 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
         q_raw = req.question_text or ""
         q_norm = norm_text(q_raw)
 
-        # 1) Follow-up cơ bản: nếu user hỏi kiểu "còn ... thì sao?"
+        # 1) Follow-up cơ bản
         if user_id and re.search(r"\b(còn|theo|vậy)\b", q_norm):
             last = _USER_CTX.get(user_id)
             if last and last.get("survey_id") == req.survey_id and last.get("last_q"):
-                # ghép lại để parser có thêm ngữ cảnh (rất đơn giản)
                 q_norm = (last["last_q"] + " " + q_norm).strip()
 
         # 2) Ưu tiên rule-based stats
@@ -925,46 +991,46 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
             if user_id:
                 _USER_CTX[user_id] = {"survey_id": req.survey_id, "last_q": q_norm, "intent": "stats"}
         else:
-            # 3) NEW — RAG theo Embeddings (đúng kiến trúc mentor duyệt)
-            #    - yêu cầu đã ingest trước đó: POST /ai/rag/ingest/{survey_id}
-            #    - nếu chưa ingest hoặc không có vec -> tự fallback TF-IDF
+            # 3) RAG dùng ChromaDB + metadata filter theo survey_id
+            collection = get_chroma_collection()
+            if collection is None:
+                raise HTTPException(status_code=503, detail="Vector store chưa sẵn sàng (ChromaDB).")
+
             vec_q = _embed_vi(q_norm)
-            rows = _embed_rows_by_survey(req.survey_id)
-            scored: list[tuple[float, str]] = []
-
-            for row in rows:
-                try:
-                    v = json.loads(row["vec_json"])
-                except Exception:
-                    v = []
-                if v:
-                    scored.append((_cosine(vec_q, v), row["text_norm"]))
-
-            scored.sort(key=lambda x: x[0], reverse=True)
-            min_sim = float(os.getenv("RAG_MIN_SIM", "0.25"))
-            scored = [(s, t) for (s, t) in scored if s >= min_sim]
-
             env_topk = int(os.getenv("RAG_TOP_K", "5"))
             topk = max(1, min(int(req.top_k or env_topk), 20))
-            topk_ctx = [t for _, t in scored[:topk]]
+            min_sim = float(os.getenv("RAG_MIN_SIM", "0.25"))
 
-            # cắt độ dài ngữ cảnh nếu cần
-            max_chars = int(os.getenv("RAG_MAX_CTX_CHARS", "5000"))
-            cur = 0; trimmed_ctx = []
-            for c in topk_ctx:
-                if cur + len(c) <= max_chars:
-                    trimmed_ctx.append(c); cur += len(c)
-                else:
-                    break
-            topk_ctx = trimmed_ctx
+            topk_ctx = []
+            if vec_q:
+                try:
+                    res = collection.query(
+                        query_embeddings=[vec_q],
+                        n_results=topk * 3,  # lấy dư một chút rồi lọc theo ngưỡng sim
+                        where={"survey_id": int(req.survey_id)},  # lọc metadata trước
+                        include=["documents", "distances", "metadatas"],
+                    )
+                    docs = (res.get("documents") or [[]])[0]
+                    dists = (res.get("distances") or [[]])[0]
+                    items = []
+                    for d, doc in zip(dists, docs):
+                        try:
+                            sim = 1.0 - float(d)  # cosine similarity
+                        except Exception:
+                            sim = 0.0
+                        items.append((sim, doc))
+                    items.sort(key=lambda x: x[0], reverse=True)
+                    items = [(s, t) for (s, t) in items if s >= min_sim]
+                    topk_ctx = [t for _, t in items[:topk]]
+                except Exception as e:
+                    print(f"[ai_chat] chroma query error: {e}")
 
             if topk_ctx:
-                # template answer nhẹ (không phát sinh chi phí LLM). Nếu muốn full RAG,
                 answer = _gen_answer_from_ctx(q_norm, topk_ctx)
                 if user_id:
-                    _USER_CTX[user_id] = {"survey_id": req.survey_id, "last_q": q_norm, "intent": "rag-emb"}
+                    _USER_CTX[user_id] = {"survey_id": req.survey_id, "last_q": q_norm, "intent": "rag-emb-chroma"}
             else:
-                # 4) Fallback — RAG TF-IDF (giữ nguyên logic cũ)
+                # 4) Fallback — TF-IDF
                 texts = [r.answer_text for r in fetch_answer_rows(db, req.survey_id)]
                 topk_ctx = retrieve_topk(texts, q_norm, req.top_k)
                 answer = craft_answer(q_norm, topk_ctx)
@@ -1005,30 +1071,93 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
 print("[startup] EXT_SENTI_URL =", os.getenv("EXT_SENTI_URL"))
 print("[startup] EXT_SENTI_KEY set? ", bool(os.getenv("EXT_SENTI_KEY")))
 
+
+# ================== RAG INGEST (đã tối ưu hoá đa luồng) ==================
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 @app.post("/ai/rag/ingest/{survey_id}", tags=["Chat AI/RAG"])
 def rag_ingest(survey_id: int, db: Session = Depends(get_db)):
+    """
+    Lấy các câu trả lời text từ MySQL (answers/responses) → embed (Gemini) song song → upsert Chroma theo batch.
+    - Dùng ThreadPoolExecutor để gọi _embed_vi song song (mặc định 8 luồng).
+    - Metadata chứa survey_id để filter trước-lọc khi query.
+    """
     rows = fetch_answer_rows(db, survey_id)
     if not rows:
         return {"ok": False, "message": "Không có câu trả lời hợp lệ."}
+
+    collection = get_chroma_collection()
+    if collection is None:
+        raise HTTPException(status_code=503, detail="Vector store chưa sẵn sàng (ChromaDB).")
+
+    BATCH = int(os.getenv("RAG_INGEST_BATCH", "200"))
+    MAX_WORKERS = int(os.getenv("EMBED_MAX_WORKERS", "8"))  # 5–10 gợi ý
     added = 0
-    for r in rows:
+
+    buf_ids: List[str] = []
+    buf_embs: List[List[float]] = []
+    buf_metas: List[Dict[str, Any]] = []
+    buf_docs: List[str] = []
+
+    def _flush():
+        nonlocal added, buf_ids, buf_embs, buf_metas, buf_docs
+        if not buf_ids:
+            return
+        try:
+            collection.upsert(
+                ids=buf_ids,
+                embeddings=buf_embs,
+                metadatas=buf_metas,
+                documents=buf_docs,
+            )
+            added += len(buf_ids)
+        except Exception as e:
+            print(f"[rag_ingest] upsert batch error: {e}")
+        finally:
+            buf_ids, buf_embs, buf_metas, buf_docs = [], [], [], []
+
+    def _worker(r):
         raw = r.answer_text or ""
         nt = norm_text(raw)
-        vec = _embed_vi(nt)
+        vec = _embed_vi(nt)  # call Gemini
         if not vec:
-            continue
-        _embed_upsert(survey_id, int(r.answer_id), nt, vec)
-        added += 1
+            return None
+        cid = f"{survey_id}:{int(r.answer_id)}"
+        meta = {
+            "survey_id": int(survey_id),
+            "answer_id": int(r.answer_id),
+            "question_id": int(r.question_id) if r.question_id is not None else None,
+        }
+        return (cid, vec, meta, nt)
+
+    # Nộp job theo lô để tránh backlog quá lớn (ổn định bộ nhớ)
+    CHUNK = MAX_WORKERS * 25  # tuỳ chỉnh
+    for i in range(0, len(rows), CHUNK):
+        chunk = rows[i:i+CHUNK]
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS, thread_name_prefix="embed") as ex:
+            futures = [ex.submit(_worker, r) for r in chunk]
+            for fut in as_completed(futures):
+                try:
+                    item = fut.result()
+                except Exception as e:
+                    print(f"[rag_ingest] worker error: {e}")
+                    continue
+                if not item:
+                    continue
+                cid, vec, meta, nt = item
+                buf_ids.append(cid); buf_embs.append(vec); buf_metas.append(meta); buf_docs.append(nt)
+                if len(buf_ids) >= BATCH:
+                    _flush()
+
+    _flush()
     return {"ok": True, "ingested": added, "survey_id": survey_id}
 
-# ============================================================
 # ===================== SPRINT 4 ADDITIONS ====================
 # 1) Keywords (TF-IDF)
 # 2) Basic Sentiment (rule-based, tiếng Việt)
 # 3) Summary (Gemini)
 # 4) Themes (TF-IDF -> SVD -> KMeans)
 # 5) Get latest analysis by kind
-# ============================================================
 
 
 EXT_URL   = os.getenv("EXT_SENTI_URL") or os.getenv("EXT_SUMM_URL")
