@@ -272,6 +272,40 @@ export const individualResponseService = {
             console.error('❌ Lỗi khi submit phản hồi với file:', error);
             throw error;
         }
+    },
+
+    /**
+     * View file by ID with authentication
+     * GET /api/files/download/{fileId}
+     */
+    viewFile: async (fileId) => {
+        try {
+            console.log('👁️ Viewing file:', fileId);
+            const response = await apiClient.get(`/api/files/download/${fileId}`, {
+                responseType: 'blob'
+            });
+            return response.data;
+        } catch (error) {
+            console.error('❌ Lỗi khi xem file:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Download file by ID with authentication
+     * GET /api/files/download/{fileId}
+     */
+    downloadFile: async (fileId, originalFileName) => {
+        try {
+            console.log('⬇️ Downloading file:', fileId, originalFileName);
+            const response = await apiClient.get(`/api/files/download/${fileId}`, {
+                responseType: 'blob'
+            });
+            return response.data;
+        } catch (error) {
+            console.error('❌ Lỗi khi tải file:', error);
+            throw error;
+        }
     }
 };
 
@@ -282,7 +316,9 @@ export const {
     exportResponses,
     bulkDeleteResponses,
     submitResponse,
-    submitResponseWithFiles
+    submitResponseWithFiles,
+    viewFile,
+    downloadFile
 } = individualResponseService;
 
 export default individualResponseService;

@@ -33,6 +33,59 @@ const IndividualResponsesPage = () => {
     });
     const [searchDraft, setSearchDraft] = useState('');
 
+    const [loadingFiles, setLoadingFiles] = useState(new Set());
+
+    // File handling functions
+    const handleFileView = async (file) => {
+        const fileKey = `view_${file.fileId}`;
+        setLoadingFiles(prev => new Set(prev).add(fileKey));
+        
+        try {
+            const response = await individualResponseService.viewFile(file.fileId);
+            // Open in new tab
+            const blob = new Blob([response], { type: file.fileType });
+            const url = window.URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        } catch (error) {
+            console.error('Error viewing file:', error);
+            alert('Không thể xem file. Vui lòng thử lại.');
+        } finally {
+            setLoadingFiles(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(fileKey);
+                return newSet;
+            });
+        }
+    };
+
+    const handleFileDownload = async (file) => {
+        const fileKey = `download_${file.fileId}`;
+        setLoadingFiles(prev => new Set(prev).add(fileKey));
+        
+        try {
+            const response = await individualResponseService.downloadFile(file.fileId, file.originalFileName);
+            // Trigger download
+            const blob = new Blob([response], { type: file.fileType });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.originalFileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error downloading file:', error);
+            alert('Không thể tải file. Vui lòng thử lại.');
+        } finally {
+            setLoadingFiles(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(fileKey);
+                return newSet;
+            });
+        }
+    };
+
     // Format thời gian từ ISO string
     const formatDateTime = (dateTimeString) => {
         if (!dateTimeString) return '';
@@ -99,16 +152,20 @@ const IndividualResponsesPage = () => {
             return parts.join(' ');
         }
 
-        // Text answer (open-ended, rating)
-        if (answer.answerText) {
+        // File upload - CHECK THIS FIRST before answerText
+        if (answer.uploadedFiles && answer.uploadedFiles.length > 0) {
+            console.log('📎 Found uploadedFiles:', answer.uploadedFiles);
+            return {
+                type: 'files',
+                files: answer.uploadedFiles
+            };
+        }
+
+        // Text answer (open-ended, rating) - but skip "File uploaded successfully" messages
+        if (answer.answerText && !answer.answerText.startsWith('File uploaded successfully')) {
             return answer.answerText.length > 100
                 ? answer.answerText.substring(0, 100) + '...'
                 : answer.answerText;
-        }
-
-        // File upload
-        if (answer.uploadedFiles && answer.uploadedFiles.length > 0) {
-            return answer.uploadedFiles.map(f => f.originalFileName || f.fileName || 'File').join(', ');
         }
 
         return 'Chưa trả lời';
@@ -612,13 +669,72 @@ const IndividualResponsesPage = () => {
                                             {questionsList.map((question) => {
                                                 const answer = getAnswerForQuestion(response, question.id);
                                                 const questionData = questionsMap.get(question.id);
-                                                const answerText = answer ? formatAnswer(answer, questionData) : 'Chưa trả lời';
+                                                const answerFormatted = answer ? formatAnswer(answer, questionData) : 'Chưa trả lời';
 
                                                 return (
                                                     <td key={question.id} className="answer-cell">
-                                                        <div className="answer-text" title={answerText}>
-                                                            {answerText}
-                                                        </div>
+                                                        {answerFormatted?.type === 'files' ? (
+                                                            <div className="file-list">
+                                                                {answerFormatted.files.map((file, fileIndex) => (
+                                                                    <div key={fileIndex} className="file-item">
+                                                                        <div className="file-info">
+                                                                            <span 
+                                                                                className="file-name" 
+                                                                                data-file-type={file.fileType}
+                                                                                title={file.originalFileName || file.fileName}
+                                                                            >
+                                                                                {file.originalFileName || file.fileName}
+                                                                            </span>
+                                                                            <span className="file-size">
+                                                                                {file.fileSize ? `${(file.fileSize / 1024).toFixed(1)} KB` : ''}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="file-actions">
+                                                                            <button 
+                                                                                onClick={() => handleFileView(file)}
+                                                                                className={`file-action-btn view-btn ${loadingFiles.has(`view_${file.fileId}`) ? 'loading' : ''}`}
+                                                                                title="Xem file"
+                                                                                disabled={loadingFiles.has(`view_${file.fileId}`)}
+                                                                            >
+                                                                                {loadingFiles.has(`view_${file.fileId}`) ? (
+                                                                                    <svg className="loading-spinner" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                                                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="60" strokeDashoffset="60">
+                                                                                            <animate attributeName="stroke-dashoffset" values="60;0;60" dur="1.5s" repeatCount="indefinite"/>
+                                                                                        </circle>
+                                                                                    </svg>
+                                                                                ) : (
+                                                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                                                        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+                                                                                    </svg>
+                                                                                )}
+                                                                            </button>
+                                                                            <button 
+                                                                                onClick={() => handleFileDownload(file)}
+                                                                                className={`file-action-btn download-btn ${loadingFiles.has(`download_${file.fileId}`) ? 'loading' : ''}`}
+                                                                                title="Tải xuống"
+                                                                                disabled={loadingFiles.has(`download_${file.fileId}`)}
+                                                                            >
+                                                                                {loadingFiles.has(`download_${file.fileId}`) ? (
+                                                                                    <svg className="loading-spinner" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                                                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" strokeDasharray="60" strokeDashoffset="60">
+                                                                                            <animate attributeName="stroke-dashoffset" values="60;0;60" dur="1.5s" repeatCount="indefinite"/>
+                                                                                        </circle>
+                                                                                    </svg>
+                                                                                ) : (
+                                                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                                                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                                                                                    </svg>
+                                                                                )}
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="answer-text" title={typeof answerFormatted === 'string' ? answerFormatted : JSON.stringify(answerFormatted)}>
+                                                                {typeof answerFormatted === 'string' ? answerFormatted : JSON.stringify(answerFormatted)}
+                                                            </div>
+                                                        )}
                                                     </td>
                                                 );
                                             })}

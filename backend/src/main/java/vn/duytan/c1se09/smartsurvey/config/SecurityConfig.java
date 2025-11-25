@@ -82,14 +82,19 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
+                        // Public endpoints FIRST (order matters!)
                         .requestMatchers("/auth/login", "/auth/register", "/auth/forgot-password").permitAll()
+                        .requestMatchers("/surveys/{id}/public", "/surveys/{id}/status").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/responses").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/responses/with-files").permitAll()
+                        .requestMatchers("/api/public/**").permitAll() // This should be before specific /api rules
+                        .requestMatchers("/actuator/**").permitAll()
+                        
+                        // Authenticated endpoints
                         .requestMatchers("/auth/change-password", "/auth/me", "/auth/test-token").authenticated()
                         .requestMatchers("/api/users/**").authenticated()
                         .requestMatchers("/users/profile").authenticated()
                         .requestMatchers("/dashboard/**").authenticated()
-                        .requestMatchers("/surveys/{id}/public", "/surveys/{id}/status").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/responses").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/responses/with-files").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/responses/with-files").authenticated()
                         .requestMatchers("/api/responses/**").authenticated()
                         .requestMatchers("/surveys/**").authenticated()
@@ -100,8 +105,6 @@ public class SecurityConfig {
                         .requestMatchers("/ai/**").authenticated()
                         .requestMatchers("/api/files/**").authenticated() // File endpoints require authentication
                         .requestMatchers("/files/**").authenticated() // Legacy file endpoints
-                        .requestMatchers("/api/public/**").permitAll()
-                        .requestMatchers("/actuator/**").permitAll()
                         .anyRequest().authenticated());
 
         http.authenticationProvider(authenticationProvider());
