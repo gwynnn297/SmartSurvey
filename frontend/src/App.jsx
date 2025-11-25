@@ -14,12 +14,10 @@ import '@fortawesome/fontawesome-free/css/all.min.css';
 import DashboardReportPage from "./pages/report/DashboardReportPage";
 import SentimentPage from "./pages/report/SentimentPage";
 import ExportReportPage from "./pages/report/ExportReportPage";
-import DetailsStatisticPage from "./pages/report/DetailsStatisticPage";
 import ResponseFormPage from "./pages/Response/ResponseFormPage";
 import PublicResponsePage from "./pages/Response/PublicResponsePage";
 import ShareSurveyPage from "./pages/Survey/ShareSurveyPage";
 import ViewLinkSharePage from "./pages/Response/ViewLinkSharePage";
-import OpenFeedbackPage from "./pages/report/OpenFeedbackPage";
 import IndividualResponsesPage from "./pages/report/IndividualResponsesPage";
 import TeamManagementPage from "./pages/TeamManagement/TeamManagementPage";
 
@@ -117,26 +115,10 @@ function App() {
           }
         />
         <Route
-          path="/report/details-statistic"
-          element={
-            <PrivateRoute>
-              <DetailsStatisticPage />
-            </PrivateRoute>
-          }
-        />
-        <Route
           path="/report/sentiment"
           element={
             <PrivateRoute>
               <SentimentPage />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/report/open-feedback"
-          element={
-            <PrivateRoute>
-              <OpenFeedbackPage />
             </PrivateRoute>
           }
         />

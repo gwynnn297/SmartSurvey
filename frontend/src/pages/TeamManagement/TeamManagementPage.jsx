@@ -8,38 +8,37 @@ import './TeamManagementPage.css';
 
 const TeamManagementPage = () => {
     console.log('[TeamManagement] Component rendering...');
-
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [teams, setTeams] = useState([]);
     const [notification, setNotification] = useState(null);
     const hasAutoSelectedRef = useRef(false);
 
-    // Modal states
+    // Trạng thái modal
     const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
     const [showEditTeamModal, setShowEditTeamModal] = useState(false);
 
-    // Selected team for detail view
+    // Nhóm được chọn để xem chi tiết
     const [selectedTeam, setSelectedTeam] = useState(null);
     const [teamMembers, setTeamMembers] = useState([]);
     const [teamSurveys, setTeamSurveys] = useState([]);
-    const [ownerSurveys, setOwnerSurveys] = useState([]); // Surveys owned by current user
-    const [selectedSurveyId, setSelectedSurveyId] = useState(null); // Selected survey for permission management
+    const [ownerSurveys, setOwnerSurveys] = useState([]); // Khảo sát thuộc sở hữu của người dùng hiện tại
+    const [selectedSurveyId, setSelectedSurveyId] = useState(null); // Khảo sát được chọn để quản lý quyền
     const [loadingTeamDetail, setLoadingTeamDetail] = useState(false);
     const [loadingOwnerSurveys, setLoadingOwnerSurveys] = useState(false);
-    // Permissions matrix: { surveyId: { teamId: { userId: permission } } }
-    // This allows the same user in different teams to have different permissions for the same survey
+    // Ma trận quyền: { surveyId: { teamId: { userId: permission } } }
+    // Cho phép cùng một người dùng trong các nhóm khác nhau có quyền khác nhau cho cùng một khảo sát
     const [permissionsMatrix, setPermissionsMatrix] = useState({});
     const [savingPermissions, setSavingPermissions] = useState(false);
-    // Track users who have permissions in other teams: { surveyId: { userId: true } }
-    // If a user has permission in another team, they cannot be assigned permission in this team
+    // Theo dõi người dùng có quyền ở các nhóm khác: { surveyId: { userId: true } }
+    // Nếu người dùng đã có quyền ở nhóm khác, họ không thể được gán quyền ở nhóm này
     const [usersWithOtherTeamPermissions, setUsersWithOtherTeamPermissions] = useState({});
-    // Dashboard data for members (non-owners)
+    // Dữ liệu dashboard cho thành viên (không phải chủ sở hữu)
     const [dashboardData, setDashboardData] = useState(null);
     const [loadingDashboard, setLoadingDashboard] = useState(false);
 
-    // Form states
+    // Trạng thái form
     const [createTeamForm, setCreateTeamForm] = useState({
         name: '',
         description: ''
@@ -56,7 +55,7 @@ const TeamManagementPage = () => {
         setNotification({ type, message });
     }, []);
 
-    // Load teams and invitations
+    // Tải danh sách nhóm và lời mời
     const loadData = useCallback(async () => {
         try {
             setLoading(true);
@@ -69,14 +68,14 @@ const TeamManagementPage = () => {
 
             console.log('[TeamManagement] Teams loaded:', teamsList.length);
 
-            // Auto-select first team only once on initial load
+            // Tự động chọn nhóm đầu tiên chỉ một lần khi tải lần đầu
             if (!hasAutoSelectedRef.current && teamsList.length > 0) {
                 hasAutoSelectedRef.current = true;
                 const firstTeam = teamsList[0];
                 setSelectedTeam(firstTeam);
                 const teamId = firstTeam.teamId || firstTeam.id;
                 console.log('[TeamManagement] Auto-selecting first team:', teamId);
-                // loadTeamDetail will be called by useEffect watching selectedTeam
+                // loadTeamDetail sẽ được gọi bởi useEffect theo dõi selectedTeam
             }
         } catch (error) {
             console.error('[TeamManagement] Error loading teams data:', error);
@@ -89,9 +88,9 @@ const TeamManagementPage = () => {
     useEffect(() => {
         loadData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Empty dependency array - chỉ chạy khi mount
+    }, []); // Mảng dependency rỗng - chỉ chạy khi mount
 
-    // Select team and load detail
+    // Chọn nhóm và tải chi tiết
     const handleSelectTeam = async (team) => {
         console.log('[TeamManagement] handleSelectTeam called with team:', team);
         setSelectedTeam(team);
@@ -100,7 +99,7 @@ const TeamManagementPage = () => {
         await loadTeamDetail(teamId);
     };
 
-    // Get current user helper
+    // Hàm helper lấy người dùng hiện tại
     const getCurrentUser = useCallback(() => {
         try {
             return JSON.parse(localStorage.getItem('user')) || null;
@@ -109,11 +108,11 @@ const TeamManagementPage = () => {
         }
     }, []);
 
-    // Load owner's surveys
+    // Tải khảo sát của chủ sở hữu
     const loadOwnerSurveys = useCallback(async () => {
         try {
             setLoadingOwnerSurveys(true);
-            // Get current user
+            // Lấy người dùng hiện tại
             const user = getCurrentUser();
             const currentUserId = user?.userId || user?.id;
 
@@ -127,7 +126,7 @@ const TeamManagementPage = () => {
                 return;
             }
 
-            // Get all surveys owned by current user (like ListSurvey)
+            // Lấy tất cả khảo sát thuộc sở hữu của người dùng hiện tại (giống như ListSurvey)
             const response = await surveyService.getSurveys(0, 1000);
             console.log('[TeamManagement] Surveys API response:', response);
 
@@ -153,11 +152,11 @@ const TeamManagementPage = () => {
                 });
             }
 
-            // Convert both to string for comparison to avoid type mismatch
+            // Chuyển đổi cả hai sang string để so sánh tránh lỗi type mismatch
             const currentUserIdStr = String(currentUserId);
             console.log('[TeamManagement] Comparing with userId (as string):', currentUserIdStr);
 
-            // Filter only surveys owned by current user
+            // Lọc chỉ các khảo sát thuộc sở hữu của người dùng hiện tại
             const ownedSurveys = surveysList.filter(survey => {
                 const ownerId = survey.userId || survey.user?.userId || survey.user?.id;
                 const ownerIdStr = ownerId ? String(ownerId) : null;
@@ -165,7 +164,7 @@ const TeamManagementPage = () => {
                 const isMatch = ownerIdStr === currentUserIdStr;
 
                 if (surveysList.length <= 5) {
-                    // Only log for first few surveys to avoid spam
+                    // Chỉ log cho vài khảo sát đầu tiên để tránh spam
                     console.log(`[TeamManagement] Survey "${survey.title || survey.id}": ownerId=${ownerId} (${typeof ownerId}, as string: ${ownerIdStr}), match=${isMatch}`);
                 }
 
@@ -191,7 +190,7 @@ const TeamManagementPage = () => {
 
             setOwnerSurveys(ownedSurveys);
 
-            // Auto-select first survey if available and no survey selected
+            // Tự động chọn khảo sát đầu tiên nếu có và chưa có khảo sát nào được chọn
             if (ownedSurveys.length > 0) {
                 setSelectedSurveyId(prev => {
                     if (!prev) {
@@ -214,7 +213,7 @@ const TeamManagementPage = () => {
         }
     }, [getCurrentUser]);
 
-    // Load existing permissions for a specific survey and team
+    // Tải quyền hiện có cho một khảo sát và nhóm cụ thể
     const loadSurveyPermissions = useCallback(async (surveyId, members, teamId) => {
         if (!surveyId || !members || members.length === 0 || !teamId) return;
 
@@ -222,15 +221,15 @@ const TeamManagementPage = () => {
             const permissions = await teamManagementService.getSurveyPermissions(surveyId);
             if (permissions?.users && Array.isArray(permissions.users)) {
                 const teamPermissions = {};
-                const usersWithOtherTeamPerms = {}; // Track users with permissions in other teams
-                // Convert teamId to number for comparison
+                const usersWithOtherTeamPerms = {}; // Theo dõi người dùng có quyền ở các nhóm khác
+                // Chuyển đổi teamId sang number để so sánh
                 const currentTeamIdNum = Number(teamId);
 
                 for (const perm of permissions.users) {
                     const userId = perm.userId || perm.user?.userId || perm.user?.id;
                     if (!userId) continue;
 
-                    // Check if member is in current team
+                    // Kiểm tra xem thành viên có trong nhóm hiện tại không
                     const member = members.find(m => {
                         const memberId = m.userId || m.user?.userId || m.user?.id;
                         return Number(memberId) === Number(userId);
@@ -240,20 +239,20 @@ const TeamManagementPage = () => {
                         const permTeamId = perm.restrictedTeamId ? Number(perm.restrictedTeamId) : null;
 
                         if (permTeamId && permTeamId === currentTeamIdNum) {
-                            // Permission for current team
+                            // Quyền cho nhóm hiện tại
                             teamPermissions[Number(userId)] = perm.permission;
                         } else if (permTeamId && permTeamId !== currentTeamIdNum) {
-                            // User has permission in another team - mark as locked
+                            // Người dùng có quyền ở nhóm khác - đánh dấu là bị khóa
                             usersWithOtherTeamPerms[Number(userId)] = true;
                         } else if (!permTeamId) {
-                            // Permission without team restriction (global permission)
-                            // This also means user cannot be assigned team-specific permission
+                            // Quyền không bị giới hạn bởi nhóm (quyền toàn cục)
+                            // Điều này cũng có nghĩa là người dùng không thể được gán quyền cụ thể cho nhóm
                             usersWithOtherTeamPerms[Number(userId)] = true;
                         }
                     }
                 }
 
-                // Update permissions matrix with team-specific structure
+                // Cập nhật ma trận quyền với cấu trúc cụ thể cho từng nhóm
                 setPermissionsMatrix(prev => ({
                     ...prev,
                     [surveyId]: {
@@ -262,7 +261,7 @@ const TeamManagementPage = () => {
                     }
                 }));
 
-                // Update users with other team permissions
+                // Cập nhật người dùng có quyền ở các nhóm khác
                 setUsersWithOtherTeamPermissions(prev => ({
                     ...prev,
                     [surveyId]: {
@@ -271,7 +270,7 @@ const TeamManagementPage = () => {
                     }
                 }));
             } else {
-                // No permissions found, set empty for this team
+                // Không tìm thấy quyền, đặt rỗng cho nhóm này
                 setPermissionsMatrix(prev => ({
                     ...prev,
                     [surveyId]: {
@@ -282,7 +281,7 @@ const TeamManagementPage = () => {
             }
         } catch (error) {
             console.error(`Error loading permissions for survey ${surveyId}:`, error);
-            // If no permissions exist yet, that's fine - just set empty for this team
+            // Nếu chưa có quyền nào, không sao - chỉ cần đặt rỗng cho nhóm này
             setPermissionsMatrix(prev => ({
                 ...prev,
                 [surveyId]: {
@@ -293,7 +292,7 @@ const TeamManagementPage = () => {
         }
     }, []);
 
-    // Load dashboard data for members (non-owners)
+    // Tải dữ liệu dashboard cho thành viên (không phải chủ sở hữu)
     const loadDashboardData = useCallback(async () => {
         try {
             setLoadingDashboard(true);
@@ -309,18 +308,18 @@ const TeamManagementPage = () => {
         }
     }, []);
 
-    // Load team detail
+    // Tải chi tiết nhóm
     const loadTeamDetail = useCallback(async (teamId, preserveSelectedSurvey = false) => {
         try {
             setLoadingTeamDetail(true);
 
-            // Store current selected survey if we want to preserve it
+            // Lưu khảo sát được chọn hiện tại nếu muốn giữ lại
             const currentSelectedSurveyId = preserveSelectedSurvey ? selectedSurveyId : null;
 
             if (!preserveSelectedSurvey) {
-                setSelectedSurveyId(null); // Reset selected survey
-                // Don't reset entire permissions matrix - keep permissions for other teams
-                // Only clear permissions for this team if needed
+                setSelectedSurveyId(null); // Đặt lại khảo sát được chọn
+                // Không đặt lại toàn bộ ma trận quyền - giữ quyền cho các nhóm khác
+                // Chỉ xóa quyền cho nhóm này nếu cần
             }
 
             console.log('[TeamManagement] Loading team detail for teamId:', teamId);
@@ -337,7 +336,7 @@ const TeamManagementPage = () => {
             console.log('[TeamManagement] Team members loaded:', membersList.length);
             console.log('[TeamManagement] Team surveys loaded:', Array.isArray(surveys) ? surveys.length : 0);
 
-            // Load owner surveys if user is owner, otherwise load dashboard data
+            // Tải khảo sát của chủ sở hữu nếu người dùng là chủ sở hữu, nếu không thì tải dữ liệu dashboard
             const user = getCurrentUser();
             const currentUserId = user?.userId || user?.id;
             console.log('[TeamManagement] Checking team ownership...');
@@ -351,7 +350,7 @@ const TeamManagementPage = () => {
                 'team.owner?.id': team.owner?.id
             });
 
-            // Convert both to string for comparison to avoid type mismatch
+            // Chuyển đổi cả hai sang string để so sánh tránh lỗi type mismatch
             const currentUserIdStr = String(currentUserId);
             const teamOwnerId = team.ownerId || team.owner?.userId || team.owner?.id;
             const teamOwnerIdStr = teamOwnerId ? String(teamOwnerId) : null;
@@ -362,16 +361,16 @@ const TeamManagementPage = () => {
 
             if (isTeamOwner) {
                 console.log('[TeamManagement] ✅ User is team owner, loading owner surveys...');
-                // Load all owner surveys
+                // Tải tất cả khảo sát của chủ sở hữu
                 await loadOwnerSurveys();
 
-                // If we preserved the selected survey, reload its permissions with new members
+                // Nếu đã giữ lại khảo sát được chọn, tải lại quyền của nó với danh sách thành viên mới
                 if (preserveSelectedSurvey && currentSelectedSurveyId && membersList.length > 0) {
                     await loadSurveyPermissions(currentSelectedSurveyId, membersList, teamId);
                 }
             } else {
                 console.log('[TeamManagement] ❌ User is NOT team owner, loading dashboard data...');
-                // Load dashboard data to show member's permissions
+                // Tải dữ liệu dashboard để hiển thị quyền của thành viên
                 await loadDashboardData();
             }
         } catch (error) {
@@ -383,23 +382,23 @@ const TeamManagementPage = () => {
         }
     }, [getCurrentUser, loadOwnerSurveys, loadSurveyPermissions, selectedSurveyId, loadDashboardData]);
 
-    // Effect to load team detail when selectedTeam changes (for auto-select on initial load)
+    // Effect để tải chi tiết nhóm khi selectedTeam thay đổi (cho tự động chọn khi tải lần đầu)
     useEffect(() => {
         if (selectedTeam && hasAutoSelectedRef.current && !loadingTeamDetail) {
             const teamId = selectedTeam.teamId || selectedTeam.id;
             console.log('[TeamManagement] Auto-selected team detected, loading detail for:', teamId);
             loadTeamDetail(teamId);
-            // Reset the ref so this only runs once
+            // Đặt lại ref để chỉ chạy một lần
             hasAutoSelectedRef.current = false;
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedTeam?.teamId || selectedTeam?.id]); // Only when team ID changes
+    }, [selectedTeam?.teamId || selectedTeam?.id]); // Chỉ khi team ID thay đổi
 
-    // Effect to auto-load permissions when survey is selected and members are available
+    // Effect để tự động tải quyền khi khảo sát được chọn và có thành viên
     useEffect(() => {
         if (selectedSurveyId && teamMembers.length > 0 && selectedTeam && !loadingTeamDetail && !loadingOwnerSurveys) {
             const teamId = selectedTeam.teamId || selectedTeam.id;
-            // Check if permissions are already loaded for this survey and team
+            // Kiểm tra xem quyền đã được tải cho khảo sát và nhóm này chưa
             const currentPermissions = permissionsMatrix[selectedSurveyId]?.[teamId];
             if (!currentPermissions || Object.keys(currentPermissions).length === 0) {
                 console.log('[TeamManagement] Auto-loading permissions for selected survey:', selectedSurveyId, 'and team:', teamId);
@@ -409,7 +408,7 @@ const TeamManagementPage = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedSurveyId, teamMembers.length, loadingTeamDetail, loadingOwnerSurveys, selectedTeam?.teamId || selectedTeam?.id]);
 
-    // Create team
+    // Tạo nhóm
     const handleCreateTeam = async (e) => {
         e.preventDefault();
         if (!createTeamForm.name.trim()) {
@@ -429,7 +428,7 @@ const TeamManagementPage = () => {
             setCreateTeamForm({ name: '', description: '' });
             showNotification('success', 'Đã tạo team thành công!');
 
-            // Auto-select new team
+            // Tự động chọn nhóm mới
             await handleSelectTeam(newTeam);
         } catch (error) {
             console.error('Error creating team:', error);
@@ -438,7 +437,7 @@ const TeamManagementPage = () => {
         }
     };
 
-    // Send invitation
+    // Gửi lời mời
     const handleSendInvitation = async (e) => {
         e.preventDefault();
         if (!inviteForm.email.trim()) {
@@ -458,11 +457,11 @@ const TeamManagementPage = () => {
             setShowInviteModal(false);
             showNotification('success', 'Đã gửi lời mời thành công!');
 
-            // Preserve selected survey when reloading (in case user is viewing permissions)
-            await loadTeamDetail(teamId, true); // Reload to show updated member count
+            // Giữ lại khảo sát được chọn khi tải lại (trong trường hợp người dùng đang xem quyền)
+            await loadTeamDetail(teamId, true); // Tải lại để hiển thị số lượng thành viên đã cập nhật
 
-            // Trigger notification reload after a short delay to ensure backend has processed
-            // This ensures duplicate TEAM_INVITATION notifications are filtered correctly
+            // Kích hoạt tải lại thông báo sau một khoảng thời gian ngắn để đảm bảo backend đã xử lý
+            // Điều này đảm bảo các thông báo TEAM_INVITATION trùng lặp được lọc chính xác
             setTimeout(() => {
                 window.dispatchEvent(new Event('reloadNotifications'));
             }, 500);
@@ -473,7 +472,7 @@ const TeamManagementPage = () => {
         }
     };
 
-    // Update team
+    // Cập nhật nhóm
     const handleUpdateTeam = async (e) => {
         e.preventDefault();
         if (!editTeamForm.name.trim()) {
@@ -490,10 +489,10 @@ const TeamManagementPage = () => {
                 description: editTeamForm.description.trim() || null
             });
 
-            // Update selected team in state
+            // Cập nhật nhóm được chọn trong state
             setSelectedTeam(updatedTeam);
 
-            // Update team in teams list
+            // Cập nhật nhóm trong danh sách nhóm
             setTeams(prev => prev.map(team => {
                 const id = team.teamId || team.id;
                 return id === teamId ? updatedTeam : team;
@@ -508,9 +507,9 @@ const TeamManagementPage = () => {
         }
     };
 
-    // Handle invitation update from Notification component
+    // Xử lý cập nhật lời mời từ component Notification
     const handleInvitationUpdate = async () => {
-        // Reload teams when invitation is accepted
+        // Tải lại danh sách nhóm khi lời mời được chấp nhận
         try {
             const teamsData = await teamManagementService.getMyTeams();
             const teamsList = Array.isArray(teamsData) ? teamsData : [];
@@ -520,9 +519,9 @@ const TeamManagementPage = () => {
         }
     };
 
-    // Edit team from list
+    // Chỉnh sửa nhóm từ danh sách
     const handleEditTeamFromList = (e, team) => {
-        e.stopPropagation(); // Prevent team selection
+        e.stopPropagation(); // Ngăn chặn việc chọn nhóm
         setSelectedTeam(team);
         setEditTeamForm({
             name: team.name || '',
@@ -531,8 +530,7 @@ const TeamManagementPage = () => {
         setShowEditTeamModal(true);
     };
 
-    // Delete team
-    // Delete team
+    // Xóa nhóm
     const handleDeleteTeam = async (e, team) => {
         e.stopPropagation();
 
@@ -549,7 +547,7 @@ const TeamManagementPage = () => {
             await teamManagementService.deleteTeam(teamId);
             console.log(`[TeamManagement] Team ${teamId} deleted successfully`);
 
-            // Clear selected team if it's the deleted team
+            // Xóa nhóm được chọn nếu đó là nhóm bị xóa
             if (selectedTeam && (selectedTeam.teamId || selectedTeam.id) === teamId) {
                 setSelectedTeam(null);
                 setTeamMembers([]);
@@ -558,7 +556,7 @@ const TeamManagementPage = () => {
                 setPermissionsMatrix({});
             }
 
-            // Remove permissions from permissionsMatrix for this team
+            // Xóa quyền khỏi permissionsMatrix cho nhóm này
             setPermissionsMatrix(prev => {
                 const updated = { ...prev };
                 for (const surveyId in updated) {
@@ -570,7 +568,7 @@ const TeamManagementPage = () => {
                 return updated;
             });
 
-            // Reload teams list
+            // Tải lại danh sách nhóm
             const teamsData = await teamManagementService.getMyTeams();
             const teamsList = Array.isArray(teamsData) ? teamsData : [];
             setTeams(teamsList);
@@ -590,7 +588,7 @@ const TeamManagementPage = () => {
         }
     };
 
-    // Thêm vào trong component TeamManagementPage
+    // Xóa thành viên khỏi nhóm
     const handleRemoveMember = async (memberId) => {
         if (!window.confirm('Bạn có chắc muốn xóa thành viên này khỏi nhóm?')) {
             return;
@@ -606,7 +604,7 @@ const TeamManagementPage = () => {
             // Cập nhật lại danh sách thành viên ở state local để UI tự reload
             setTeamMembers(prev => prev.filter(m => (m.memberId || m.id) !== memberId));
 
-            // Cập nhật số lượng member trong danh sách teams bên trái
+            // Cập nhật số lượng thành viên trong danh sách nhóm bên trái
             setTeams(prev => prev.map(t => {
                 const tId = t.teamId || t.id;
                 if (tId === teamId) {
@@ -622,28 +620,28 @@ const TeamManagementPage = () => {
             showNotification('error', errorMsg);
         }
     };
-    // Handle survey selection
+    // Xử lý chọn khảo sát
     const handleSelectSurvey = async (surveyId) => {
-        if (selectedSurveyId === surveyId) return; // Already selected
+        if (selectedSurveyId === surveyId) return; // Đã được chọn
 
         setSelectedSurveyId(surveyId);
-        // Load permissions for selected survey
+        // Tải quyền cho khảo sát được chọn
         if (teamMembers.length > 0 && selectedTeam) {
             const teamId = selectedTeam.teamId || selectedTeam.id;
             await loadSurveyPermissions(surveyId, teamMembers, teamId);
         }
     };
 
-    // Handle permission change
+    // Xử lý thay đổi quyền
     const handlePermissionChange = (surveyId, userId, permission) => {
         if (!selectedTeam) return;
         const teamId = selectedTeam.teamId || selectedTeam.id;
 
-        // Check if user has permission in another team - if so, don't allow change
+        // Kiểm tra xem người dùng có quyền ở nhóm khác không - nếu có, không cho phép thay đổi
         const hasPermissionInOtherTeam = usersWithOtherTeamPermissions[surveyId]?.[userId] || false;
         if (hasPermissionInOtherTeam) {
             console.log(`[TeamManagement] Cannot change permission for user ${userId} - already has permission in another team`);
-            return; // Don't allow change
+            return; // Không cho phép thay đổi
         }
 
         setPermissionsMatrix(prev => ({
@@ -658,7 +656,7 @@ const TeamManagementPage = () => {
         }));
     };
 
-    // Save permissions for selected survey and team
+    // Lưu quyền cho khảo sát và nhóm được chọn
     const handleSavePermissions = async () => {
         if (!selectedTeam || !selectedSurveyId || savingPermissions) return;
 
@@ -666,23 +664,23 @@ const TeamManagementPage = () => {
             setSavingPermissions(true);
             const teamId = selectedTeam.teamId || selectedTeam.id;
 
-            // Get permissions for this specific team
+            // Lấy quyền cho nhóm cụ thể này
             const teamPermissions = permissionsMatrix[selectedSurveyId]?.[teamId] || {};
 
-            // Load ALL existing permissions for this survey first
+            // Tải TẤT CẢ quyền hiện có cho khảo sát này trước
             const allPermissions = await teamManagementService.getSurveyPermissions(selectedSurveyId);
             const allUsersPermissions = allPermissions?.users || [];
 
-            // Build a map of existing permissions: userId -> { permission, restrictedTeamId }
-            // Track BOTH team-restricted permissions AND individual permissions (without restrictedTeamId)
+            // Xây dựng map của quyền hiện có: userId -> { permission, restrictedTeamId }
+            // Theo dõi CẢ quyền bị giới hạn bởi nhóm VÀ quyền cá nhân (không có restrictedTeamId)
             const existingPermissionsMap = new Map();
-            const individualPermissions = []; // Store individual permissions separately
+            const individualPermissions = []; // Lưu quyền cá nhân riêng biệt
 
             for (const perm of allUsersPermissions) {
                 const userId = perm.userId || perm.user?.userId || perm.user?.id;
                 if (userId) {
                     if (perm.restrictedTeamId) {
-                        // Team-restricted permission
+                        // Quyền bị giới hạn bởi nhóm
                         const key = `${userId}_${perm.restrictedTeamId}`;
                         existingPermissionsMap.set(key, {
                             userId: Number(userId),
@@ -690,32 +688,32 @@ const TeamManagementPage = () => {
                             restrictedTeamId: Number(perm.restrictedTeamId)
                         });
                     } else {
-                        // Individual permission (without restrictedTeamId) - preserve these
+                        // Quyền cá nhân (không có restrictedTeamId) - giữ lại những quyền này
                         individualPermissions.push({
                             userId: Number(userId),
                             permission: perm.permission
-                            // No restrictedTeamId - this is an individual permission
+                            // Không có restrictedTeamId - đây là quyền cá nhân
                         });
                     }
                 }
             }
 
-            // Build teamAccess array: include permissions from ALL teams AND individual permissions
+            // Xây dựng mảng teamAccess: bao gồm quyền từ TẤT CẢ các nhóm VÀ quyền cá nhân
             const teamAccess = [];
 
-            // First, add individual permissions (preserve them - they are independent of teams)
+            // Đầu tiên, thêm quyền cá nhân (giữ lại chúng - chúng độc lập với nhóm)
             for (const perm of individualPermissions) {
                 teamAccess.push({
                     userId: perm.userId,
                     permission: perm.permission
-                    // No restrictedTeamId - individual permission
+                    // Không có restrictedTeamId - quyền cá nhân
                 });
             }
 
-            // Then, add permissions from other teams (preserve them)
+            // Sau đó, thêm quyền từ các nhóm khác (giữ lại chúng)
             for (const [key, perm] of existingPermissionsMap.entries()) {
                 const permTeamId = perm.restrictedTeamId;
-                // If this permission is from a different team, preserve it
+                // Nếu quyền này từ nhóm khác, giữ lại
                 if (permTeamId !== Number(teamId)) {
                     teamAccess.push({
                         userId: perm.userId,
@@ -725,17 +723,17 @@ const TeamManagementPage = () => {
                 }
             }
 
-            // Then, add/update permissions for current team
+            // Sau đó, thêm/cập nhật quyền cho nhóm hiện tại
             for (const [userId, permission] of Object.entries(teamPermissions)) {
                 if (permission && permission !== 'none') {
-                    // Check if user has permission in another team - if so, skip this user
+                    // Kiểm tra xem người dùng có quyền ở nhóm khác không - nếu có, bỏ qua người dùng này
                     const hasPermissionInOtherTeam = usersWithOtherTeamPermissions[selectedSurveyId]?.[userId] || false;
                     if (hasPermissionInOtherTeam) {
                         console.log(`[TeamManagement] Skipping user ${userId} - already has permission in another team`);
-                        continue; // Skip this user, they already have permission in another team
+                        continue; // Bỏ qua người dùng này, họ đã có quyền ở nhóm khác
                     }
 
-                    // Check if member is in the team
+                    // Kiểm tra xem thành viên có trong nhóm không
                     const member = teamMembers.find(m => {
                         const memberId = m.userId || m.user?.userId || m.user?.id;
                         return String(memberId) === String(userId);
@@ -744,7 +742,7 @@ const TeamManagementPage = () => {
                         teamAccess.push({
                             userId: parseInt(userId),
                             permission: permission,
-                            restrictedTeamId: teamId // Team-restricted permission
+                            restrictedTeamId: teamId // Quyền bị giới hạn bởi nhóm
                         });
                     }
                 }
@@ -756,7 +754,7 @@ const TeamManagementPage = () => {
 
             showNotification('success', 'Đã cập nhật quyền truy cập thành công!');
 
-            // Reload permissions to reflect saved state
+            // Tải lại quyền để phản ánh trạng thái đã lưu
             await loadSurveyPermissions(selectedSurveyId, teamMembers, teamId);
         } catch (error) {
             console.error('Error saving permissions:', error);
@@ -768,14 +766,14 @@ const TeamManagementPage = () => {
     };
 
 
-    // Check if user is owner of team
+    // Kiểm tra xem người dùng có phải là chủ sở hữu của nhóm không
     const isOwner = useCallback((team) => {
         const user = getCurrentUser();
         const currentUserId = user?.userId || user?.id;
         return (team.ownerId || team.owner?.userId || team.owner?.id) === currentUserId;
     }, [getCurrentUser]);
 
-    // Get role label in Vietnamese
+    // Lấy nhãn vai trò bằng tiếng Việt
     const getRoleLabel = (role) => {
         const roleMap = {
             'OWNER': 'Chủ sở hữu',
@@ -786,7 +784,7 @@ const TeamManagementPage = () => {
         return roleMap[role] || role;
     };
 
-    // Get permission label in Vietnamese
+    // Lấy nhãn quyền bằng tiếng Việt
     const getPermissionLabel = (permission) => {
         const permissionMap = {
             'EDITOR': 'Chỉnh sửa',
@@ -797,7 +795,7 @@ const TeamManagementPage = () => {
         return permissionMap[permission] || permission || 'Không truy cập';
     };
 
-    // Get status label
+    // Lấy nhãn trạng thái
     const getStatusLabel = (status) => {
         const statusMap = {
             'published': 'Đang mở',
@@ -1108,11 +1106,11 @@ const TeamManagementPage = () => {
                                                                                             const userId = member.userId || member.user?.userId || member.user?.id || member.memberId || member.id;
                                                                                             const isOwnerMember = member.role === 'OWNER';
                                                                                             const teamId = selectedTeam.teamId || selectedTeam.id;
-                                                                                            // Get permission for this specific team
+                                                                                            // Lấy quyền cho nhóm cụ thể này
                                                                                             const currentPermission = permissionsMatrix[selectedSurveyId]?.[teamId]?.[userId] || null;
-                                                                                            // Check if user has permission in another team
+                                                                                            // Kiểm tra xem người dùng có quyền ở nhóm khác không
                                                                                             const hasPermissionInOtherTeam = usersWithOtherTeamPermissions[selectedSurveyId]?.[userId] || false;
-                                                                                            // User cannot be assigned permission if they have permission in another team
+                                                                                            // Người dùng không thể được gán quyền nếu họ đã có quyền ở nhóm khác
                                                                                             const isDisabled = isOwnerMember || savingPermissions || hasPermissionInOtherTeam;
 
                                                                                             return (

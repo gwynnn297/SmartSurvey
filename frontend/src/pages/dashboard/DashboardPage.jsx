@@ -5,6 +5,22 @@ import Sidebar from "../../components/Sidebar";
 import MainLayout from "../../layouts/MainLayout";
 import { surveyService } from "../../services/surveyService";
 import { responseService } from "../../services/responseService";
+import { individualResponseService } from "../../services/individualResponseService";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  BarChart,
+  Bar,
+} from "recharts";
 import "./DashboardPage.css";
 
 const METRIC_CARDS = [
@@ -136,6 +152,504 @@ const ChartCard = ({ title, type, description, icon }) => (
   </article>
 );
 
+// Component biểu đồ phân bố trạng thái khảo sát
+const StatusDistributionChart = ({ surveysData, loading }) => {
+  // Tính toán phân bố trạng thái
+  const statusDistribution = useMemo(() => {
+    if (!surveysData || surveysData.length === 0) {
+      return [];
+    }
+
+    const statusCounts = {
+      published: 0,
+      archived: 0,
+      draft: 0,
+    };
+
+    surveysData.forEach((survey) => {
+      const status = survey.status || "draft";
+      if (statusCounts.hasOwnProperty(status)) {
+        statusCounts[status]++;
+      } else {
+        statusCounts.draft++;
+      }
+    });
+
+    const total = surveysData.length;
+    const data = [
+      {
+        name: "Đang mở",
+        value: statusCounts.published,
+        count: statusCounts.published,
+        percentage: total > 0 ? Math.round((statusCounts.published / total) * 100) : 0,
+        color: "#22c55e", // green
+      },
+      {
+        name: "Đã đóng",
+        value: statusCounts.archived,
+        count: statusCounts.archived,
+        percentage: total > 0 ? Math.round((statusCounts.archived / total) * 100) : 0,
+        color: "#ef4444", // red
+      },
+      {
+        name: "Bản nháp",
+        value: statusCounts.draft,
+        count: statusCounts.draft,
+        percentage: total > 0 ? Math.round((statusCounts.draft / total) * 100) : 0,
+        color: "#3b82f6", // blue
+      },
+    ].filter((item) => item.value > 0); // Chỉ hiển thị các trạng thái có dữ liệu
+
+    return data;
+  }, [surveysData]);
+
+  if (loading) {
+    return (
+      <article className="dash-chart">
+        <header className="dash-chart__header">
+          <div>
+            <h3>Phân bố trạng thái khảo sát</h3>
+            <p>Biểu đồ tròn hiển thị tỷ lệ khảo sát theo trạng thái</p>
+          </div>
+          <span className="dash-chart__type">Biểu đồ tròn</span>
+        </header>
+        <div className="dash-chart__placeholder">
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '240px' }}>
+            <p>Đang tải dữ liệu...</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  if (statusDistribution.length === 0) {
+    return (
+      <article className="dash-chart">
+        <header className="dash-chart__header">
+          <div>
+            <h3>Phân bố trạng thái khảo sát</h3>
+            <p>Biểu đồ tròn hiển thị tỷ lệ khảo sát theo trạng thái</p>
+          </div>
+          <span className="dash-chart__type">Biểu đồ tròn</span>
+        </header>
+        <div className="dash-chart__placeholder">
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '240px', flexDirection: 'column', gap: '12px' }}>
+            <span className="dash-chart__icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M8 12h8" />
+                <path d="M12 8v8" />
+              </svg>
+            </span>
+            <p style={{ margin: 0, color: 'rgba(15, 23, 42, 0.6)' }}>Chưa có dữ liệu khảo sát</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className="dash-chart">
+      <header className="dash-chart__header">
+        <div>
+          <h3>Phân bố trạng thái khảo sát</h3>
+          <p>Biểu đồ tròn hiển thị tỷ lệ khảo sát theo trạng thái</p>
+        </div>
+        <span className="dash-chart__type">Biểu đồ tròn</span>
+      </header>
+      <div style={{ padding: '20px', minHeight: '280px' }}>
+        <ResponsiveContainer width="100%" height={240}>
+          <PieChart>
+            <Pie
+              data={statusDistribution}
+              dataKey="value"
+              cx="50%"
+              cy="50%"
+              outerRadius={80}
+              labelLine={false}
+              label={({ name, percentage }) =>
+                `${name}: ${percentage}%`
+              }
+            >
+              {statusDistribution.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(value, name, props) => [
+                `${props.payload.count} khảo sát (${props.payload.percentage}%)`,
+                props.payload.name,
+              ]}
+            />
+            <Legend
+              formatter={(value, entry) => {
+                const data = statusDistribution.find((d) => d.name === value);
+                return `${value}: ${data?.count || 0} (${data?.percentage || 0}%)`;
+              }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    </article>
+  );
+};
+
+// Component biểu đồ xu hướng phản hồi
+const ResponseTrendChart = ({ surveysData, loading }) => {
+  const [trendData, setTrendData] = useState([]);
+  const [loadingTrend, setLoadingTrend] = useState(false);
+
+  // Lấy dữ liệu xu hướng phản hồi
+  useEffect(() => {
+    const fetchTrendData = async () => {
+      if (!surveysData || surveysData.length === 0 || loading) {
+        setTrendData([]);
+        return;
+      }
+
+      setLoadingTrend(true);
+      try {
+        // Lấy tất cả responses từ các surveys published
+        const publishedSurveys = surveysData.filter(s => s.status === "published");
+
+        if (publishedSurveys.length === 0) {
+          setTrendData([]);
+          setLoadingTrend(false);
+          return;
+        }
+
+        // Lấy responses từ tất cả surveys (chỉ lấy summary với submittedAt)
+        const allResponses = [];
+        const promises = publishedSurveys.map(async (survey) => {
+          try {
+            const surveyId = survey.id || survey._id;
+            if (!surveyId) return;
+
+            // Lấy responses với size lớn để có đủ dữ liệu
+            const responseData = await individualResponseService.listResponses(surveyId, {
+              page: 0,
+              size: 1000, // Lấy tối đa 1000 responses
+              sort: 'submittedAt,desc'
+            });
+
+            const responses = responseData.result || [];
+            responses.forEach(resp => {
+              if (resp.submittedAt) {
+                allResponses.push({
+                  date: resp.submittedAt,
+                  surveyId: surveyId
+                });
+              }
+            });
+          } catch (error) {
+            console.error(`Error fetching responses for survey ${survey.id}:`, error);
+          }
+        });
+
+        await Promise.all(promises);
+
+        // Nhóm responses theo ngày (7 ngày gần nhất)
+        const now = new Date();
+        const days = 7;
+        const dateMap = {};
+
+        // Khởi tạo 7 ngày gần nhất với giá trị 0
+        for (let i = days - 1; i >= 0; i--) {
+          const date = new Date(now);
+          date.setDate(date.getDate() - i);
+          date.setHours(0, 0, 0, 0);
+          const dateKey = date.toISOString().split('T')[0];
+          dateMap[dateKey] = 0;
+        }
+
+        // Đếm responses theo ngày
+        allResponses.forEach(resp => {
+          try {
+            const responseDate = new Date(resp.date);
+            responseDate.setHours(0, 0, 0, 0);
+            const dateKey = responseDate.toISOString().split('T')[0];
+
+            // Chỉ tính các ngày trong 7 ngày gần nhất
+            if (dateMap.hasOwnProperty(dateKey)) {
+              dateMap[dateKey]++;
+            }
+          } catch (error) {
+            console.error('Error parsing date:', error);
+          }
+        });
+
+        // Chuyển đổi thành mảng để hiển thị
+        const trendArray = Object.keys(dateMap)
+          .sort()
+          .map(dateKey => {
+            const date = new Date(dateKey);
+            const day = date.getDate();
+            const month = date.getMonth() + 1;
+            return {
+              date: `${day}/${month}`,
+              fullDate: dateKey,
+              count: dateMap[dateKey]
+            };
+          });
+
+        setTrendData(trendArray);
+      } catch (error) {
+        console.error('Error fetching trend data:', error);
+        setTrendData([]);
+      } finally {
+        setLoadingTrend(false);
+      }
+    };
+
+    fetchTrendData();
+  }, [surveysData, loading]);
+
+  if (loading || loadingTrend) {
+    return (
+      <article className="dash-chart">
+        <header className="dash-chart__header">
+          <div>
+            <h3>Xu hướng phản hồi</h3>
+            <p>Biểu đồ đường hiển thị xu hướng phản hồi theo thời gian</p>
+          </div>
+          <span className="dash-chart__type">Biểu đồ đường</span>
+        </header>
+        <div className="dash-chart__placeholder">
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '240px' }}>
+            <p>Đang tải dữ liệu...</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  if (trendData.length === 0) {
+    return (
+      <article className="dash-chart">
+        <header className="dash-chart__header">
+          <div>
+            <h3>Xu hướng phản hồi</h3>
+            <p>Biểu đồ đường hiển thị xu hướng phản hồi theo thời gian</p>
+          </div>
+          <span className="dash-chart__type">Biểu đồ đường</span>
+        </header>
+        <div className="dash-chart__placeholder">
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '240px', flexDirection: 'column', gap: '12px' }}>
+            <span className="dash-chart__icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3v18h18" />
+                <path d="M19 17V9l-5 5-3-3-4 4" />
+              </svg>
+            </span>
+            <p style={{ margin: 0, color: 'rgba(15, 23, 42, 0.6)' }}>Chưa có dữ liệu phản hồi</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className="dash-chart">
+      <header className="dash-chart__header">
+        <div>
+          <h3>Xu hướng phản hồi</h3>
+          <p>Biểu đồ đường hiển thị xu hướng phản hồi theo thời gian (7 ngày gần nhất)</p>
+        </div>
+        <span className="dash-chart__type">Biểu đồ đường</span>
+      </header>
+      <div style={{ padding: '20px', minHeight: '280px' }}>
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={trendData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.2)" />
+            <XAxis
+              dataKey="date"
+              stroke="rgba(15, 23, 42, 0.6)"
+              style={{ fontSize: '12px' }}
+            />
+            <YAxis
+              stroke="rgba(15, 23, 42, 0.6)"
+              style={{ fontSize: '12px' }}
+            />
+            <Tooltip
+              formatter={(value) => [`${value} phản hồi`, 'Số lượng']}
+              labelFormatter={(label) => `Ngày: ${label}`}
+              contentStyle={{
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                border: '1px solid rgba(148, 163, 184, 0.3)',
+                borderRadius: '8px',
+                padding: '8px'
+              }}
+            />
+            <Line
+              type="monotone"
+              dataKey="count"
+              stroke="#3b82f6"
+              strokeWidth={2}
+              dot={{ fill: '#3b82f6', r: 4 }}
+              activeDot={{ r: 6 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </article>
+  );
+};
+
+// Component biểu đồ so sánh khảo sát
+const SurveyComparisonChart = ({ surveysData, responseCounts, loading }) => {
+  // Tính toán dữ liệu so sánh
+  const comparisonData = useMemo(() => {
+    if (!surveysData || surveysData.length === 0 || !responseCounts) {
+      return [];
+    }
+
+    // Lấy top 10 surveys có nhiều phản hồi nhất
+    const surveysWithCounts = surveysData
+      .map(survey => {
+        const surveyId = String(survey.id || survey._id);
+        const count = responseCounts[surveyId] || 0;
+        return {
+          name: survey.title || "Không tiêu đề",
+          count: count,
+          surveyId: surveyId,
+          status: survey.status || "draft"
+        };
+      })
+      .filter(item => item.count > 0) // Chỉ hiển thị surveys có phản hồi
+      .sort((a, b) => b.count - a.count) // Sắp xếp giảm dần
+      .slice(0, 10); // Lấy top 10
+
+    return surveysWithCounts;
+  }, [surveysData, responseCounts]);
+
+  if (loading) {
+    return (
+      <article className="dash-chart">
+        <header className="dash-chart__header">
+          <div>
+            <h3>So sánh khảo sát</h3>
+            <p>Biểu đồ cột so sánh số lượng phản hồi giữa các khảo sát</p>
+          </div>
+          <span className="dash-chart__type">Biểu đồ cột</span>
+        </header>
+        <div className="dash-chart__placeholder">
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '240px' }}>
+            <p>Đang tải dữ liệu...</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  if (comparisonData.length === 0) {
+    return (
+      <article className="dash-chart">
+        <header className="dash-chart__header">
+          <div>
+            <h3>So sánh khảo sát</h3>
+            <p>Biểu đồ cột so sánh số lượng phản hồi giữa các khảo sát</p>
+          </div>
+          <span className="dash-chart__type">Biểu đồ cột</span>
+        </header>
+        <div className="dash-chart__placeholder">
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '240px', flexDirection: 'column', gap: '12px' }}>
+            <span className="dash-chart__icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <rect x="7" y="8" width="3" height="8" />
+                <rect x="12" y="5" width="3" height="11" />
+                <rect x="17" y="10" width="3" height="6" />
+              </svg>
+            </span>
+            <p style={{ margin: 0, color: 'rgba(15, 23, 42, 0.6)' }}>Chưa có dữ liệu phản hồi</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  // Rút ngắn tên khảo sát nếu quá dài
+  const formatName = (name) => {
+    if (name.length > 20) {
+      return name.substring(0, 20) + '...';
+    }
+    return name;
+  };
+
+  return (
+    <article className="dash-chart">
+      <header className="dash-chart__header">
+        <div>
+          <h3>So sánh khảo sát</h3>
+          <p>Biểu đồ cột so sánh số lượng phản hồi giữa các khảo sát (Top {comparisonData.length})</p>
+        </div>
+        <span className="dash-chart__type">Biểu đồ cột</span>
+      </header>
+      <div style={{ padding: '20px', minHeight: '280px' }}>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart
+            data={comparisonData}
+            margin={{ top: 5, right: 30, bottom: 60, left: 5 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.2)" />
+            <XAxis
+              type="category"
+              dataKey="name"
+              stroke="rgba(15, 23, 42, 0.6)"
+              style={{ fontSize: '11px' }}
+              angle={-45}
+              textAnchor="end"
+              height={60}
+              tick={{ fontSize: '10px' }}
+              tickFormatter={formatName}
+            />
+            <YAxis
+              type="number"
+              stroke="rgba(15, 23, 42, 0.6)"
+              style={{ fontSize: '12px' }}
+              label={{ value: 'Số lượng phản hồi', angle: -90, position: 'insideLeft', style: { fontSize: '12px', fill: 'rgba(15, 23, 42, 0.6)', textAnchor: 'middle' } }}
+            />
+            <Tooltip
+              formatter={(value) => [`${value} phản hồi`, 'Số lượng']}
+              labelFormatter={(label) => `Khảo sát: ${label}`}
+              contentStyle={{
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                border: '1px solid rgba(148, 163, 184, 0.3)',
+                borderRadius: '8px',
+                padding: '8px'
+              }}
+            />
+            <Bar
+              dataKey="count"
+              fill="#3b82f6"
+              radius={[4, 4, 0, 0]}
+            >
+              {comparisonData.map((entry, index) => {
+                // Màu sắc dựa trên số lượng phản hồi
+                const maxCount = Math.max(...comparisonData.map(d => d.count));
+                const ratio = entry.count / maxCount;
+                let color = "#3b82f6"; // Mặc định xanh dương
+
+                if (ratio >= 0.7) {
+                  color = "#22c55e"; // Xanh lá - Nhiều phản hồi
+                } else if (ratio >= 0.4) {
+                  color = "#3b82f6"; // Xanh dương - Trung bình
+                } else {
+                  color = "#8b5cf6"; // Tím - Ít phản hồi
+                }
+
+                return (
+                  <Cell key={`cell-${index}`} fill={color} />
+                );
+              })}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </article>
+  );
+};
+
 const RecentSurveyItem = ({ survey, index, onOpen, responseCounts, loadingResponseCounts }) => {
   const statusLabel = survey.status === "published" ? "Đang mở" : survey.status === "archived" ? "Đã đóng" : "Bản nháp";
   const statusClass = survey.status || "draft";
@@ -195,10 +709,26 @@ export default function DashboardPage() {
   const [pageSize] = useState(DEFAULT_PAGE_SIZE);
   const [responseCounts, setResponseCounts] = useState({});
   const [loadingResponseCounts, setLoadingResponseCounts] = useState(false);
+  const [allSurveysForChart, setAllSurveysForChart] = useState([]);
 
   const displayName = user?.name || user?.username || user?.fullName || "User";
 
-  const recentSurveys = useMemo(() => surveys.slice(0, 5), [surveys]);
+  // Lấy 5 khảo sát mới tạo gần đây nhất
+  const recentSurveys = useMemo(() => {
+    if (!allSurveysForChart || allSurveysForChart.length === 0) {
+      return [];
+    }
+
+    // Sắp xếp theo ngày tạo (mới nhất trước)
+    const sortedSurveys = [...allSurveysForChart].sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.created_at || 0);
+      const dateB = new Date(b.createdAt || b.created_at || 0);
+      return dateB - dateA; // Sắp xếp giảm dần (mới nhất trước)
+    });
+
+    // Lấy 5 khảo sát đầu tiên
+    return sortedSurveys.slice(0, 5);
+  }, [allSurveysForChart]);
 
   const openSurveyForEditing = useCallback(
     (survey) => navigate("/create-survey", { state: { editSurvey: survey } }),
@@ -325,12 +855,19 @@ export default function DashboardPage() {
               : [];
           if (allSurveys.length > 0) {
             surveysForStatistics = allSurveys;
+            setAllSurveysForChart(allSurveys); // Lưu tất cả surveys cho biểu đồ
+          } else {
+            setAllSurveysForChart(surveysForDisplay);
           }
         } catch (error) {
           console.log("Dashboard: Unable to fetch all surveys, using current page for statistics");
+          setAllSurveysForChart(surveysForDisplay);
         }
       } else if (!pageResponse) {
         surveysForStatistics = localSurveys;
+        setAllSurveysForChart(localSurveys);
+      } else {
+        setAllSurveysForChart(surveysForDisplay);
       }
 
       const [countsMap, apiTotalResponses] = await Promise.all([
@@ -425,9 +962,13 @@ export default function DashboardPage() {
             <p>Cập nhật tổng quan trực quan để bạn sẵn sàng ra quyết định.</p>
           </header>
           <div className="dash-charts__grid">
-            {CHART_PLACEHOLDERS.map((chart) => (
-              <ChartCard key={chart.title} {...chart} />
-            ))}
+            <StatusDistributionChart surveysData={allSurveysForChart} loading={loading} />
+            <ResponseTrendChart surveysData={allSurveysForChart} loading={loading} />
+            <SurveyComparisonChart
+              surveysData={allSurveysForChart}
+              responseCounts={responseCounts}
+              loading={loading || loadingResponseCounts}
+            />
           </div>
         </section>
 
@@ -467,7 +1008,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {totalElements > pageSize && (
+        {/* {totalElements > pageSize && (
           <div className="dash-pagination" role="navigation" aria-label="Phân trang khảo sát">
             <button type="button" className="dash-pagination__btn" onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 0))} disabled={currentPage === 0}>
               Trước
@@ -484,7 +1025,7 @@ export default function DashboardPage() {
               Tiếp
             </button>
           </div>
-        )}
+        )} */}
 
         {showCreateModal && (
           <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
