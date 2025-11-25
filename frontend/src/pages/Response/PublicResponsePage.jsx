@@ -7,7 +7,6 @@ import { getSurveyPublicInfo } from "../../services/dashboardReportService";
 import { isValidTokenFormat, generateUniqueToken } from "../../utils/tokenGenerator";
 import logoSmartSurvey from "../../assets/logoSmartSurvey.png";
 import { apiClient } from "../../services/authService";
-import { publicApiClient } from "../../services/publicApiClient";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -487,7 +486,7 @@ const PublicResponsePage = () => {
                 formData.append('durationSeconds', String(durationSeconds));
             }
 
-            const response = await publicApiClient.post('/api/public/responses/with-files', formData, {
+            const response = await apiClient.post('/api/public/responses/with-files', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
@@ -557,7 +556,7 @@ const PublicResponsePage = () => {
                 }
             });
 
-            const response = await publicApiClient.post('/api/public/responses', payload);
+            const response = await apiClient.post('/api/public/responses', payload);
             return response.data;
         }
     };
