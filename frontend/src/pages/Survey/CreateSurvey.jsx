@@ -6,6 +6,7 @@ import { questionService, optionService } from '../../services/questionSurvey';
 import { aiSurveyService } from '../../services/aiSurveyService';
 import NotificationModal from '../../components/NotificationModal';
 import AddUserSurvey from '../../components/AddUserSurvey';
+import AIChat, { AIChatButton } from '../../components/AIChat';
 import './CreateSurvey.css';
 import '../Response/ResponseFormPage.css';
 import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
@@ -722,6 +723,7 @@ const CreateSurvey = () => {
     const isNavigatingToPreviewOrShare = React.useRef(false); // Để theo dõi navigation tới preview/share
     const [notification, setNotification] = useState(null); // State để quản lý notification
     const [showInviteModal, setShowInviteModal] = useState(false);
+    const [showAIChat, setShowAIChat] = useState(false);
 
     const [surveyData, setSurveyData] = useState({
         title: '',
@@ -3325,6 +3327,27 @@ const CreateSurvey = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* AI Chat Button - Hiển thị khi có surveyId */}
+            {editSurveyId && (
+                <>
+                    {!showAIChat && (
+                        <AIChatButton
+                            onClick={() => setShowAIChat(true)}
+                            surveyId={editSurveyId}
+                        />
+                    )}
+                    {showAIChat && (
+                        <AIChat
+                            surveyId={editSurveyId}
+                            surveyTitle={surveyData.title}
+                            surveyDescription={surveyData.description}
+                            onClose={() => setShowAIChat(false)}
+                            isOpen={showAIChat}
+                        />
+                    )}
+                </>
             )}
         </MainLayout>
     );

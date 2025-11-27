@@ -4,11 +4,13 @@ import MainLayout from "../../layouts/MainLayout";
 import { individualResponseService } from "../../services/individualResponseService";
 import { surveyService } from "../../services/surveyService";
 import { dashboardReportService } from "../../services/dashboardReportService";
+import AIChat, { AIChatButton } from "../../components/AIChat";
 import "./ExportReportPage.css";
 
 const ExportReportPage = () => {
     const location = useLocation();
     const navigate = useNavigate();
+    const [showAIChat, setShowAIChat] = useState(false);
 
     // Lấy surveyId từ location.state
     const surveyData = location.state || {};
@@ -353,7 +355,7 @@ const ExportReportPage = () => {
                                             <span className="label">Tổng phản hồi: {previewStats.totalResponses}</span>
                                             {previewStats.totalViews > 0 && (
                                                 <div style={{
-                                                    
+
                                                     fontSize: '13px',
                                                     color: '#6b7280'
                                                 }}>
@@ -472,6 +474,27 @@ const ExportReportPage = () => {
                     </button>
                 </div>
             </div>
+
+            {/* AI Chat Button - Hiển thị khi có surveyId */}
+            {surveyId && (
+                <>
+                    {!showAIChat && (
+                        <AIChatButton
+                            onClick={() => setShowAIChat(true)}
+                            surveyId={surveyId}
+                        />
+                    )}
+                    {showAIChat && (
+                        <AIChat
+                            surveyId={surveyId}
+                            surveyTitle={surveyTitle}
+                            surveyDescription={surveyDescription}
+                            onClose={() => setShowAIChat(false)}
+                            isOpen={showAIChat}
+                        />
+                    )}
+                </>
+            )}
         </MainLayout>
     );
 };

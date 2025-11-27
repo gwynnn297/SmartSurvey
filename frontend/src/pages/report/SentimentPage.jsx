@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import MainLayout from "../../layouts/MainLayout";
 import ToolbarResult from "../../components/ToolbarResult";
+import AIChat, { AIChatButton } from "../../components/AIChat";
 import "./SentimentPage.css";
 import { aiAnalysisService } from "../../services/aiAnalysisService";
 import { responseService } from "../../services/responseService";
@@ -21,6 +22,7 @@ import {
 
 const SentimentPage = () => {
   const location = useLocation();
+  const [showAIChat, setShowAIChat] = useState(false);
   // Guards to prevent duplicate API calls (StrictMode and concurrent clicks)
   const isFetchingRef = useRef(false);
   const hasLoadedRef = useRef(false);
@@ -698,6 +700,27 @@ const SentimentPage = () => {
           </div>
         </div> */}
       </div>
+
+      {/* AI Chat Button - Hiển thị khi có surveyId */}
+      {location.state?.surveyId && (
+        <>
+          {!showAIChat && (
+            <AIChatButton
+              onClick={() => setShowAIChat(true)}
+              surveyId={location.state.surveyId}
+            />
+          )}
+          {showAIChat && (
+            <AIChat
+              surveyId={location.state.surveyId}
+              surveyTitle={location.state.surveyTitle}
+              surveyDescription={location.state.surveyDescription}
+              onClose={() => setShowAIChat(false)}
+              isOpen={showAIChat}
+            />
+          )}
+        </>
+      )}
     </MainLayout>
   );
 };
