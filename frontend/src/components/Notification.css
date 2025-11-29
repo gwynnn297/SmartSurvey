@@ -201,6 +201,24 @@
     background: #dbeafe;
 }
 
+.notification-item.no-click {
+    cursor: default;
+}
+
+.notification-item.no-click:hover {
+    background: #eff6ff !important;
+}
+
+.notification-item.no-click .notification-content,
+.notification-item.no-click .notification-icon {
+    pointer-events: none;
+    user-select: none;
+}
+
+.notification-item.no-click .notification-actions {
+    pointer-events: auto;
+}
+
 .notification-icon {
     width: 40px;
     height: 40px;

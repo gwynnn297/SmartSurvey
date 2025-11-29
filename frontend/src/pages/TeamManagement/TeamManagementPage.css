@@ -349,6 +349,16 @@
     color: #1e40af;
 }
 
+.role-badge.team {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.role-badge.individual {
+    background: #fef3c7;
+    color: #92400e;
+}
+
 /* Action Buttons */
 .action-dash {
     color: #94a3b8;
@@ -462,7 +472,10 @@
 .surveys-list-scroll {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 8px;
+    max-height: 600px;
+    min-height: 200px;
 }
 
 .survey-item-permission {

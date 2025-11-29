@@ -37,6 +37,9 @@ const TeamManagementPage = () => {
     // Dữ liệu dashboard cho thành viên (không phải chủ sở hữu)
     const [dashboardData, setDashboardData] = useState(null);
     const [loadingDashboard, setLoadingDashboard] = useState(false);
+    // Tất cả khảo sát được phân quyền (kể cả team và user)
+    const [allAccessibleSurveys, setAllAccessibleSurveys] = useState([]);
+    const [loadingAllSurveys, setLoadingAllSurveys] = useState(false);
 
     // Trạng thái form
     const [createTeamForm, setCreateTeamForm] = useState({
@@ -126,21 +129,41 @@ const TeamManagementPage = () => {
                 return;
             }
 
-            // Lấy tất cả khảo sát thuộc sở hữu của người dùng hiện tại (giống như ListSurvey)
-            const response = await surveyService.getSurveys(0, 1000);
-            console.log('[TeamManagement] Surveys API response:', response);
-
+            // Lấy tất cả khảo sát thuộc sở hữu của người dùng hiện tại
+            // Backend giới hạn size tối đa là 100, nên cần gọi nhiều lần để lấy tất cả
             let surveysList = [];
+            let currentPage = 0;
+            const pageSize = 100; // Backend giới hạn tối đa 100
+            let hasMore = true;
+            let totalPages = 1;
 
-            if (response?.result && Array.isArray(response.result)) {
-                surveysList = response.result;
-            } else if (Array.isArray(response)) {
-                surveysList = response;
-            } else if (Array.isArray(response?.data)) {
-                surveysList = response.data;
-            } else if (response?.meta && response?.result) {
-                surveysList = Array.isArray(response.result) ? response.result : [];
+            while (hasMore && currentPage < 100) { // Giới hạn tối đa 100 trang để tránh vòng lặp vô hạn
+                const response = await surveyService.getSurveys(currentPage, pageSize);
+                console.log(`[TeamManagement] Surveys API response page ${currentPage}:`, response);
+
+                let pageSurveys = [];
+                if (response?.result && Array.isArray(response.result)) {
+                    pageSurveys = response.result;
+                    if (response?.meta) {
+                        totalPages = response.meta.pages || 1;
+                    }
+                } else if (Array.isArray(response)) {
+                    pageSurveys = response;
+                } else if (Array.isArray(response?.data)) {
+                    pageSurveys = response.data;
+                } else if (response?.meta && response?.result) {
+                    pageSurveys = Array.isArray(response.result) ? response.result : [];
+                    totalPages = response.meta.pages || 1;
+                }
+
+                surveysList = surveysList.concat(pageSurveys);
+
+                // Kiểm tra xem còn trang nào không
+                currentPage++;
+                hasMore = currentPage < totalPages && pageSurveys.length === pageSize;
             }
+
+            console.log('[TeamManagement] Total surveys loaded:', surveysList.length);
 
             console.log('[TeamManagement] All surveys from API:', surveysList.length, 'surveys');
             if (surveysList.length > 0) {
@@ -308,6 +331,97 @@ const TeamManagementPage = () => {
         }
     }, []);
 
+    // Tải tất cả khảo sát được phân quyền (kể cả team và user)
+    const loadAllAccessibleSurveys = useCallback(async (currentTeamSurveys = []) => {
+        try {
+            setLoadingAllSurveys(true);
+            console.log('[TeamManagement] Loading all accessible surveys...');
+
+            // Lấy tất cả khảo sát mà user có quyền truy cập
+            const response = await surveyService.getSurveys(0, 1000);
+            let surveysList = [];
+
+            if (response?.result && Array.isArray(response.result)) {
+                surveysList = response.result;
+            } else if (Array.isArray(response)) {
+                surveysList = response;
+            } else if (Array.isArray(response?.data)) {
+                surveysList = response.data;
+            } else if (response?.meta && response?.result) {
+                surveysList = Array.isArray(response.result) ? response.result : [];
+            }
+
+            // Lấy thông tin permission từ dashboard
+            const dashboard = await teamManagementService.getUserDashboard();
+            const sharedSurveysMap = new Map();
+            if (dashboard?.sharedSurveysDetail) {
+                dashboard.sharedSurveysDetail.forEach(s => {
+                    sharedSurveysMap.set(s.surveyId, s);
+                });
+            }
+
+            // Kết hợp với teamSurveys nếu có
+            const teamSurveysMap = new Map();
+            currentTeamSurveys.forEach(s => {
+                teamSurveysMap.set(s.surveyId, s);
+            });
+
+            // Tạo danh sách tất cả khảo sát với đầy đủ thông tin
+            const allSurveys = surveysList.map(survey => {
+                const surveyId = survey.id || survey.surveyId;
+                const sharedInfo = sharedSurveysMap.get(surveyId);
+                const teamSurveyInfo = teamSurveysMap.get(surveyId);
+
+                // Ưu tiên thông tin từ teamSurveys (có đầy đủ owner và status)
+                if (teamSurveyInfo) {
+                    return {
+                        surveyId: surveyId,
+                        title: teamSurveyInfo.title || survey.title,
+                        permission: teamSurveyInfo.permission,
+                        ownerName: teamSurveyInfo.ownerName || survey.userName || 'Không rõ',
+                        status: teamSurveyInfo.status || survey.status || 'draft',
+                        sharedVia: 'team' // Chia sẻ qua team
+                    };
+                }
+
+                // Nếu không có trong teamSurveys, sử dụng thông tin từ sharedSurveysDetail
+                if (sharedInfo) {
+                    return {
+                        surveyId: surveyId,
+                        title: sharedInfo.title || survey.title,
+                        permission: sharedInfo.permission,
+                        ownerName: survey.userName || 'Không rõ',
+                        status: survey.status || 'draft',
+                        sharedVia: sharedInfo.sharedVia || 'user' // Lấy từ sharedInfo hoặc mặc định là user
+                    };
+                }
+
+                // Nếu là survey của chính user (owner), permission là OWNER
+                const user = getCurrentUser();
+                const currentUserId = user?.userId || user?.id;
+                const ownerId = survey.userId || survey.user?.userId || survey.user?.id;
+                const isOwner = String(ownerId) === String(currentUserId);
+
+                return {
+                    surveyId: surveyId,
+                    title: survey.title,
+                    permission: isOwner ? 'OWNER' : null,
+                    ownerName: survey.userName || 'Không rõ',
+                    status: survey.status || 'draft',
+                    sharedVia: isOwner ? null : 'user' // Owner không có sharedVia, còn lại là user
+                };
+            }).filter(s => s.permission); // Chỉ lấy các survey có permission
+
+            console.log('[TeamManagement] All accessible surveys loaded:', allSurveys.length);
+            setAllAccessibleSurveys(allSurveys);
+        } catch (error) {
+            console.error('[TeamManagement] Error loading all accessible surveys:', error);
+            setNotification({ type: 'error', message: 'Không thể tải danh sách khảo sát.' });
+        } finally {
+            setLoadingAllSurveys(false);
+        }
+    }, [getCurrentUser]);
+
     // Tải chi tiết nhóm
     const loadTeamDetail = useCallback(async (teamId, preserveSelectedSurvey = false) => {
         try {
@@ -324,17 +438,23 @@ const TeamManagementPage = () => {
 
             console.log('[TeamManagement] Loading team detail for teamId:', teamId);
 
-            const [members, surveys] = await Promise.all([
+            const [membersResponse, teamSurveysResponse] = await Promise.all([
                 teamManagementService.getTeamMembers(teamId),
                 teamManagementService.getTeamSurveys(teamId)
             ]);
 
-            const membersList = Array.isArray(members) ? members : [];
+            const membersList = Array.isArray(membersResponse) ? membersResponse : [];
             setTeamMembers(membersList);
-            setTeamSurveys(Array.isArray(surveys) ? surveys : []);
+
+            const surveysList = Array.isArray(teamSurveysResponse?.surveys)
+                ? teamSurveysResponse.surveys
+                : Array.isArray(teamSurveysResponse)
+                    ? teamSurveysResponse
+                    : [];
+            setTeamSurveys(surveysList);
 
             console.log('[TeamManagement] Team members loaded:', membersList.length);
-            console.log('[TeamManagement] Team surveys loaded:', Array.isArray(surveys) ? surveys.length : 0);
+            console.log('[TeamManagement] Team surveys loaded:', surveysList.length);
 
             // Tải khảo sát của chủ sở hữu nếu người dùng là chủ sở hữu, nếu không thì tải dữ liệu dashboard
             const user = getCurrentUser();
@@ -373,6 +493,9 @@ const TeamManagementPage = () => {
                 // Tải dữ liệu dashboard để hiển thị quyền của thành viên
                 await loadDashboardData();
             }
+
+            // Tải tất cả khảo sát được phân quyền
+            await loadAllAccessibleSurveys(surveysList);
         } catch (error) {
             console.error('[TeamManagement] Error loading team detail:', error);
             console.error('[TeamManagement] Error details:', error.response?.data);
@@ -1159,56 +1282,71 @@ const TeamManagementPage = () => {
                                                 )}
                                             </div>
                                         ) : (
-                                            <div className="detail-section">
-                                                <h3>Vai trò của bạn trong các khảo sát</h3>
-                                                <p className="section-description">
-                                                    Xem các khảo sát bạn có quyền truy cập và vai trò của bạn trong từng khảo sát
-                                                </p>
+                                            <>
+                                                {/* Bảng Quyền truy cập - Tất cả khảo sát được phân quyền */}
+                                                <div className="detail-section">
+                                                    <h3>Quyền truy cập</h3>
+                                                    <p className="section-description">
+                                                        Tất cả các khảo sát mà bạn được cấp quyền truy cập
+                                                    </p>
 
-                                                {loadingDashboard ? (
-                                                    <div className="permissions-loading">
-                                                        <div className="loading-spinner"></div>
-                                                        <p>Đang tải thông tin...</p>
-                                                    </div>
-                                                ) : dashboardData?.sharedSurveysDetail && dashboardData.sharedSurveysDetail.length > 0 ? (
-                                                    <div className="table-container" style={{ marginTop: '16px' }}>
-                                                        <table className="members-table">
-                                                            <thead>
-                                                                <tr>
-                                                                    <th>KHẢO SÁT</th>
-                                                                    <th>VAI TRÒ</th>
-                                                                    <th>ĐƯỢC CHIA SẺ QUA</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {dashboardData.sharedSurveysDetail.map((survey) => (
-                                                                    <tr key={survey.surveyId}>
-                                                                        <td>
-                                                                            <div className="survey-name-cell">
-                                                                                {survey.title || 'Không có tiêu đề'}
-                                                                            </div>
-                                                                        </td>
-                                                                        <td>
-                                                                            <span className={`permission-badge ${survey.permission?.toLowerCase() || 'no-access'}`}>
-                                                                                {getPermissionLabel(survey.permission)}
-                                                                            </span>
-                                                                        </td>
-                                                                        <td>
-                                                                            <span className="role-badge member">
-                                                                                {survey.sharedVia === 'team' ? 'Nhóm' : 'Cá nhân'}
-                                                                            </span>
-                                                                        </td>
+                                                    {loadingAllSurveys ? (
+                                                        <div className="permissions-loading">
+                                                            <div className="loading-spinner"></div>
+                                                            <p>Đang tải thông tin...</p>
+                                                        </div>
+                                                    ) : allAccessibleSurveys.length > 0 ? (
+                                                        <div className="table-container" style={{ marginTop: '16px' }}>
+                                                            <table className="members-table">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>KHẢO SÁT</th>
+                                                                        <th>QUYỀN CỦA BẠN</th>
+                                                                        <th>CHỦ SỞ HỮU</th>
+                                                                        <th>TRẠNG THÁI</th>
+                                                                        <th>ĐƯỢC CHIA SẺ QUA</th>
                                                                     </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                ) : (
-                                                    <div className="empty-permissions">
-                                                        <p>Bạn chưa có quyền truy cập vào khảo sát nào</p>
-                                                    </div>
-                                                )}
-                                            </div>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {allAccessibleSurveys.map((survey) => (
+                                                                        <tr key={survey.surveyId}>
+                                                                            <td>
+                                                                                <div className="survey-name-cell">
+                                                                                    {survey.title || 'Không có tiêu đề'}
+                                                                                </div>
+                                                                            </td>
+                                                                            <td>
+                                                                                <span className={`permission-badge ${survey.permission?.toLowerCase() || 'no-access'}`}>
+                                                                                    {getPermissionLabel(survey.permission)}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td>{survey.ownerName || 'Không rõ'}</td>
+                                                                            <td>
+                                                                                <span className={`status-badge-small ${(survey.status || 'draft').toLowerCase()}`}>
+                                                                                    {getStatusLabel((survey.status || '').toLowerCase())}
+                                                                                </span>
+                                                                            </td>
+                                                                            <td>
+                                                                                {survey.sharedVia ? (
+                                                                                    <span className={`role-badge ${survey.sharedVia === 'team' ? 'team' : 'individual'}`}>
+                                                                                        {survey.sharedVia === 'team' ? 'Nhóm' : 'Cá nhân'}
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="role-badge member">-</span>
+                                                                                )}
+                                                                            </td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="empty-permissions">
+                                                            <p>Bạn chưa có quyền truy cập khảo sát nào</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </>
                                         )}
                                     </>
                                 )}
