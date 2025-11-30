@@ -12,13 +12,46 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
     const [chatHistory, setChatHistory] = useState([]);
     const [error, setError] = useState(null);
     const [showMenu, setShowMenu] = useState(false);
+    const [isIngesting, setIsIngesting] = useState(false);
+    const [ingestionStatus, setIngestionStatus] = useState('');
     const messagesEndRef = useRef(null);
     const chatContainerRef = useRef(null);
     const menuRef = useRef(null);
+    const ingestionDoneRef = useRef(false);
+
+    // Ingest survey data vào RAG khi mở chat lần đầu
+    const ingestSurveyData = async () => {
+        if (!surveyId || ingestionDoneRef.current) return;
+
+        try {
+            setIsIngesting(true);
+            setIngestionStatus('Đang chuẩn bị dữ liệu...');
+            console.log('Starting RAG ingest for survey:', surveyId);
+
+            const response = await aiChatService.ingestSurveyData(surveyId);
+            console.log('RAG ingest completed:', response);
+
+            setIngestionStatus('Dữ liệu đã sẵn sàng!');
+            ingestionDoneRef.current = true;
+
+            // Clear status after 2 seconds
+            setTimeout(() => {
+                setIngestionStatus('');
+            }, 2000);
+        } catch (error) {
+            console.error('Error ingesting survey data:', error);
+            // Don't show error for ingest, just log it
+            // The chat can still work without ingest
+            ingestionDoneRef.current = true;
+        } finally {
+            setIsIngesting(false);
+        }
+    };
 
     // Load chat history khi mở chat
     useEffect(() => {
         if (isOpen && surveyId) {
+            ingestSurveyData();
             loadChatHistory();
             generateSummary();
         }
@@ -350,6 +383,26 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
 
                 {/* Content */}
                 <div className="ai-chat-content">
+                    {/* Ingestion Status */}
+                    {(isIngesting || ingestionStatus) && (
+                        <div className="ai-chat-ingest-status">
+                            {isIngesting && (
+                                <>
+                                    <div className="ai-chat-ingest-spinner"></div>
+                                    <span>{ingestionStatus}</span>
+                                </>
+                            )}
+                            {!isIngesting && ingestionStatus && (
+                                <>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                    <span>{ingestionStatus}</span>
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     {/* AI Summary Section */}
                     {summary && (
                         <div className="ai-chat-summary-section">
