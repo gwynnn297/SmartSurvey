@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from sqlalchemy.sql import text
 from dotenv import load_dotenv
+from urllib.parse import urlparse, unquote
 load_dotenv()
 
 # === ChromaDB (vector store) — LAZY LOAD ===
@@ -157,28 +158,44 @@ def call_gemini_json(url: str, key: str, payload: dict, timeout: float, max_retr
             back = min(3.0, (0.2 * (2**attempt))) + random.uniform(0, 0.2)
             _t.sleep(back)
 
-def _gen_answer_from_ctx(question: str, contexts: list[str]) -> str:
+def _gen_answer_from_ctx(question: str, contexts: list[str], history: str = "") -> str:
     if not contexts:
         return "Chưa đủ ngữ cảnh để trả lời."
     max_chars = int(os.getenv("RAG_MAX_CTX_CHARS","5000"))
+
+    # Gộp & cắt context theo giới hạn ký tự
     ctx = contexts[:]
-    # gộp & cắt theo giới hạn ký tự
-    joined = "\n- ".join(ctx)
-    if len(joined) > max_chars:
-        joined = joined[:max_chars]
+    joined_ctx = "\n- ".join(ctx)
+    if len(joined_ctx) > max_chars:
+        joined_ctx = joined_ctx[:max_chars]
+
+    # Lịch sử hội thoại (có thể rỗng)
+    hist_str = (history or "").strip()
+    if hist_str and len(hist_str) > max_chars:
+        hist_str = hist_str[-max_chars:]  # cắt phần cuối cùng (gần hiện tại)
+
+    # Prompt cấu trúc theo yêu cầu
     prompt = (
-        "Bạn là trợ lý phân tích phản hồi khảo sát TIẾNG VIỆT.\n"
-        "Chỉ dùng NGỮ CẢNH bên dưới để trả lời ngắn gọn, có căn cứ. "
-        "Nếu không đủ thông tin, hãy nói 'Chưa đủ thông tin'.\n\n"
-        f"CÂU HỎI: {question}\n\nNGỮ CẢNH:\n- {joined}"
+        "[ROLE]\n"
+        "Bạn là trợ lý phân tích phản hồi khảo sát TIẾNG VIỆT. "
+        "Chỉ dựa vào NGỮ CẢNH và LỊCH SỬ CHAT để trả lời ngắn gọn, có căn cứ. "
+        "Nếu không đủ thông tin, hãy trả lời: 'Chưa đủ thông tin'.\n\n"
+        "[CONTEXT]\n"
+        f"- {joined_ctx}\n\n"
+        "[CHAT HISTORY]\n"
+        f"{(hist_str if hist_str else '(Không có)')}\n\n"
+        "[CURRENT QUESTION]\n"
+        f"{question}"
     )
+
     data = call_gemini_json(
         os.getenv("EXT_SUMM_URL"),
         os.getenv("EXT_SENTI_KEY"),
-        {"contents":[{"parts":[{"text": prompt}]}]},
-        timeout=float(os.getenv("EXT_SENTI_TIMEOUT","12.0")),
-        max_retry=int(os.getenv("EXT_SENTI_MAX_RETRY","4")),
+        {"contents": [{"parts": [{"text": prompt}]}]},   # <-- đúng cấu trúc
+        timeout=float(os.getenv("EXT_SENTI_TIMEOUT", "12.0")),
+        max_retry=int(os.getenv("EXT_SENTI_MAX_RETRY", "4")),
     )
+
     try:
         cand = (data.get("candidates") or [{}])[0]
         parts = (cand.get("content") or {}).get("parts") or [{}]
@@ -186,6 +203,8 @@ def _gen_answer_from_ctx(question: str, contexts: list[str]) -> str:
         return txt or "Chưa đủ thông tin."
     except Exception:
         return "Chưa đủ thông tin."
+
+
 
 # --- Token-bucket rate limiting ---
 class TokenBucket:
@@ -245,7 +264,6 @@ def ai_metrics():
 
 # ====== dự án sẵn có (KHÔNG dùng model train nội bộ) ======
 # bạn giữ nguyên các module settings/db/model như dự án của bạn
-from settings import settings
 from db import init_db, SessionLocal, AiSentiment, Answer, Response, AiChatLog, ActivityLog
 
 EXT_URL = os.getenv("EXT_SENTI_URL")
@@ -325,15 +343,7 @@ def sha256(s: str) -> str:
 # ============================================================
 
 def _conn():
-    return pymysql.connect(
-        host=settings.DB_HOST,
-        port=settings.DB_PORT,
-        user=settings.DB_USER,
-        password=settings.DB_PASS,
-        database=settings.DB_NAME,
-        charset="utf8mb4",
-        cursorclass=pymysql.cursors.DictCursor,
-    )
+    return pymysql.connect(**_get_db_connect_args())
 
 
 def sql_one(q: str, args=None):
@@ -355,6 +365,70 @@ def sql_exec(q: str, args=None):
         with con.cursor() as cur:
             cur.execute(q, args or ())
         con.commit()
+
+def _db_params_from_url(url: str) -> dict:
+    """
+    Parse DATABASE_URL / DB_URL kiểu:
+      mysql+pymysql://user:pass@host:3306/dbname
+      mysql://user:pass@host:3306/dbname
+      sqlite:///path/to/file.db  (KHÔNG dùng cho pymysql)
+    Trả về dict tham số cho pymysql.connect(...)
+    """
+    u = urlparse(url)
+    # sqlite không dùng ở đây (pymysql), nhưng ta vẫn guard:
+    if u.scheme.startswith("sqlite"):
+        raise ValueError("DATABASE_URL trỏ sqlite — không hợp lệ cho pymysql.connect")
+
+    host = u.hostname or "127.0.0.1"
+    port = u.port or 3306
+    user = unquote(u.username or "root")
+    password = unquote(u.password or "")
+    # path trả về "/dbname"
+    database = (u.path or "").lstrip("/") or ""
+    return {
+        "host": host,
+        "port": int(port),
+        "user": user,
+        "password": password,
+        "database": database,
+    }
+
+def _get_db_connect_args() -> dict:
+    """
+    Ưu tiên:
+      1) DATABASE_URL hoặc DB_URL (URL đầy đủ)
+      2) Nhóm DB_* rời rạc
+      3) Fallback tạm thời: nhóm MYSQL_* (compat cũ)
+    """
+    # 1) URL ưu tiên cao nhất
+    url = os.getenv("DATABASE_URL") or os.getenv("DB_URL")
+    if url:
+        try:
+            params = _db_params_from_url(url)
+        except Exception as e:
+            raise RuntimeError(f"Invalid DATABASE_URL/DB_URL: {e}")
+    else:
+        # 2) Bộ DB_…
+        host = os.getenv("DB_HOST") or os.getenv("MYSQL_HOST") or "127.0.0.1"
+        port = int(os.getenv("DB_PORT") or os.getenv("MYSQL_PORT") or 3306)
+        user = os.getenv("DB_USER") or os.getenv("MYSQL_USER") or "root"
+        password = os.getenv("DB_PASS") or os.getenv("MYSQL_PWD") or ""
+        database = os.getenv("DB_NAME") or os.getenv("MYSQL_DB") or ""
+
+        params = {
+            "host": host,
+            "port": port,
+            "user": user,
+            "password": password,
+            "database": database,
+        }
+
+    # Thêm defaults chung cho mọi kết nối pymysql
+    params.update({
+        "charset": "utf8mb4",
+        "cursorclass": pymysql.cursors.DictCursor,
+    })
+    return params
 
 # ============================================================
 # Gọi GEMINI (Structured Output JSON)
@@ -455,8 +529,11 @@ def get_db():
 # ==== on_startup (cập nhật) ====
 @app.on_event("startup")
 def on_startup():
-    init_db()
-    print("[startup] DB =", settings.DB_URL)
+    if os.getenv("DATABASE_URL") or os.getenv("DB_URL"):
+        print("[startup] DB Connected (via DATABASE_URL/DB_URL)")
+    else:
+        # Không có URL hợp nhất -> rơi về bộ biến rời rạc
+        print("[startup] DB Connected (via DB_* / MYSQL_*)")
     print("[startup] External sentiment only (Gemini)")
 
     # Tự động migrate Chroma nếu bật cờ MIGRATE_ON_BOOT=1
@@ -978,20 +1055,12 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
         q_raw = req.question_text or ""
         q_norm = norm_text(q_raw)
 
-        # 1) Follow-up cơ bản
-        if user_id and re.search(r"\b(còn|theo|vậy)\b", q_norm):
-            last = _USER_CTX.get(user_id)
-            if last and last.get("survey_id") == req.survey_id and last.get("last_q"):
-                q_norm = (last["last_q"] + " " + q_norm).strip()
-
-        # 2) Ưu tiên rule-based stats
+        # (A) Với câu hỏi dạng thống kê rule-based, vẫn ưu tiên như cũ
         stat_ans = _answer_stat_query(db, req.survey_id, q_norm)
         if stat_ans:
             answer, topk_ctx = stat_ans, []
-            if user_id:
-                _USER_CTX[user_id] = {"survey_id": req.survey_id, "last_q": q_norm, "intent": "stats"}
         else:
-            # 3) RAG dùng ChromaDB + metadata filter theo survey_id
+            # (B) Truy xuất ngữ cảnh top-k như cũ (Chroma → TF-IDF fallback)
             collection = get_chroma_collection()
             if collection is None:
                 raise HTTPException(status_code=503, detail="Vector store chưa sẵn sàng (ChromaDB).")
@@ -1001,13 +1070,13 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
             topk = max(1, min(int(req.top_k or env_topk), 20))
             min_sim = float(os.getenv("RAG_MIN_SIM", "0.25"))
 
-            topk_ctx = []
+            topk_ctx: list[str] = []
             if vec_q:
                 try:
                     res = collection.query(
                         query_embeddings=[vec_q],
-                        n_results=topk * 3,  # lấy dư một chút rồi lọc theo ngưỡng sim
-                        where={"survey_id": int(req.survey_id)},  # lọc metadata trước
+                        n_results=topk * 3,
+                        where={"survey_id": int(req.survey_id)},
                         include=["documents", "distances", "metadatas"],
                     )
                     docs = (res.get("documents") or [[]])[0]
@@ -1025,19 +1094,20 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
                 except Exception as e:
                     print(f"[ai_chat] chroma query error: {e}")
 
+            # (C) Lấy lịch sử hội thoại từ DB (tối đa 5 cặp Q/A)
+            history = get_chat_history(db, user_id=user_id, survey_id=req.survey_id, limit=5)
+
             if topk_ctx:
-                answer = _gen_answer_from_ctx(q_norm, topk_ctx)
-                if user_id:
-                    _USER_CTX[user_id] = {"survey_id": req.survey_id, "last_q": q_norm, "intent": "rag-emb-chroma"}
+                # Gọi Gemini với cả CONTEXT + HISTORY
+                answer = _gen_answer_from_ctx(q_norm, topk_ctx, history=history)
             else:
-                # 4) Fallback — TF-IDF
+                # Fallback TF-IDF nếu vecto rỗng hoặc Chroma fail
                 texts = [r.answer_text for r in fetch_answer_rows(db, req.survey_id)]
                 topk_ctx = retrieve_topk(texts, q_norm, req.top_k)
+                # craft_answer là local — không cần history
                 answer = craft_answer(q_norm, topk_ctx)
-                if user_id:
-                    _USER_CTX[user_id] = {"survey_id": req.survey_id, "last_q": q_norm, "intent": "rag"}
 
-        # 5) Log & trả kết quả
+        # (D) Log & trả kết quả như cũ
         now = datetime.utcnow()
         chat = AiChatLog(
             survey_id=req.survey_id,
@@ -1053,6 +1123,7 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
             description=f"AI chat for survey_id={req.survey_id}",
         ))
         db.commit()
+
         return ChatResponse(
             survey_id=req.survey_id, question_text=req.question_text,
             answer_text=answer, context=topk_ctx,
@@ -1070,6 +1141,45 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
 
 print("[startup] EXT_SENTI_URL =", os.getenv("EXT_SENTI_URL"))
 print("[startup] EXT_SENTI_KEY set? ", bool(os.getenv("EXT_SENTI_KEY")))
+
+
+# ============================ Conversational Memory ============================
+
+def get_chat_history(db: Session, user_id: Optional[int], survey_id: int, limit: int = 5) -> str:
+    """
+    Lấy 'limit' bản ghi chat gần nhất của user trong survey, theo thời gian tăng dần
+    và chuẩn hoá về chuỗi:
+        User: ...
+        AI: ...
+        User: ...
+        AI: ...
+    Trả về chuỗi rỗng nếu chưa có lịch sử.
+    """
+    if not user_id:
+        return ""
+
+    # Lấy các entry mới nhất rồi đảo ngược để ra (cũ -> mới)
+    rows = (
+        db.query(AiChatLog)
+        .filter(AiChatLog.survey_id == survey_id)
+        .filter(AiChatLog.user_id == user_id)
+        .order_by(AiChatLog.chat_id.desc())
+        .limit(max(1, int(limit)))
+        .all()
+    )
+    if not rows:
+        return ""
+
+    rows = list(reversed(rows))
+    parts: list[str] = []
+    for r in rows:
+        q = (r.question_text or "").strip()
+        a = (r.ai_response or "").strip()
+        if q:
+            parts.append(f"User: {q}")
+        if a:
+            parts.append(f"AI: {a}")
+    return "\n".join(parts).strip()
 
 
 # ================== RAG INGEST (đã tối ưu hoá đa luồng) ==================

@@ -9,15 +9,44 @@ import os, json, math
 import pymysql
 from dotenv import load_dotenv
 import chromadb
+from urllib.parse import urlparse, unquote
 
 load_dotenv()
 
-# === MySQL (đọc env tương tự app) ===
-DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
-DB_PORT = int(os.getenv("DB_PORT", "3306"))
-DB_NAME = os.getenv("DB_NAME", "smartsurvey")
-DB_USER = os.getenv("DB_USER", "root")
-DB_PASS = os.getenv("DB_PASS", "")
+def _db_params_from_url(url: str) -> dict:
+    u = urlparse(url)
+    if u.scheme.startswith("sqlite"):
+        raise ValueError("DATABASE_URL sqlite không hợp lệ cho pymysql")
+    return {
+        "host": u.hostname or "127.0.0.1",
+        "port": int(u.port or 3306),
+        "user": unquote(u.username or "root"),
+        "password": unquote(u.password or ""),
+        "database": (u.path or "").lstrip("/") or "",
+        "charset": "utf8mb4",
+        "cursorclass": pymysql.cursors.DictCursor,
+    }
+
+def _get_db_connect_args() -> dict:
+    url = os.getenv("DATABASE_URL") or os.getenv("DB_URL")
+    if url:
+        return _db_params_from_url(url)
+
+    host = os.getenv("DB_HOST") or os.getenv("MYSQL_HOST") or "127.0.0.1"
+    port = int(os.getenv("DB_PORT") or os.getenv("MYSQL_PORT") or 3306)
+    user = os.getenv("DB_USER") or os.getenv("MYSQL_USER") or "root"
+    password = os.getenv("DB_PASS") or os.getenv("MYSQL_PWD") or ""
+    database = os.getenv("DB_NAME") or os.getenv("MYSQL_DB") or ""
+
+    return {
+        "host": host,
+        "port": port,
+        "user": user,
+        "password": password,
+        "database": database,
+        "charset": "utf8mb4",
+        "cursorclass": pymysql.cursors.DictCursor,
+    }
 
 # === ChromaDB ===
 CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_db")
@@ -25,11 +54,7 @@ CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "survey_answers")
 BATCH = int(os.getenv("MIGRATE_BATCH", "1000"))
 
 def conn():
-    return pymysql.connect(
-        host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS,
-        database=DB_NAME, charset="utf8mb4",
-        cursorclass=pymysql.cursors.DictCursor
-    )
+    return pymysql.connect(**_get_db_connect_args())
 
 def main():
     client = chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
