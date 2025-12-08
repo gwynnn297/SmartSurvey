@@ -1192,80 +1192,74 @@ def get_chat_history(db: Session, user_id: Optional[int], survey_id: int, limit:
 
 # ================== RAG INGEST (đã tối ưu hoá đa luồng) ==================
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 @app.post("/ai/rag/ingest/{survey_id}", tags=["Chat AI/RAG"])
 def rag_ingest(survey_id: int, db: Session = Depends(get_db)):
     """
-    Lấy các câu trả lời text từ MySQL (answers/responses) → embed (Gemini) song song → upsert Chroma theo batch.
-    - Dùng ThreadPoolExecutor để gọi _embed_vi song song (mặc định 8 luồng).
-    - Metadata chứa survey_id để filter trước-lọc khi query.
+    Phiên bản Free Tier: Chạy tuần tự từng dòng và nghỉ (sleep) để tránh lỗi RateLimit.
     """
+    import time
+
+    # 1. Lấy dữ liệu
     rows = fetch_answer_rows(db, survey_id)
     if not rows:
         return {"ok": False, "message": "Không có câu trả lời hợp lệ."}
 
+    # 2. Kết nối Chroma
     collection = get_chroma_collection()
     if collection is None:
         raise HTTPException(status_code=503, detail="Vector store chưa sẵn sàng (ChromaDB).")
 
-    BATCH = int(os.getenv("RAG_INGEST_BATCH", "200"))
-    MAX_WORKERS = int(os.getenv("EMBED_MAX_WORKERS", "8"))  # 5–10 gợi ý
-    added = 0
+    print(f"[rag_ingest] Bắt đầu xử lý {len(rows)} dòng (Tuần tự + Sleep)...")
 
-    buf_ids: List[str] = []
-    buf_embs: List[List[float]] = []
-    buf_metas: List[Dict[str, Any]] = []
-    buf_docs: List[str] = []
+    # Các biến lưu tạm
+    BATCH_SIZE = 10 
+    added = 0
+    buf_ids, buf_embs, buf_metas, buf_docs = [], [], [], []
 
     def _flush():
         nonlocal added, buf_ids, buf_embs, buf_metas, buf_docs
-        if not buf_ids:
-            return
+        if not buf_ids: return
         try:
-            collection.upsert(
-                ids=buf_ids,
-                embeddings=buf_embs,
-                metadatas=buf_metas,
-                documents=buf_docs,
-            )
+            collection.upsert(ids=buf_ids, embeddings=buf_embs, metadatas=buf_metas, documents=buf_docs)
             added += len(buf_ids)
+            print(f"   -> Đã lưu batch {len(buf_ids)} dòng.")
         except Exception as e:
-            print(f"[rag_ingest] upsert batch error: {e}")
+            print(f"[rag_ingest] upsert error: {e}")
         finally:
             buf_ids, buf_embs, buf_metas, buf_docs = [], [], [], []
 
-    def _worker(r):
+    # 3. VÒNG LẶP TUẦN TỰ (Thay thế hoàn toàn ThreadPoolExecutor)
+    for i, r in enumerate(rows):
         raw = r.answer_text or ""
         nt = norm_text(raw)
-        vec = _embed_vi(nt)  # call Gemini
-        if not vec:
-            return None
+        
+        # --- GỌI GEMINI ---
+        vec = _embed_vi(nt) 
+        
+        # --- QUAN TRỌNG: NGỦ 4 GIÂY ---
+        time.sleep(4.0) 
+
+        if not vec: 
+            print(f"   [x] Dòng {i+1}: Lỗi lấy vector")
+            continue
+        
+        # Tạo metadata
         cid = f"{survey_id}:{int(r.answer_id)}"
         meta = {
             "survey_id": int(survey_id),
             "answer_id": int(r.answer_id),
             "question_id": int(r.question_id) if r.question_id is not None else None,
         }
-        return (cid, vec, meta, nt)
 
-    # Nộp job theo lô để tránh backlog quá lớn (ổn định bộ nhớ)
-    CHUNK = MAX_WORKERS * 25  # tuỳ chỉnh
-    for i in range(0, len(rows), CHUNK):
-        chunk = rows[i:i+CHUNK]
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS, thread_name_prefix="embed") as ex:
-            futures = [ex.submit(_worker, r) for r in chunk]
-            for fut in as_completed(futures):
-                try:
-                    item = fut.result()
-                except Exception as e:
-                    print(f"[rag_ingest] worker error: {e}")
-                    continue
-                if not item:
-                    continue
-                cid, vec, meta, nt = item
-                buf_ids.append(cid); buf_embs.append(vec); buf_metas.append(meta); buf_docs.append(nt)
-                if len(buf_ids) >= BATCH:
-                    _flush()
+        buf_ids.append(cid)
+        buf_embs.append(vec)
+        buf_metas.append(meta)
+        buf_docs.append(nt)
+        
+        print(f"   [v] Dòng {i+1}/{len(rows)}: OK")
+
+        if len(buf_ids) >= BATCH_SIZE:
+            _flush()
 
     _flush()
     return {"ok": True, "ingested": added, "survey_id": survey_id}
@@ -1526,12 +1520,18 @@ def _gemini_summarize(responses: _List[str]) -> str:
 
     # SUMMARY : ĐOẠN VĂN
     prompt = (
-        "Hãy tóm tắt ngắn gọn các ý chính từ các phản hồi dưới đây.\n"
-        "YÊU CẦU:\n"
-        "1. Viết thành văn bản thuần (Plain text), không dùng định dạng Markdown.\n"
-        "2. KHÔNG dùng các ký tự như: #, *, -, >.\n"
-        "3. Tóm tắt các ý Tích cực, Tiêu cực và Đề xuất thành các đoạn văn ngắn, cách nhau bởi dấu xuống dòng.\n\n"
-        "DỮ LIỆU:\n" + joined_for_hash
+        "Bạn là chuyên gia phân tích phản hồi khách hàng.\n"
+        "Hãy tóm tắt dữ liệu dưới đây thành báo cáo ngắn gọn.\n\n"
+        "YÊU CẦU ĐỊNH DẠNG (BẮT BUỘC):\n"
+        "1. Trả về dạng Plain Text (Văn bản thuần), KHÔNG dùng Markdown (không dùng **, ##, -).\n"
+        "2. Chia làm 3 phần rõ ràng bằng cách viết IN HOA tiêu đề như sau:\n\n"
+        "PHẦN 1: ĐIỂM TÍCH CỰC\n"
+        "(Liệt kê các ý tích cực...)\n\n"
+        "PHẦN 2: VẤN ĐỀ TỒN TẠI\n"
+        "(Liệt kê các vấn đề tiêu cực...)\n\n"
+        "PHẦN 3: ĐỀ XUẤT CẢI THIỆN\n"
+        "(Đưa ra gợi ý hành động...)\n\n"
+        "DỮ LIỆU PHẢN HỒI:\n" + joined_for_hash
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
