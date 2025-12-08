@@ -98,7 +98,23 @@ const SentimentPage = () => {
     },
   } : defaultStats;
 
-  const COLORS = ["#22c55e", "#facc15", "#ef4444"];
+  const NEON_PALETTE = [
+    "#00F0FF",  // Neon Cyan
+    "#7B2FF7",  // Electric Purple
+    "#FF2E63",  // Neon Pink
+    "#FF8F00",  // Neon Amber
+    "#38FF7A",  // Neon Green
+    "#FF00F5",  // Ultra Violet Neon
+    "#00FF9F",  // Neon Aqua Green
+    "#FFD500",  // Neon Yellow
+    "#3A0CA3",  // Deep Neon Violet
+    "#7209B7",  // Cyber Grape Neon
+  ];
+
+  // Thay đổi dòng 101 từ:
+  // const COLORS = ["#22c55e", "#facc15", "#ef4444"];
+  // Thành:
+  const COLORS = [NEON_PALETTE[4], NEON_PALETTE[7], NEON_PALETTE[2]]; // Neon Green, Neon Yellow, Neon Pink
 
   // Hàm để tải dữ liệu sentiment (có chặn gọi trùng)
   // Sử dụng basicSentiment từ aiAnalysisService
@@ -355,7 +371,119 @@ const SentimentPage = () => {
     { name: "Tiêu cực", value: stats.percent.negative },
   ];
 
-  // Hàm để parse summary text thành các phần tử React
+  // Hàm để parse analysis text thành các mục: Tích cực, Tiêu cực, Đề xuất, Nhiễu
+  const parseAnalysisText = (analysisText) => {
+    if (!analysisText) return null;
+
+    // Định nghĩa các mục và màu tương ứng
+    const categories = [
+      { key: 'Tích cực', label: 'Tích cực', color: '#22c55e', colorClass: 'text-green-600' },
+      { key: 'Tiêu cực', label: 'Tiêu cực', color: '#ef4444', colorClass: 'text-red-600' },
+      { key: 'Đề xuất', label: 'Đề xuất', color: '#3b82f6', colorClass: 'text-blue-600' },
+      { key: 'Nhiễu', label: 'Nhiễu', color: '#eab308', colorClass: 'text-yellow-600' },
+    ];
+
+    const result = {
+      positive: [],
+      negative: [],
+      suggestion: [],
+      noise: [],
+    };
+
+    // Tách text theo các dấu mục
+    // Xử lý cả trường hợp có xuống dòng và không xuống dòng
+    let text = analysisText.trim();
+
+    // Tìm tất cả các vị trí bắt đầu của các mục (case-insensitive)
+    const matches = [];
+    categories.forEach(cat => {
+      // Tìm cả "Tích cực:" và "Tích cực :" (có thể có khoảng trắng)
+      const regex = new RegExp(`${cat.key}\\s*:`, 'gi');
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        matches.push({
+          index: match.index,
+          category: cat,
+          fullMatch: match[0],
+        });
+      }
+    });
+
+    // Sắp xếp matches theo vị trí
+    matches.sort((a, b) => a.index - b.index);
+
+    // Nếu không tìm thấy mục nào, trả về null
+    if (matches.length === 0) {
+      return null;
+    }
+
+    // Hàm helper để tách nội dung thành các ý riêng biệt
+    const splitIntoItems = (content) => {
+      if (!content || !content.trim()) return [];
+
+      // Thử tách theo xuống dòng trước
+      const lines = content.split('\n').filter(line => line.trim());
+
+      if (lines.length > 1) {
+        // Có xuống dòng, mỗi dòng là một ý (loại bỏ số thứ tự hoặc dấu đầu dòng)
+        return lines.map(line => {
+          // Loại bỏ số thứ tự (1., 2., 3.) hoặc dấu đầu dòng (-, •)
+          return line.trim().replace(/^(\d+[\.\)]\s*|[-•]\s*)/, '').trim();
+        }).filter(item => item.length > 0);
+      }
+
+      // Không có xuống dòng, thử các cách tách khác
+      // 1. Tách theo số thứ tự (1., 2., 3.) hoặc dấu đầu dòng (-, •)
+      const numberedPattern = /(?:\d+[\.\)]\s*|[-•]\s*)/;
+      const numberedParts = content.split(numberedPattern).filter(part => part.trim());
+      if (numberedParts.length > 1) {
+        return numberedParts.map(part => part.trim()).filter(part => part.length > 0);
+      }
+
+      // 2. Tách theo dấu phẩy (nếu có nhiều ý ngắn)
+      const commaParts = content.split(/[,，]/).map(part => part.trim()).filter(part => part.length > 0);
+      if (commaParts.length > 1 && commaParts.every(part => part.length < 100)) {
+        // Chỉ tách theo dấu phẩy nếu các phần đều ngắn (có thể là danh sách)
+        return commaParts;
+      }
+
+      // 3. Nếu không tách được, coi toàn bộ là một ý
+      return [content.trim()];
+    };
+
+    // Tách text thành các phần theo từng mục
+    matches.forEach((match, index) => {
+      const startIndex = match.index + match.fullMatch.length;
+      const endIndex = index < matches.length - 1 ? matches[index + 1].index : text.length;
+      const content = text.substring(startIndex, endIndex).trim();
+
+      if (content) {
+        const items = splitIntoItems(content);
+
+        // Gán vào mục tương ứng
+        const categoryKey = match.category.key.toLowerCase();
+        if (categoryKey === 'tích cực') {
+          result.positive = items;
+        } else if (categoryKey === 'tiêu cực') {
+          result.negative = items;
+        } else if (categoryKey === 'đề xuất') {
+          result.suggestion = items;
+        } else if (categoryKey === 'nhiễu') {
+          result.noise = items;
+        }
+      }
+    });
+
+    // Kiểm tra xem có mục nào không
+    const hasData = result.positive.length > 0 ||
+      result.negative.length > 0 ||
+      result.suggestion.length > 0 ||
+      result.noise.length > 0;
+
+    return hasData ? result : null;
+  };
+
+  // Hàm để parse summary text thành các phần tử React (giữ lại cho tương thích)
   const parseSummaryText = (summaryText) => {
     if (!summaryText) return null;
 
@@ -407,8 +535,6 @@ const SentimentPage = () => {
       });
     }
 
-    // Nếu là đoạn văn, hiển thị như một đoạn với highlights
-    // Giữ nguyên format gốc, chỉ highlight keywords
     return [{
       id: 0,
       text: highlightKeywords(summaryText.trim()),
@@ -419,6 +545,9 @@ const SentimentPage = () => {
   // Lấy summary text từ summaryData
   const summaryText = summaryData?.summary || null;
   const parsedSummary = summaryText ? parseSummaryText(summaryText) : null;
+
+  // Parse analysis text theo các mục: Tích cực, Tiêu cực, Đề xuất, Nhiễu
+  const parsedAnalysis = summaryText ? parseAnalysisText(summaryText) : null;
 
   // Kiểm tra có surveyId từ location.state không
   const surveyId = location.state?.surveyId;
@@ -452,13 +581,9 @@ const SentimentPage = () => {
           surveyDescription={surveyDescription}
         />
         <h1 className="page-title">
-          {surveyTitle ? `${surveyTitle}` : 'Thống kê khảo sát'}
+          {surveyTitle ? `Tên khảo sát : ${surveyTitle}` : 'Thống kê khảo sát'}
         </h1>
-        {surveyDescription && (
-          <p className="page-subtitle">
-            {surveyDescription}
-          </p>
-        )}
+
 
         <div className="sentiment-summary-grid">
           {/* Biểu đồ tròn phân bố cảm xúc */}
@@ -482,7 +607,7 @@ const SentimentPage = () => {
                       outerRadius={80}
                       labelLine={false}
                       label={({ name, percent }) =>
-                        `${name} ${(percent * 100).toFixed(0)}%`
+                        `${(percent * 100).toFixed(0)}%`
                       }
                     >
                       {chartData.map((entry, index) => (
@@ -555,20 +680,77 @@ const SentimentPage = () => {
               <div className="loading-summary">
                 <p>Đang tải tóm tắt...</p>
               </div>
-            ) : parsedSummary && parsedSummary.length > 0 ? (
-              <div className="ai-sum">
-                {parsedSummary.map((item) => (
-                  <p key={item.id} style={{ marginBottom: '0.75rem', lineHeight: '1.6' }}>
-                    {item.isBullet && <span style={{ marginRight: '0.5rem' }}>•</span>}
-                    {item.text.map((part, partIndex) => (
-                      part.highlight ? (
-                        <span key={partIndex} className="highlight">{part.text}</span>
-                      ) : (
-                        <span key={partIndex}>{part.text}</span>
-                      )
-                    ))}
-                  </p>
-                ))}
+            ) : parsedAnalysis ? (
+              <div className="ai-analysis-categorized">
+                <div className="analysis-grid">
+                  {/* Mục Tích cực */}
+                  {parsedAnalysis.positive.length > 0 && (
+                    <div className="analysis-category">
+                      <h4 className="analysis-category-title" style={{ color: '#22c55e' }}>
+                        <i className="fa-solid fa-circle-check" style={{ marginRight: '8px' }}></i>
+                        Tích cực
+                      </h4>
+                      <ul className="analysis-items">
+                        {parsedAnalysis.positive.map((item, index) => (
+                          <li key={index} style={{ color: '#22c55e', marginBottom: '0.5rem', lineHeight: '1.6' }}>
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Mục Tiêu cực */}
+                  {parsedAnalysis.negative.length > 0 && (
+                    <div className="analysis-category">
+                      <h4 className="analysis-category-title" style={{ color: '#ef4444' }}>
+                        <i className="fa-solid fa-circle-exclamation" style={{ marginRight: '8px' }}></i>
+                        Tiêu cực
+                      </h4>
+                      <ul className="analysis-items">
+                        {parsedAnalysis.negative.map((item, index) => (
+                          <li key={index} style={{ color: '#ef4444', marginBottom: '0.5rem', lineHeight: '1.6' }}>
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Mục Đề xuất */}
+                  {parsedAnalysis.suggestion.length > 0 && (
+                    <div className="analysis-category">
+                      <h4 className="analysis-category-title" style={{ color: '#3b82f6' }}>
+                        <i className="fa-solid fa-lightbulb" style={{ marginRight: '8px' }}></i>
+                        Đề xuất
+                      </h4>
+                      <ul className="analysis-items">
+                        {parsedAnalysis.suggestion.map((item, index) => (
+                          <li key={index} style={{ color: '#3b82f6', marginBottom: '0.5rem', lineHeight: '1.6' }}>
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Mục Nhiễu */}
+                  {parsedAnalysis.noise.length > 0 && (
+                    <div className="analysis-category">
+                      <h4 className="analysis-category-title" style={{ color: '#eab308' }}>
+                        <i className="fa-solid fa-triangle-exclamation" style={{ marginRight: '8px' }}></i>
+                        Nhiễu
+                      </h4>
+                      <ul className="analysis-items">
+                        {parsedAnalysis.noise.map((item, index) => (
+                          <li key={index} style={{ color: '#eab308', marginBottom: '0.5rem', lineHeight: '1.6' }}>
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : summaryData?.ok === false ? (
               <div className="error-summary">
@@ -576,7 +758,7 @@ const SentimentPage = () => {
               </div>
             ) : (
               <div className="no-summary">
-                <p>Chưa có dữ liệu tóm tắt. Vui lòng đợi hệ thống phân tích.</p>
+                <p>Không có dữ liệu</p>
               </div>
             )}
             {summaryData && summaryData.count !== undefined && (

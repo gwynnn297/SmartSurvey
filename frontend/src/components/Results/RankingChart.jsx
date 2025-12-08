@@ -9,16 +9,26 @@ import {
     ResponsiveContainer,
 } from "recharts";
 
-const COLORS = [
-    "#3b82f6", "#10b981", "#f59e0b", "#ef4444",
-    "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"
+const NEON_PALETTE = [
+    "#00F0FF",  // Neon Cyan
+    "#7B2FF7",  // Electric Purple
+    "#FF2E63",  // Neon Pink
+    "#FF8F00",  // Neon Amber
+    "#38FF7A",  // Neon Green
+    "#FF00F5",  // Ultra Violet Neon
+    "#00FF9F",  // Neon Aqua Green
+    "#FFD500",  // Neon Yellow
+    "#3A0CA3",  // Deep Neon Violet
+    "#7209B7",  // Cyber Grape Neon
 ];
+
+const COLORS = NEON_PALETTE;
 
 const RankingChart = ({ data, surveyId }) => {
     if (!data || !data.chartData || data.chartData.length === 0) {
         return (
             <div className="question-chart-wrapper">
-                <h4 className="question-title">{data?.questionText || 'Câu hỏi xếp hạng'}</h4>
+                <h4 className="question-title"> Câu hỏi : {data?.questionText || 'Câu hỏi xếp hạng'}</h4>
                 <div style={{ padding: "1rem", textAlign: "center", color: "#666" }}>
                     Chưa có dữ liệu ranking
                 </div>
@@ -26,7 +36,7 @@ const RankingChart = ({ data, surveyId }) => {
         );
     }
 
-    // Backend đã tính toán và sắp xếp sẵn theo thứ tự ưu tiên (cao nhất = ưu tiên nhất)
+  
     const chartData = data.chartData
         .filter(item => (item.count || 0) > 0)
         .map((item, index) => ({
@@ -39,7 +49,7 @@ const RankingChart = ({ data, surveyId }) => {
     if (chartData.length === 0) {
         return (
             <div className="question-chart-wrapper">
-                <h4 className="question-title">{data.questionText}</h4>
+                <h4 className="question-title"> Câu hỏi :{data.questionText}</h4>
                 <div style={{ padding: "1rem", textAlign: "center", color: "#666" }}>
                     Chưa có phản hồi nào
                 </div>
@@ -52,7 +62,7 @@ const RankingChart = ({ data, surveyId }) => {
 
     return (
         <div className="question-chart-wrapper">
-            <h4 className="question-title">{data.questionText}</h4>
+            <h4 className="question-title"> Câu hỏi : {data.questionText}</h4>
 
             {/* Bar Chart - Xếp hạng ưu tiên */}
             <div className="ranking-chart-container">
@@ -61,13 +71,13 @@ const RankingChart = ({ data, surveyId }) => {
                     <BarChart
                         data={chartData}
                         layout="vertical"
-                        margin={{ left: 10, right: 30, top: 20, bottom: 50 }}
+                        margin={{ right: 100, top: 20, bottom: 20 }}
                     >
                         <XAxis
                             type="number"
                             domain={[0, 'dataMax']}
                             label={{
-                                value: 'Điểm ưu tiên (%)',
+
                                 position: 'bottom',
                                 offset: 15,
                                 style: {
@@ -95,16 +105,23 @@ const RankingChart = ({ data, surveyId }) => {
                                 boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                             }}
                         />
-                        <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]}>
+                        <Bar
+                            dataKey="value"
+                            fill={NEON_PALETTE[0]}
+                            radius={[0, 4, 4, 0]}
+                            label={{
+                                position: 'right',
+                                formatter: (value) => `${value.toFixed(1)}%`,
+                                style: {
+                                    fontSize: '12px',
+                                    fill: '#374151',
+                                    fontWeight: '500'
+                                }
+                            }}
+                        >
                             {chartData.map((entry, index) => {
-                                // Màu sắc: điểm cao (tốt) = xanh lá, điểm thấp = đỏ
-                                const maxScore = Math.max(...chartData.map(d => d.value));
-                                const scoreRatio = entry.value / maxScore;
-                                const color = scoreRatio >= 0.7
-                                    ? "#10b981"  // Xanh lá - Ưu tiên cao
-                                    : scoreRatio >= 0.4
-                                        ? "#fbbf24"  // Vàng - Ưu tiên trung bình
-                                        : "#ef4444"; // Đỏ - Ưu tiên thấp
+
+                                const color = NEON_PALETTE[index % NEON_PALETTE.length];
 
                                 return (
                                     <Cell
@@ -116,38 +133,6 @@ const RankingChart = ({ data, surveyId }) => {
                         </Bar>
                     </BarChart>
                 </ResponsiveContainer>
-            </div>
-
-            {/* Bảng thống kê chi tiết */}
-            <div className="ranking-summary-table">
-                <h5 className="chart-subtitle">Bảng thống kê chi tiết</h5>
-                <table className="ranking-table">
-                    <thead>
-                        <tr>
-                            <th>Xếp hạng</th>
-                            <th>Option</th>
-                            <th>Số lượt chọn</th>
-                            <th>Điểm ưu tiên (%)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {chartData.map((item, index) => {
-                            // item.value đã là weighted score percentage từ backend
-                            return (
-                                <tr key={index}>
-                                    <td className="rank-position">
-                                        <strong>#{item.rank}</strong>
-                                    </td>
-                                    <td className="option-name">{item.name}</td>
-                                    <td><strong>{item.count}</strong></td>
-                                    <td className="weighted-score">
-                                        <strong>{item.value.toFixed(2)}%</strong>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
             </div>
 
             <div className="chart-stats">

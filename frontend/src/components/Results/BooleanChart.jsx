@@ -8,7 +8,20 @@ import {
     ResponsiveContainer,
 } from "recharts";
 
-const COLORS = ["#10b981", "#ef4444"];
+const NEON_PALETTE = [
+    "#00F0FF",  
+    "#7B2FF7",  
+    "#FF2E63",  
+    "#FF8F00",  
+    "#38FF7A",  
+    "#FF00F5",  
+    "#00FF9F",  
+    "#FFD500",  
+    "#3A0CA3", 
+    "#7209B7",  
+];
+
+const COLORS = [NEON_PALETTE[0], NEON_PALETTE[1]]; 
 
 const BooleanChart = ({ data }) => {
     if (!data) {
@@ -28,14 +41,14 @@ const BooleanChart = ({ data }) => {
     const chartData = [];
     if (trueCount > 0) {
         chartData.push({
-            name: "Có / Đúng",
+            name: "Có ",
             value: trueCount,
             percentage: truePercentage
         });
     }
     if (falseCount > 0) {
         chartData.push({
-            name: "Không / Sai",
+            name: "Không ",
             value: falseCount,
             percentage: falsePercentage
         });
@@ -50,7 +63,7 @@ const BooleanChart = ({ data }) => {
     if (chartData.length === 0 || total === 0) {
         return (
             <div className="question-chart-wrapper">
-                <h4 className="question-title">{data.questionText}</h4>
+                <h4 className="question-title"> Câu hỏi : {data.questionText}</h4>
                 <div style={{ padding: "1rem", textAlign: "center", color: "#666" }}>
                     Chưa có phản hồi nào
                 </div>
@@ -61,11 +74,12 @@ const BooleanChart = ({ data }) => {
     // Nếu chỉ có 1 giá trị, hiển thị thông báo đặc biệt
     if (chartData.length === 1) {
         const singleItem = chartData[0];
-        const color = singleItem.name === "Có / Đúng" ? COLORS[0] : COLORS[1];
+      
+        const color = NEON_PALETTE[0];
 
         return (
             <div className="question-chart-wrapper">
-                <h4 className="question-title">{data.questionText}</h4>
+                <h4 className="question-title">Câu hỏi : {data.questionText}</h4>
 
                 <ResponsiveContainer width="100%" height={250}>
                     <PieChart>
@@ -76,7 +90,7 @@ const BooleanChart = ({ data }) => {
                             cx="50%"
                             cy="50%"
                             outerRadius={80}
-                            label={({ name, percentage }) => `${name}: ${percentage.toFixed(1)}%`}
+                            label={({ percentage }) => ` ${percentage.toFixed(1)}%`}
                         >
                             <Cell fill={color} />
                         </Pie>
@@ -86,49 +100,10 @@ const BooleanChart = ({ data }) => {
                 </ResponsiveContainer>
 
                 <div className="chart-stats">
-                    <div style={{ display: "flex", gap: "2rem", justifyContent: "center", marginTop: "0.5rem" }}>
-                        {trueCount > 0 && (
-                            <div>
-                                <span style={{ color: COLORS[0], fontWeight: "bold" }}>Có/Đúng: </span>
-                                <strong>{trueCount}</strong> ({truePercentage.toFixed(1)}%)
-                            </div>
-                        )}
-                        {falseCount > 0 && (
-                            <div>
-                                <span style={{ color: COLORS[1], fontWeight: "bold" }}>Không/Sai: </span>
-                                <strong>{falseCount}</strong> ({falsePercentage.toFixed(1)}%)
-                            </div>
-                        )}
-                    </div>
-                    <p style={{ marginTop: "0.5rem" }}>Tổng: <strong>{total}</strong> phản hồi</p>
-                    {/* Bảng thống kê chi tiết */}
-                    <div className="ranking-summary-table">
-                        <h5 className="chart-subtitle">Bảng thống kê chi tiết</h5>
-                        <table className="ranking-table">
-                            <thead>
-                                <tr>
-                                    <th>Lựa chọn</th>
-                                    <th>Số lượng</th>
-                                    <th>Tỷ lệ (%)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {chartData.map((item, index) => (
-                                    <tr key={index}>
-                                        <td className="option-name">{item.name}</td>
-                                        <td><strong>{item.value}</strong></td>
-                                        <td className="weighted-score">
-                                            <strong>{item.percentage.toFixed(2)}%</strong>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
 
-                    <div className="chart-stats">
-                        <p>Tổng: <strong>{total}</strong> phản hồi</p>
-                    </div>
+
+
+                    <p style={{ marginTop: "0.5rem" }}>Tổng: <strong>{total}</strong> phản hồi</p>
                 </div>
             </div>
         );
@@ -137,7 +112,7 @@ const BooleanChart = ({ data }) => {
     // Hiển thị bình thường nếu có cả 2 giá trị
     return (
         <div className="question-chart-wrapper">
-            <h4 className="question-title">{data.questionText}</h4>
+            <h4 className="question-title">Câu hỏi :{data.questionText}</h4>
 
             <ResponsiveContainer width="100%" height={250}>
                 <PieChart>
@@ -148,10 +123,11 @@ const BooleanChart = ({ data }) => {
                         cx="50%"
                         cy="50%"
                         outerRadius={80}
-                        label={({ name, percentage }) => `${name}: ${percentage.toFixed(1)}%`}
+                        label={({ percentage }) => ` ${percentage.toFixed(1)}%`}
                     >
                         {chartData.map((entry, index) => {
-                            const color = entry.name === "Có / Đúng" ? COLORS[0] : COLORS[1];
+
+                            const color = index === 0 ? NEON_PALETTE[0] : NEON_PALETTE[1];
                             return <Cell key={`cell-${index}`} fill={color} />;
                         })}
                     </Pie>
@@ -161,49 +137,8 @@ const BooleanChart = ({ data }) => {
             </ResponsiveContainer>
 
             <div className="chart-stats">
-                <div style={{ display: "flex", gap: "2rem", justifyContent: "center", marginTop: "0.5rem" }}>
-                    {trueCount > 0 && (
-                        <div>
-                            <span style={{ color: COLORS[0], fontWeight: "bold" }}>Có/Đúng: </span>
-                            <strong>{trueCount}</strong> ({truePercentage.toFixed(1)}%)
-                        </div>
-                    )}
-                    {falseCount > 0 && (
-                        <div>
-                            <span style={{ color: COLORS[1], fontWeight: "bold" }}>Không/Sai: </span>
-                            <strong>{falseCount}</strong> ({falsePercentage.toFixed(1)}%)
-                        </div>
-                    )}
-                </div>
-                <p style={{ marginTop: "0.5rem" }}>Tổng: <strong>{total}</strong> phản hồi</p>
-            </div>
-            {/* Bảng thống kê chi tiết */}
-            <div className="ranking-summary-table">
-                <h5 className="chart-subtitle">Bảng thống kê chi tiết</h5>
-                <table className="ranking-table">
-                    <thead>
-                        <tr>
-                            <th>Lựa chọn</th>
-                            <th>Số lượng</th>
-                            <th>Tỷ lệ (%)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {chartData.map((item, index) => (
-                            <tr key={index}>
-                                <td className="option-name">{item.name}</td>
-                                <td><strong>{item.value}</strong></td>
-                                <td className="weighted-score">
-                                    <strong>{item.percentage.toFixed(2)}%</strong>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
 
-            <div className="chart-stats">
-                <p>Tổng: <strong>{total}</strong> phản hồi</p>
+                <p style={{ marginTop: "0.5rem" }}>Tổng: <strong>{total}</strong> phản hồi</p>
             </div>
         </div>
     );

@@ -12,10 +12,20 @@ import {
     ResponsiveContainer,
 } from "recharts";
 
-const COLORS = [
-    "#3b82f6", "#10b981", "#f59e0b", "#ef4444",
-    "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16"
+const NEON_PALETTE = [
+    "#00F0FF",  // Neon Cyan
+    "#7B2FF7",  // Electric Purple
+    "#FF2E63",  // Neon Pink
+    "#FF8F00",  // Neon Amber
+    "#38FF7A",  // Neon Green
+    "#FF00F5",  // Ultra Violet Neon
+    "#00FF9F",  // Neon Aqua Green
+    "#FFD500",  // Neon Yellow
+    "#3A0CA3",  // Deep Neon Violet
+    "#7209B7",  // Cyber Grape Neon
 ];
+
+const COLORS = NEON_PALETTE;
 
 const MultipleChoiceChart = ({ data }) => {
     if (!data || !data.chartData || data.chartData.length === 0) {
@@ -26,13 +36,13 @@ const MultipleChoiceChart = ({ data }) => {
         );
     }
 
-    // 1️⃣ Lọc các option count = 0
+    //  Lọc các option count = 0
     const filtered = data.chartData.filter((item) => item.count > 0);
 
     if (filtered.length === 0) {
         return (
             <div className="question-chart-wrapper">
-                <h4 className="question-title">{data.questionText}</h4>
+                <h4 className="question-title"> Câu hỏi : {data.questionText}</h4>
                 <div style={{ padding: "1rem", textAlign: "center", color: "#666" }}>
                     Chưa có phản hồi nào
                 </div>
@@ -40,11 +50,11 @@ const MultipleChoiceChart = ({ data }) => {
         );
     }
 
-    // 2️⃣ Tính tổng số lượt chọn → để phần trăm = 100%
+   
     const total = filtered.reduce((sum, item) => sum + item.count, 0);
 
-        // 3️⃣ Tự tính lại phần trăm mới và sắp xếp từ cao xuống thấp
-        const chartData = filtered
+    //  Tự tính lại phần trăm mới và sắp xếp từ cao xuống thấp
+    const chartData = filtered
         .map((item) => ({
             name: item.option,
             value: item.count,
@@ -55,7 +65,7 @@ const MultipleChoiceChart = ({ data }) => {
 
     return (
         <div className="question-chart-wrapper">
-            <h4 className="question-title">{data.questionText}</h4>
+            <h4 className="question-title"> Câu hỏi : {data.questionText}</h4>
 
             {isPie ? (
                 <ResponsiveContainer width="100%" height={250}>
@@ -67,7 +77,7 @@ const MultipleChoiceChart = ({ data }) => {
                             cx="50%"
                             cy="50%"
                             outerRadius={80}
-                            label={({ name, percentage }) => `${name}: ${percentage.toFixed(1)}%`}
+                            label={({ percentage }) => `${percentage.toFixed(1)}%`}
                         >
                             {chartData.map((entry, index) => (
                                 <Cell key={index} fill={COLORS[index % COLORS.length]} />
@@ -95,34 +105,7 @@ const MultipleChoiceChart = ({ data }) => {
                     </BarChart>
                 </ResponsiveContainer>
             )}
-            {/* Bảng thống kê chi tiết */}
-            <div className="ranking-summary-table">
-                <h5 className="chart-subtitle">Bảng thống kê chi tiết</h5>
-                <table className="ranking-table">
-                    <thead>
-                        <tr>
-                            <th>STT</th>
-                            <th>Option</th>
-                            <th>Số lượt chọn</th>
-                            <th>Tỷ lệ (%)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {chartData.map((item, index) => (
-                            <tr key={index}>
-                                <td className="rank-position">
-                                    <strong>{index + 1}</strong>
-                                </td>
-                                <td className="option-name">{item.name}</td>
-                                <td><strong>{item.value}</strong></td>
-                                <td className="weighted-score">
-                                    <strong>{item.percentage.toFixed(2)}%</strong>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+
 
             <div className="chart-stats">
                 <p>Tổng: <strong>{total}</strong> lượt chọn</p>

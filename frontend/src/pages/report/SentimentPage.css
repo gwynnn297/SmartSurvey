@@ -121,18 +121,30 @@
 }
 
 .stat-item.positive {
-  background: rgba(34, 197, 94, 0.15);
-  color: #166534;
+  background: rgba(56, 255, 122, 0.15);
+  /* Neon Green #38FF7A với opacity */
+  color: #2dcc6a;
+  /* Màu Neon Green tối hơn để dễ đọc */
+  border-left: 3px solid #38FF7A;
+  /* Neon Green từ NEON_PALETTE */
 }
 
 .stat-item.neutral {
-  background: rgba(234, 179, 8, 0.15);
-  color: #92400e;
+  background: rgba(255, 213, 0, 0.15);
+  /* Neon Yellow #FFD500 với opacity */
+  color: #ccaa00;
+  /* Màu Neon Yellow tối hơn để dễ đọc */
+  border-left: 3px solid #FFD500;
+  /* Neon Yellow từ NEON_PALETTE */
 }
 
 .stat-item.negative {
-  background: rgba(239, 68, 68, 0.15);
-  color: #991b1b;
+  background: rgba(255, 46, 99, 0.15);
+  /* Neon Pink #FF2E63 với opacity */
+  color: #cc2550;
+  /* Màu Neon Pink tối hơn để dễ đọc */
+  border-left: 3px solid #FF2E63;
+  /* Neon Pink từ NEON_PALETTE */
 }
 
 .ai-insight {
@@ -262,6 +274,85 @@
   font-weight: 500;
 }
 
+/* ---------------------- */
+/* Phân tích theo mục */
+/* ---------------------- */
+
+.ai-analysis-categorized {
+  color: #374151;
+  line-height: 1.6;
+}
+
+.analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.analysis-category {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+}
+
+.analysis-category:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.analysis-category-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 2px solid currentColor;
+  opacity: 0.9;
+}
+
+.analysis-items {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+  flex: 1;
+}
+
+.analysis-items li {
+  padding-left: 1.5rem;
+  position: relative;
+  margin-bottom: 0.75rem;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.analysis-items li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.analysis-items li:last-child {
+  margin-bottom: 0;
+}
+
+/* Responsive cho màn hình nhỏ */
+@media (max-width: 768px) {
+  .analysis-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
 .chart-wrapper {
   width: 100%;
   height: 260px;
@@ -306,8 +397,8 @@
 
 /* Survey Charts Section */
 .survey-charts-section {
-  margin-top: 3rem;
-  padding-top: 2rem;
+  margin-top: 1.5rem;
+  padding-top: 0.5rem;
   border-top: 2px solid #e5e7eb;
 }
 

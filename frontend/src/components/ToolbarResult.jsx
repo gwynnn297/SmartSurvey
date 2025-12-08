@@ -8,9 +8,10 @@ const ToolbarResult = ({ surveyId, surveyTitle, surveyDescription }) => {
 
     // Xác định trang hiện tại dựa trên pathname
     const currentPath = location.pathname;
-    const isDashboard = currentPath === '/report' || currentPath === '/report/';
+    const isDashboard = currentPath ===  '/report' || currentPath === '/report/';
     const isIndividualResponses = currentPath === '/report/individual-responses';
     const isSentiment = currentPath === '/report/sentiment';
+    const isExportReport = currentPath === '/report/export';
 
     // Chuẩn bị state để truyền khi navigate
     const getNavigationState = () => {
@@ -79,8 +80,16 @@ const ToolbarResult = ({ surveyId, surveyTitle, surveyDescription }) => {
                     onClick={() => handleNavigate('/report/sentiment')}
                     title="Thống kê"
                 >
-                    <i class="fa-solid fa-chart-simple"></i>
+                    <i className="fa-solid fa-chart-simple"></i>
                     <span>Thống kê</span>
+                </button>
+                <button
+                    className={`toolbar-result-btn ${isExportReport ? 'active' : ''}`}
+                    onClick={() => handleNavigate('/report/export')}
+                    title="Xuất báo cáo"
+                >
+                    <i className="fa-solid fa-file-export"></i>
+                    <span>Xuất báo cáo</span>
                 </button>
             </div>
         </div>
