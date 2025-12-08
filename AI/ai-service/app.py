@@ -160,12 +160,12 @@ def call_gemini_json(url: str, key: str, payload: dict, timeout: float, max_retr
 
 def _gen_answer_from_ctx(question: str, contexts: list[str], history: str = "") -> str:
     if not contexts:
-        return "Chưa đủ ngữ cảnh để trả lời."
+        return "Chưa đủ ngữ cảnh dữ liệu để trả lời câu hỏi này."
     max_chars = int(os.getenv("RAG_MAX_CTX_CHARS","5000"))
 
     # Gộp & cắt context theo giới hạn ký tự
     ctx = contexts[:]
-    joined_ctx = "\n- ".join(ctx)
+    joined_ctx = "\n".join(ctx)
     if len(joined_ctx) > max_chars:
         joined_ctx = joined_ctx[:max_chars]
 
@@ -177,11 +177,17 @@ def _gen_answer_from_ctx(question: str, contexts: list[str], history: str = "") 
     # Prompt cấu trúc theo yêu cầu
     prompt = (
         "[ROLE]\n"
-        "Bạn là trợ lý phân tích phản hồi khảo sát TIẾNG VIỆT. "
-        "Chỉ dựa vào NGỮ CẢNH và LỊCH SỬ CHAT để trả lời ngắn gọn, có căn cứ. "
-        "Nếu không đủ thông tin, hãy trả lời: 'Chưa đủ thông tin'.\n\n"
+        "Bạn là trợ lý ảo hỗ trợ tra cứu dữ liệu. "
+        "Nhiệm vụ: Trả lời câu hỏi dựa trên thông tin cung cấp.\n\n"
+        
+        "[YÊU CẦU ĐỊNH DẠNG - QUAN TRỌNG]\n"
+        "1. TRẢ LỜI DẠNG VĂN BẢN THUẦN (PLAIN TEXT).\n"
+        "2. TUYỆT ĐỐI KHÔNG dùng Markdown (không dùng dấu **, không dùng dấu #, không dùng dấu `).\n"
+        "3. KHÔNG dùng gạch đầu dòng (- hoặc *) nếu không cần thiết. Hãy viết thành câu hoàn chỉnh hoặc xuống dòng tự nhiên.\n"
+        "4. Ngắn gọn, súc tích, đi thẳng vào vấn đề.\n\n"
+
         "[CONTEXT]\n"
-        f"- {joined_ctx}\n\n"
+        f"{joined_ctx}\n\n"
         "[CHAT HISTORY]\n"
         f"{(hist_str if hist_str else '(Không có)')}\n\n"
         "[CURRENT QUESTION]\n"
@@ -200,6 +206,8 @@ def _gen_answer_from_ctx(question: str, contexts: list[str], history: str = "") 
         cand = (data.get("candidates") or [{}])[0]
         parts = (cand.get("content") or {}).get("parts") or [{}]
         txt = (parts[0].get("text") or "").strip()
+        txt = re.sub(r'\*\*|__', '', txt)
+        txt = re.sub(r'^#+\s*', '', txt, flags=re.MULTILINE)
         return txt or "Chưa đủ thông tin."
     except Exception:
         return "Chưa đủ thông tin."
@@ -1500,7 +1508,7 @@ def _local_summary(responses: list[str], max_bullets: int = 5) -> str:
     scores = X.sum(axis=1).A1
     idx = scores.argsort()[::-1][:max_bullets]
     picks = [sents[i] for i in sorted(idx)]  # giữ thứ tự tự nhiên
-    return "- " + "\n- ".join(picks)
+    return "- " + "\n ".join(picks)
 
 def _gemini_summarize(responses: _List[str]) -> str:
     if not responses:
@@ -1516,11 +1524,14 @@ def _gemini_summarize(responses: _List[str]) -> str:
         _METRICS["summary_cache_hit"] += 1
         return cached
 
-    # (giữ nguyên phần tạo prompt/payload hiện có, chỉ khác dưới đây dùng wrapper)
+    # SUMMARY : ĐOẠN VĂN
     prompt = (
-        "Tóm tắt ngắn gọn (3-5 bullet) các ý chính từ danh sách phản hồi tiếng Việt dưới đây. "
-        "Nhấn mạnh điểm tích cực, tiêu cực và đề xuất cải tiến nếu có.\n\n"
-        "Danh sách phản hồi:\n- " + joined_for_hash.replace("\n", "\n- ")
+        "Hãy tóm tắt ngắn gọn các ý chính từ các phản hồi dưới đây.\n"
+        "YÊU CẦU:\n"
+        "1. Viết thành văn bản thuần (Plain text), không dùng định dạng Markdown.\n"
+        "2. KHÔNG dùng các ký tự như: #, *, -, >.\n"
+        "3. Tóm tắt các ý Tích cực, Tiêu cực và Đề xuất thành các đoạn văn ngắn, cách nhau bởi dấu xuống dòng.\n\n"
+        "DỮ LIỆU:\n" + joined_for_hash
     )
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
 
@@ -1539,6 +1550,8 @@ def _gemini_summarize(responses: _List[str]) -> str:
         txt = parts[0].get("text")
         if isinstance(txt, str) and txt.strip():
             SUMMARY_CACHE.set(ck, txt)
+            clean_txt = txt.replace("*", "").replace("#", "").replace("- ", "")
+            SUMMARY_CACHE.set(ck, clean_txt)
             _METRICS["summary_success"] += 1
             _rec_latency("summary_latency_ms", 1000.0*(_time.perf_counter()-t0))
             return txt
