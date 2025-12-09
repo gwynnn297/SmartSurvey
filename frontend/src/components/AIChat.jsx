@@ -288,24 +288,25 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
     return (
         <div className="ai-chat-overlay" onClick={(e) => e.target === e.currentTarget && handleToggleChat()}>
             <div className="ai-chat-container" ref={chatContainerRef} onClick={(e) => e.stopPropagation()}>
-                {/* Header */}
-                <div className="ai-chat-header">
-                    <div className="ai-chat-menu-wrapper" ref={menuRef}>
-                        <button
-                            className="ai-chat-menu-btn"
-                            aria-label="Menu"
-                            onClick={() => setShowMenu(!showMenu)}
-                        >
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <line x1="3" y1="6" x2="21" y2="6"></line>
-                                <line x1="3" y1="12" x2="21" y2="12"></line>
-                                <line x1="3" y1="18" x2="21" y2="18"></line>
-                            </svg>
-                        </button>
-
-                        {/* Menu Dropdown */}
-                        {showMenu && (
-                            <div className="ai-chat-menu-dropdown">
+                {/* Sidebar Menu Overlay */}
+                {showMenu && (
+                    <>
+                        <div className="ai-chat-menu-backdrop" onClick={() => setShowMenu(false)}></div>
+                        <div className="ai-chat-menu-dropdown" ref={menuRef}>
+                            <div className="ai-chat-menu-header">
+                                <h3>Menu</h3>
+                                <button
+                                    className="ai-chat-menu-close-btn"
+                                    onClick={() => setShowMenu(false)}
+                                    aria-label="Close menu"
+                                >
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div className="ai-chat-menu-content">
                                 <button
                                     className="ai-chat-menu-item ai-chat-menu-item-new"
                                     onClick={handleNewChat}
@@ -354,7 +355,24 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
                                     )}
                                 </div>
                             </div>
-                        )}
+                        </div>
+                    </>
+                )}
+
+                {/* Header */}
+                <div className="ai-chat-header">
+                    <div className="ai-chat-menu-wrapper">
+                        <button
+                            className="ai-chat-menu-btn"
+                            aria-label="Menu"
+                            onClick={() => setShowMenu(!showMenu)}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <line x1="3" y1="6" x2="21" y2="6"></line>
+                                <line x1="3" y1="12" x2="21" y2="12"></line>
+                                <line x1="3" y1="18" x2="21" y2="18"></line>
+                            </svg>
+                        </button>
                     </div>
                     <div className="ai-chat-title">
                         <span className="ai-chat-logo">🤖</span>
