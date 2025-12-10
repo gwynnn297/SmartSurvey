@@ -173,10 +173,12 @@
     overflow: hidden;
     transition: transform 0.35s var(--dash-transition), box-shadow 0.35s var(--dash-transition);
 }
+
 .dash-kpi:hover {
     transform: translateY(-4px) scale(1.05);
     box-shadow: 0 24px 48px rgba(59, 130, 246, 0.45);
 }
+
 .dash-kpi::before {
     content: "";
     position: absolute;
@@ -317,6 +319,7 @@
     flex-direction: column;
     transition: transform 0.35s var(--dash-transition), box-shadow 0.35s var(--dash-transition);
 }
+
 .dash-chart:hover {
     transform: translateY(-4px) scale(1.05);
     box-shadow: 0 24px 48px rgba(59, 130, 246, 0.45);
@@ -1279,4 +1282,101 @@
     .option-desc {
         font-size: 13px;
     }
+}
+
+/* ===== TIME FILTER STYLES ===== */
+.time-filter-dropdown {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.time-filter-dropdown__wrapper {
+    position: relative;
+}
+
+.time-filter-dropdown__custom-picker {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    background: white;
+    border: 1px solid var(--dash-border);
+    border-radius: var(--dash-radius-sm);
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+    z-index: 100;
+    display: flex;
+    gap: 16px;
+    min-width: 400px;
+}
+
+.time-filter-dropdown__date-input {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+}
+
+.time-filter-dropdown__date-input label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--dash-text);
+}
+
+.time-filter-dropdown__date-input input[type="date"] {
+    padding: 8px 12px;
+    font-size: 14px;
+    border: 1px solid var(--dash-border);
+    border-radius: 6px;
+    background-color: white;
+    color: var(--dash-text);
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.time-filter-dropdown__date-input input[type="date"]:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+@media (max-width: 768px) {
+    .time-filter-dropdown {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .time-filter-dropdown__custom-picker {
+        position: static;
+        margin-top: 12px;
+        min-width: 100%;
+        flex-direction: column;
+    }
+}
+
+/* ===== CHART SCROLL WRAPPER ===== */
+.chart-scroll-wrapper {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
+}
+
+.chart-scroll-wrapper::-webkit-scrollbar {
+    height: 8px;
+}
+
+.chart-scroll-wrapper::-webkit-scrollbar-track {
+    background: rgba(148, 163, 184, 0.1);
+    border-radius: 4px;
+}
+
+.chart-scroll-wrapper::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.5);
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.chart-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+    background: rgba(148, 163, 184, 0.7);
 }

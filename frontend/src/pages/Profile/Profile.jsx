@@ -386,11 +386,9 @@ const Profile = () => {
             <div className="modern-container" style={{ paddingTop: '80px' }}>
                 {/* Modern Header with centered title */}
                 <div className="modern-header">
-                    <div className="header-content">
-                        <div className="header-center">
+                    <div className="header-content">                       
                             <h1 className="page-title">Thông tin cá nhân</h1>
-                            <p className="page-description">Xem và chỉnh sửa thông tin cá nhân của bạn</p>
-                        </div>
+                            <p className="page-description">Xem và chỉnh sửa thông tin cá nhân của bạn</p>                       
                     </div>
                 </div>
 
