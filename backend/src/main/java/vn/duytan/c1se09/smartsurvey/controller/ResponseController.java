@@ -91,7 +91,7 @@ public class ResponseController {
 	/**
 	 * Export CSV/Excel
 	 */
-	@PostMapping("/api/surveys/{surveyId}/responses/export")
+	@GetMapping("/api/surveys/{surveyId}/responses/export")
 	@ApiMessage("Export responses CSV/Excel")
 	public ResponseEntity<byte[]> exportResponses(
 			@PathVariable Long surveyId,

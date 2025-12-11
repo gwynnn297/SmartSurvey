@@ -39,10 +39,16 @@ public class SurveyService {
     private final CategoryRepository categoryRepository;
     private final QuestionRepository questionRepository;
     private final OptionRepository optionRepository;
+    private final AnswerRepository answerRepository;
+    private final ResponseRepository responseRepository;
+    private final SurveyViewRepository surveyViewRepository;
+    private final AiSentimentRepository aiSentimentRepository;
+    private final AiAnalysisRepository aiAnalysisRepository;
     private final AuthService authService;
     private final ActivityLogService activityLogService;
     private final SurveyPermissionService surveyPermissionService;
     private final SurveyPermissionRepository surveyPermissionRepository;
+    private final AiChatLogRepository aiChatLogRepository;
     private final NotificationService notificationService;
     private final UserRepository userRepository;
     private final TeamRepository teamRepository;
@@ -82,8 +88,18 @@ public class SurveyService {
     }
 
     @Transactional
-    public Survey updateSurvey(Survey survey) {
-        // Có thể bổ sung kiểm tra quyền, validation tại đây
+    public Survey updateSurvey(Survey survey) throws IdInvalidException {
+        // Kiểm tra quyền trước khi update
+        User currentUser = authService.getCurrentUser();
+        if (currentUser == null) {
+            throw new IdInvalidException("Người dùng chưa xác thực");
+        }
+        
+        // Check permission: chỉ OWNER và EDITOR mới được cập nhật survey
+        if (!surveyPermissionService.canEdit(survey, currentUser)) {
+            throw new IdInvalidException("Bạn không có quyền chỉnh sửa khảo sát này");
+        }
+        
         return surveyRepository.save(survey);
     }
 
@@ -297,7 +313,21 @@ public class SurveyService {
             throw new IdInvalidException("Chỉ chủ sở hữu mới có thể xóa khảo sát");
         }
 
-        // Cascade delete: Xóa tất cả questions và options thuộc survey này
+        // BƯỚC 1: Xóa tất cả Answers trước (tham chiếu Response và Question)
+        List<Response> responses = responseRepository.findBySurvey(survey);
+        for (Response response : responses) {
+            List<Answer> answers = answerRepository.findByResponse(response);
+            if (!answers.isEmpty()) {
+                answerRepository.deleteAll(answers);
+            }
+        }
+
+        // BƯỚC 2: Xóa tất cả Responses (tham chiếu Survey)
+        if (!responses.isEmpty()) {
+            responseRepository.deleteAll(responses);
+        }
+
+        // BƯỚC 3: Xóa tất cả Options và Questions
         List<Question> questions = questionRepository.findBySurvey(survey);
         for (Question question : questions) {
             // Xóa tất cả options của question này
@@ -324,7 +354,37 @@ public class SurveyService {
             questionRepository.deleteAll(questions);
         }
 
-        // Cuối cùng xóa survey
+        // BƯỚC 4: Xóa SurveyPermission (tham chiếu Survey)
+        List<SurveyPermission> permissions = surveyPermissionRepository.findBySurvey(survey);
+        if (!permissions.isEmpty()) {
+            surveyPermissionRepository.deleteAll(permissions);
+        }
+
+        // BƯỚC 5: Xóa SurveyView (tham chiếu Survey)
+        List<SurveyView> views = surveyViewRepository.findBySurveyOrderByViewedAtDesc(survey);
+        if (!views.isEmpty()) {
+            surveyViewRepository.deleteAll(views);
+        }
+
+        // BƯỚC 6: Xóa AiSentiment (tham chiếu Survey)
+        List<AiSentiment> sentiments = aiSentimentRepository.findBySurvey(survey);
+        if (!sentiments.isEmpty()) {
+            aiSentimentRepository.deleteAll(sentiments);
+        }
+
+        // BƯỚC 7: Xóa AiAnalysis (tham chiếu Survey)
+        List<AiAnalysis> analyses = aiAnalysisRepository.findBySurvey(survey);
+        if (!analyses.isEmpty()) {
+            aiAnalysisRepository.deleteAll(analyses);
+        }
+
+        // BƯỚC 8: Xóa AiChatLogs (tham chiếu Survey)
+        List<AiChatLog> chatLogs = aiChatLogRepository.findBySurvey(survey);
+        if (!chatLogs.isEmpty()) {
+            aiChatLogRepository.deleteAll(chatLogs);
+        }
+
+        // BƯỚC 9: Cuối cùng xóa survey
         surveyRepository.delete(survey);
         activityLogService.log(
                 ActivityLog.ActionType.delete_survey,

@@ -92,9 +92,11 @@ public class ResponseService {
 		if (current != null) {
 			response.setUser(current);
 		}
+		
 		if (request.getRequestToken() != null && !request.getRequestToken().isBlank()) {
 			response.setRequestToken(request.getRequestToken().trim());
 		}
+		
 		if (request.getDurationSeconds() != null && request.getDurationSeconds() > 0) {
 			response.setDurationSeconds(request.getDurationSeconds());
 		}
@@ -512,14 +514,15 @@ public class ResponseService {
 				pageable);
 
 		List<Response> responses = page.getContent();
-		List<Question> requiredQuestions = questionRepository.findBySurvey(survey);
+		// Lấy tất cả questions và sắp xếp theo displayOrder
+		List<Question> allQuestions = questionRepository.findBySurveyOrderByDisplayOrderAsc(survey);
 
 		if ("xlsx".equalsIgnoreCase(format)) {
-			byte[] bytes = exportXlsx(survey, responses, includeAnswers, requiredQuestions);
+			byte[] bytes = exportXlsx(survey, responses, includeAnswers, allQuestions);
 			return buildDownload(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "responses_" + surveyId + ".xlsx");
 		}
 		// default CSV
-		byte[] bytes = exportCsv(survey, responses, includeAnswers, requiredQuestions);
+		byte[] bytes = exportCsv(survey, responses, includeAnswers, allQuestions);
 		return buildDownload(bytes, "text/csv; charset=UTF-8", "responses_" + surveyId + ".csv");
 	}
 
@@ -572,121 +575,1076 @@ public class ResponseService {
 
 	private byte[] exportCsv(Survey survey, List<Response> responses, boolean includeAnswers, List<Question> questions) {
 		StringBuilder sb = new StringBuilder();
-		// header
-		sb.append("responseId,surveyId,userId,requestToken,submittedAt,durationSeconds,completionStatus");
+		
+		// Thêm UTF-8 BOM để Excel hiểu đúng tiếng Việt
+		sb.append("\uFEFF");
+		
+		// ========== PHẦN 1: TỔNG QUAN ==========
+		sb.append("BÁO CÁO PHẢN HỒI KHẢO SÁT\r\n");
+		sb.append("========================================\r\n");
+		sb.append("\r\n");
+		
+		// Thông tin khảo sát
+		sb.append("Thông tin khảo sát:\r\n");
+		sb.append("Tên khảo sát:,").append(escapeCsv(survey.getTitle() != null ? survey.getTitle() : "N/A")).append("\r\n");
+		sb.append("ID khảo sát:,").append(survey.getSurveyId()).append("\r\n");
+		if (survey.getCreatedAt() != null) {
+			sb.append("Ngày tạo:,").append(escapeCsv(survey.getCreatedAt().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")))).append("\r\n");
+		}
+		if (survey.getStatus() != null) {
+			sb.append("Trạng thái:,").append(escapeCsv(survey.getStatus().name())).append("\r\n");
+		}
+		sb.append("\r\n");
+		
+		// Tính toán thống kê
+		int totalResponses = responses.size();
+		List<Question> requiredQuestions = questions.stream()
+				.filter(q -> Boolean.TRUE.equals(q.getIsRequired()))
+				.collect(Collectors.toList());
+		
+		int completed = 0;
+		int partial = 0;
+		int dropped = 0;
+		
+		for (Response r : responses) {
+			String status = determineCompletionStatus(r, requiredQuestions);
+			if (status.equals("completed")) {
+				completed++;
+			} else if (status.equals("partial")) {
+				partial++;
+			} else {
+				dropped++;
+			}
+		}
+		
+		double completionRate = totalResponses > 0 ? (double) completed / totalResponses * 100 : 0.0;
+		
+		double avgDuration = 0.0;
+		int countWithDuration = 0;
+		for (Response r : responses) {
+			if (r.getDurationSeconds() != null && r.getDurationSeconds() > 0) {
+				avgDuration += r.getDurationSeconds();
+				countWithDuration++;
+			}
+		}
+		if (countWithDuration > 0) {
+			avgDuration = avgDuration / countWithDuration;
+		}
+		String avgTimeStr = formatDuration((int) avgDuration);
+		
+		LocalDateTime firstResponse = null;
+		LocalDateTime lastResponse = null;
+		for (Response r : responses) {
+			if (r.getSubmittedAt() != null) {
+				if (firstResponse == null || r.getSubmittedAt().isBefore(firstResponse)) {
+					firstResponse = r.getSubmittedAt();
+				}
+				if (lastResponse == null || r.getSubmittedAt().isAfter(lastResponse)) {
+					lastResponse = r.getSubmittedAt();
+				}
+			}
+		}
+		
+		// Thống kê phản hồi
+		sb.append("Thống kê phản hồi:\r\n");
+		sb.append("Tổng số phản hồi:,").append(totalResponses).append("\r\n");
+		sb.append("Số phản hồi hoàn thành:,").append(completed).append("\r\n");
+		sb.append("Số phản hồi chưa hoàn thành:,").append(partial).append("\r\n");
+		sb.append("Số phản hồi bỏ dở:,").append(dropped).append("\r\n");
+		sb.append("Tỷ lệ hoàn thành:,").append(String.format("%.2f%%", completionRate)).append("\r\n");
+		sb.append("Thời gian trung bình hoàn thành:,").append(escapeCsv(avgTimeStr)).append("\r\n");
+		if (firstResponse != null) {
+			sb.append("Phản hồi đầu tiên:,").append(escapeCsv(firstResponse.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")))).append("\r\n");
+		}
+		if (lastResponse != null) {
+			sb.append("Phản hồi cuối cùng:,").append(escapeCsv(lastResponse.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")))).append("\r\n");
+		}
+		sb.append("\r\n");
+		
+		// Thống kê câu hỏi
+		sb.append("Thống kê câu hỏi:\r\n");
+		sb.append("Tổng số câu hỏi:,").append(questions.size()).append("\r\n");
+		sb.append("Số câu hỏi bắt buộc:,").append(requiredQuestions.size()).append("\r\n");
+		sb.append("Số câu hỏi tùy chọn:,").append(questions.size() - requiredQuestions.size()).append("\r\n");
+		sb.append("\r\n");
+		
+		// ========== PHẦN 2: THỐNG KÊ TỪNG CÂU HỎI ==========
+		sb.append("THỐNG KÊ TỪNG CÂU HỎI\r\n");
+		sb.append("========================================\r\n");
+		sb.append("STT,Câu hỏi,Số người trả lời,Tỷ lệ (%),Loại câu hỏi\r\n");
+		
+		int stt = 1;
+		for (Question question : questions) {
+			// Đếm số người trả lời
+			int answerCount = 0;
+			for (Response response : responses) {
+				List<Answer> answers = answerRepository.findByResponse(response);
+				boolean hasAnswer = answers.stream()
+						.anyMatch(a -> a.getQuestion() != null && 
+								a.getQuestion().getQuestionId().equals(question.getQuestionId()));
+				if (hasAnswer) {
+					answerCount++;
+				}
+			}
+			
+			double percentage = totalResponses > 0 ? (double) answerCount / totalResponses * 100 : 0.0;
+			String questionText = question.getQuestionText() != null ? question.getQuestionText() : "Câu hỏi " + question.getQuestionId();
+			String questionType = question.getQuestionType() != null ? 
+					translateQuestionType(question.getQuestionType()) : "N/A";
+			
+			sb.append(stt++).append(',')
+					.append(escapeCsv(questionText)).append(',')
+					.append(answerCount).append(',')
+					.append(String.format("%.2f", percentage)).append(',')
+					.append(escapeCsv(questionType)).append("\r\n");
+		}
+		
+		sb.append("TỔNG CỘNG,,").append(totalResponses).append(",100.00,\r\n");
+		sb.append("\r\n");
+		sb.append("\r\n");
+		
+		// ========== PHẦN 2.5: THỐNG KÊ CHI TIẾT TỪNG CÂU HỎI (ĐÁP ÁN VÀ SỐ LƯỢNG) ==========
+		sb.append("THỐNG KÊ CHI TIẾT TỪNG CÂU HỎI - ĐÁP ÁN VÀ SỐ LƯỢNG\r\n");
+		sb.append("========================================\r\n");
+		sb.append("\r\n");
+		
+		for (Question question : questions) {
+			String questionText = question.getQuestionText() != null ? question.getQuestionText() : "Câu hỏi " + question.getQuestionId();
+			sb.append("Câu hỏi: ").append(escapeCsv(questionText)).append("\r\n");
+			sb.append("Tùy chọn,Số lượng,Tỷ lệ (%),Loại câu hỏi\r\n");
+			
+			QuestionTypeEnum questionType = question.getQuestionType();
+			
+			if (questionType == QuestionTypeEnum.multiple_choice || 
+				questionType == QuestionTypeEnum.single_choice ||
+				questionType == QuestionTypeEnum.boolean_ ||
+				questionType == QuestionTypeEnum.rating) {
+				// Câu hỏi có options
+				List<Option> options = optionRepository.findByQuestionOrderByCreatedAt(question);
+				List<Answer> allAnswers = answerRepository.findByQuestion(question);
+				
+				// Đếm số lượng cho mỗi option
+				Map<Long, Integer> optionCounts = new HashMap<>();
+				for (Answer answer : allAnswers) {
+					if (answer.getOption() != null) {
+						Long optionId = answer.getOption().getOptionId();
+						optionCounts.put(optionId, optionCounts.getOrDefault(optionId, 0) + 1);
+					}
+				}
+				
+				// Tính tổng số responses cho câu hỏi này
+				int questionTotalResponses = (int) allAnswers.stream()
+						.map(a -> a.getResponse().getResponseId())
+						.distinct()
+						.count();
+				
+				// Hiển thị từng option
+				for (Option option : options) {
+					int count = optionCounts.getOrDefault(option.getOptionId(), 0);
+					double percentage = questionTotalResponses > 0 ? (double) count / questionTotalResponses * 100 : 0.0;
+					
+					sb.append(escapeCsv(option.getOptionText() != null ? option.getOptionText() : "N/A")).append(',')
+							.append(count).append(',')
+							.append(String.format("%.2f", percentage)).append(',')
+							.append(escapeCsv(translateQuestionType(questionType))).append("\r\n");
+				}
+				
+				// Tổng cộng
+				sb.append("Tổng,").append(questionTotalResponses).append(",100.00,\r\n");
+				
+			} else if (questionType == QuestionTypeEnum.open_ended) {
+				// Câu hỏi mở
+				List<Answer> allAnswers = answerRepository.findByQuestion(question);
+				int answerCount = (int) allAnswers.stream()
+						.filter(a -> a.getAnswerText() != null && !a.getAnswerText().trim().isEmpty())
+						.map(a -> a.getResponse().getResponseId())
+						.distinct()
+						.count();
+				
+				double percentage = totalResponses > 0 ? (double) answerCount / totalResponses * 100 : 0.0;
+				sb.append("Câu hỏi mở,").append(answerCount).append(',')
+						.append(String.format("%.2f", percentage)).append(',')
+						.append(escapeCsv(translateQuestionType(questionType))).append("\r\n");
+			} else {
+				// Các loại câu hỏi khác
+				List<Answer> allAnswers = answerRepository.findByQuestion(question);
+				int answerCount = (int) allAnswers.stream()
+						.map(a -> a.getResponse().getResponseId())
+						.distinct()
+						.count();
+				
+				double percentage = totalResponses > 0 ? (double) answerCount / totalResponses * 100 : 0.0;
+				sb.append("Có trả lời,").append(answerCount).append(',')
+						.append(String.format("%.2f", percentage)).append(',')
+						.append(escapeCsv(translateQuestionType(questionType))).append("\r\n");
+			}
+			
+			sb.append("\r\n"); // Skip một dòng giữa các câu hỏi
+		}
+		
+		sb.append("\r\n");
+		
+		// ========== PHẦN 3: DANH SÁCH PHẢN HỒI ==========
+		sb.append("DANH SÁCH PHẢN HỒI\r\n");
+		sb.append("========================================\r\n");
+		
+		// Header với tên cột rõ ràng hơn
+		sb.append("STT,Response ID,Survey ID,User ID,Request Token,Submitted At,Duration (seconds),Completion Status");
 		if (includeAnswers) {
 			for (Question q : questions) {
 				sb.append(',').append(escapeCsv(q.getQuestionText() != null ? q.getQuestionText() : ("Q" + q.getQuestionId())));
 			}
 		}
-		sb.append("\n");
+		sb.append("\r\n"); // Dùng \r\n cho Windows compatibility
 
 		List<Question> required = questions.stream().filter(q -> Boolean.TRUE.equals(q.getIsRequired())).toList();
 
+		stt = 1;
 		for (Response r : responses) {
 			String status = determineCompletionStatus(r, required);
-			sb.append(r.getResponseId()).append(',')
+			String statusVi = status.equals("completed") ? "Hoàn thành" : 
+							  status.equals("partial") ? "Chưa hoàn thành" : "Bỏ dở";
+			
+			// Format submittedAt đúng chuẩn
+			String submittedAtStr = r.getSubmittedAt() != null 
+				? r.getSubmittedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"))
+				: "";
+			
+			sb.append(stt++).append(',')
+					.append(r.getResponseId()).append(',')
 					.append(r.getSurvey().getSurveyId()).append(',')
 					.append(r.getUser() != null ? r.getUser().getUserId() : "").append(',')
 					.append(escapeCsv(r.getRequestToken())).append(',')
-					.append(r.getSubmittedAt()).append(',')
+					.append(escapeCsv(submittedAtStr)).append(',')
 					.append(r.getDurationSeconds() != null ? r.getDurationSeconds() : "").append(',')
-					.append(status);
+					.append(escapeCsv(statusVi));
 			if (includeAnswers) {
 				List<Answer> answers = answerRepository.findByResponse(r);
 				Map<Long, List<Answer>> byQ = answers.stream().collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
 				for (Question q : questions) {
 					List<Answer> list = byQ.getOrDefault(q.getQuestionId(), List.of());
-					String val;
-					if (q.getQuestionType() == QuestionTypeEnum.multiple_choice) {
-						val = list.stream().filter(a -> a.getOption() != null)
-								.map(a -> a.getOption().getOptionText())
-								.filter(Objects::nonNull)
-								.collect(Collectors.joining("; "));
-					} else if (q.getQuestionType() == QuestionTypeEnum.single_choice || q.getQuestionType() == QuestionTypeEnum.boolean_ || q.getQuestionType() == QuestionTypeEnum.rating) {
-						Answer a = list.isEmpty() ? null : list.get(0);
-						val = a != null ? (a.getOption() != null ? a.getOption().getOptionText() : a.getAnswerText()) : "";
-					} else {
-						Answer a = list.isEmpty() ? null : list.get(0);
-						val = a != null ? a.getAnswerText() : "";
-					}
+					String val = formatAnswerValueForCsv(list, q.getQuestionType());
 					sb.append(',').append(escapeCsv(val));
 				}
 			}
-			sb.append("\n");
+			sb.append("\r\n"); // Dùng \r\n
 		}
 		return sb.toString().getBytes(StandardCharsets.UTF_8);
+	}
+	
+	/**
+	 * Format answer value cho CSV (giống với Excel)
+	 */
+	private String formatAnswerValueForCsv(List<Answer> list, QuestionTypeEnum questionType) {
+		if (list == null || list.isEmpty()) {
+			return "";
+		}
+		
+		if (questionType == QuestionTypeEnum.multiple_choice || questionType == QuestionTypeEnum.ranking) {
+			// Nhiều lựa chọn - nối bằng dấu phẩy
+			return list.stream()
+					.filter(a -> a.getOption() != null)
+					.map(a -> a.getOption().getOptionText())
+					.filter(Objects::nonNull)
+					.collect(Collectors.joining(", "));
+		} else if (questionType == QuestionTypeEnum.single_choice || 
+				   questionType == QuestionTypeEnum.boolean_ || 
+				   questionType == QuestionTypeEnum.rating) {
+			Answer a = list.get(0);
+			if (a == null) return "";
+			if (a.getOption() != null && a.getOption().getOptionText() != null) {
+				return a.getOption().getOptionText();
+			}
+			return a.getAnswerText() != null ? a.getAnswerText() : "";
+		} else {
+			// Open-ended, date_time, file_upload, etc.
+			Answer a = list.get(0);
+			return a != null && a.getAnswerText() != null ? a.getAnswerText() : "";
+		}
 	}
 
 	private byte[] exportXlsx(Survey survey, List<Response> responses, boolean includeAnswers, List<Question> questions) {
 		try {
 			org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
-			org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Responses");
-			int rowIdx = 0;
-			// header
-			org.apache.poi.ss.usermodel.Row header = sheet.createRow(rowIdx++);
-			int col = 0;
-			header.createCell(col++).setCellValue("responseId");
-			header.createCell(col++).setCellValue("surveyId");
-			header.createCell(col++).setCellValue("userId");
-			header.createCell(col++).setCellValue("requestToken");
-			header.createCell(col++).setCellValue("submittedAt");
-			header.createCell(col++).setCellValue("durationSeconds");
-			header.createCell(col++).setCellValue("completionStatus");
-			if (includeAnswers) {
-				for (Question q : questions) {
-					header.createCell(col++).setCellValue(q.getQuestionText() != null ? q.getQuestionText() : ("Q" + q.getQuestionId()));
-				}
-			}
-
-			List<Question> required = questions.stream().filter(q -> Boolean.TRUE.equals(q.getIsRequired())).toList();
-
-			for (Response r : responses) {
-				org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
-				int c = 0;
-				String status = determineCompletionStatus(r, required);
-				row.createCell(c++).setCellValue(r.getResponseId());
-				row.createCell(c++).setCellValue(r.getSurvey().getSurveyId());
-				row.createCell(c++).setCellValue(r.getUser() != null ? r.getUser().getUserId() : 0);
-				row.createCell(c++).setCellValue(Optional.ofNullable(r.getRequestToken()).orElse(""));
-				row.createCell(c++).setCellValue(r.getSubmittedAt() != null ? r.getSubmittedAt().toString() : "");
-				row.createCell(c++).setCellValue(r.getDurationSeconds() != null ? r.getDurationSeconds() : 0);
-				row.createCell(c++).setCellValue(status);
-				if (includeAnswers) {
-					List<Answer> answers = answerRepository.findByResponse(r);
-					Map<Long, List<Answer>> byQ = answers.stream().collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
-					for (Question q : questions) {
-						List<Answer> list = byQ.getOrDefault(q.getQuestionId(), List.of());
-						String val;
-						if (q.getQuestionType() == QuestionTypeEnum.multiple_choice) {
-							val = list.stream().filter(a -> a.getOption() != null)
-									.map(a -> a.getOption().getOptionText())
-									.filter(Objects::nonNull)
-									.collect(Collectors.joining("; "));
-						} else if (q.getQuestionType() == QuestionTypeEnum.single_choice || q.getQuestionType() == QuestionTypeEnum.boolean_ || q.getQuestionType() == QuestionTypeEnum.rating) {
-							Answer a = list.isEmpty() ? null : list.get(0);
-							val = a != null ? (a.getOption() != null ? a.getOption().getOptionText() : a.getAnswerText()) : "";
-						} else {
-							Answer a = list.isEmpty() ? null : list.get(0);
-							val = a != null ? a.getAnswerText() : "";
-						}
-						row.createCell(c++).setCellValue(val);
-					}
-				}
-			}
-
+			
+			// Sắp xếp questions theo displayOrder
+			List<Question> sortedQuestions = new ArrayList<>(questions);
+			sortedQuestions.sort((q1, q2) -> {
+				Integer order1 = q1.getDisplayOrder() != null ? q1.getDisplayOrder() : 0;
+				Integer order2 = q2.getDisplayOrder() != null ? q2.getDisplayOrder() : 0;
+				return Integer.compare(order1, order2);
+			});
+			
+			// Tạo các style
+			org.apache.poi.ss.usermodel.CellStyle headerStyle = createHeaderStyle(wb);
+			org.apache.poi.ss.usermodel.CellStyle dataStyle = createDataStyle(wb);
+			org.apache.poi.ss.usermodel.CellStyle dateStyle = createDateStyle(wb);
+			org.apache.poi.ss.usermodel.CellStyle numberStyle = createNumberStyle(wb);
+			org.apache.poi.ss.usermodel.CellStyle titleStyle = createTitleStyle(wb);
+			org.apache.poi.ss.usermodel.CellStyle completedStyle = createStatusStyle(wb, true);
+			org.apache.poi.ss.usermodel.CellStyle partialStyle = createStatusStyle(wb, false);
+			
+			// Sheet 1: Tổng quan
+			createOverviewSheet(wb, survey, responses, sortedQuestions, titleStyle, dataStyle, numberStyle);
+			
+			// Sheet 2: Thống kê câu hỏi
+			createQuestionStatsSheet(wb, survey, responses, sortedQuestions, headerStyle, dataStyle, numberStyle);
+			
+			// Sheet 3: Thống kê chi tiết từng câu hỏi (đáp án và số lượng)
+			createDetailedQuestionStatsSheet(wb, survey, responses, sortedQuestions, headerStyle, dataStyle, numberStyle);
+			
+			// Sheet 4: Danh sách phản hồi
+			createResponsesSheet(wb, survey, responses, includeAnswers, sortedQuestions, 
+					headerStyle, dataStyle, dateStyle, numberStyle, completedStyle, partialStyle);
+			
 			java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
 			wb.write(bos);
 			wb.close();
 			return bos.toByteArray();
 		} catch (Exception e) {
+			e.printStackTrace();
 			return new byte[0];
 		}
+	}
+	
+	/**
+	 * Tạo sheet Tổng quan với thống kê đầy đủ
+	 */
+	private void createOverviewSheet(org.apache.poi.xssf.usermodel.XSSFWorkbook wb, 
+			Survey survey, List<Response> responses, List<Question> questions,
+			org.apache.poi.ss.usermodel.CellStyle titleStyle,
+			org.apache.poi.ss.usermodel.CellStyle dataStyle,
+			org.apache.poi.ss.usermodel.CellStyle numberStyle) {
+		org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Tổng quan");
+		int rowIdx = 0;
+		
+		// Title
+		org.apache.poi.ss.usermodel.Row titleRow = sheet.createRow(rowIdx++);
+		org.apache.poi.ss.usermodel.Cell titleCell = titleRow.createCell(0);
+		titleCell.setCellValue("BÁO CÁO PHẢN HỒI KHẢO SÁT");
+		titleCell.setCellStyle(titleStyle);
+		sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(0, 0, 0, 1));
+		
+		rowIdx++; // Skip một dòng
+		
+		// Thông tin survey
+		addInfoRow(sheet, rowIdx++, "Tên khảo sát:", 
+				survey.getTitle() != null ? survey.getTitle() : "N/A", dataStyle);
+		addInfoRow(sheet, rowIdx++, "ID khảo sát:", String.valueOf(survey.getSurveyId()), dataStyle);
+		addInfoRow(sheet, rowIdx++, "Ngày tạo:", 
+				survey.getCreatedAt() != null 
+					? survey.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+					: "N/A", dataStyle);
+		addInfoRow(sheet, rowIdx++, "Trạng thái:", 
+				survey.getStatus() != null ? survey.getStatus().name() : "N/A", dataStyle);
+		
+		rowIdx++; // Skip một dòng
+		
+		// Tính toán thống kê
+		int totalResponses = responses.size();
+		List<Question> requiredQuestions = questions.stream()
+				.filter(q -> Boolean.TRUE.equals(q.getIsRequired()))
+				.collect(Collectors.toList());
+		
+		// Đếm completed, partial, dropped
+		int completed = 0;
+		int partial = 0;
+		int dropped = 0;
+		
+		for (Response r : responses) {
+			String status = determineCompletionStatus(r, requiredQuestions);
+			if (status.equals("completed")) {
+				completed++;
+			} else if (status.equals("partial")) {
+				partial++;
+			} else {
+				dropped++;
+			}
+		}
+		
+		// Tính tỷ lệ hoàn thành
+		double completionRate = totalResponses > 0 ? (double) completed / totalResponses * 100 : 0.0;
+		
+		// Tính thời gian trung bình hoàn thành
+		double avgDuration = 0.0;
+		int countWithDuration = 0;
+		for (Response r : responses) {
+			if (r.getDurationSeconds() != null && r.getDurationSeconds() > 0) {
+				avgDuration += r.getDurationSeconds();
+				countWithDuration++;
+			}
+		}
+		if (countWithDuration > 0) {
+			avgDuration = avgDuration / countWithDuration;
+		}
+		String avgTimeStr = formatDuration((int) avgDuration);
+		
+		// Tìm ngày phản hồi đầu tiên và cuối cùng
+		LocalDateTime firstResponse = null;
+		LocalDateTime lastResponse = null;
+		for (Response r : responses) {
+			if (r.getSubmittedAt() != null) {
+				if (firstResponse == null || r.getSubmittedAt().isBefore(firstResponse)) {
+					firstResponse = r.getSubmittedAt();
+				}
+				if (lastResponse == null || r.getSubmittedAt().isAfter(lastResponse)) {
+					lastResponse = r.getSubmittedAt();
+				}
+			}
+		}
+		
+		// Thống kê phản hồi
+		org.apache.poi.ss.usermodel.Row statsTitleRow = sheet.createRow(rowIdx++);
+		org.apache.poi.ss.usermodel.Cell statsTitleCell = statsTitleRow.createCell(0);
+		statsTitleCell.setCellValue("THỐNG KÊ PHẢN HỒI");
+		org.apache.poi.ss.usermodel.Font statsTitleFont = wb.createFont();
+		statsTitleFont.setBold(true);
+		statsTitleFont.setFontHeightInPoints((short) 12);
+		org.apache.poi.ss.usermodel.CellStyle statsTitleStyle = wb.createCellStyle();
+		statsTitleStyle.setFont(statsTitleFont);
+		statsTitleCell.setCellStyle(statsTitleStyle);
+		sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowIdx - 1, rowIdx - 1, 0, 1));
+		
+		rowIdx++; // Skip một dòng
+		
+		// Thống kê số lượng
+		addInfoRow(sheet, rowIdx++, "Tổng số phản hồi:", String.valueOf(totalResponses), dataStyle);
+		addInfoRowWithNumber(sheet, rowIdx++, "Số phản hồi hoàn thành:", completed, dataStyle, numberStyle);
+		addInfoRowWithNumber(sheet, rowIdx++, "Số phản hồi chưa hoàn thành:", partial, dataStyle, numberStyle);
+		addInfoRowWithNumber(sheet, rowIdx++, "Số phản hồi bỏ dở:", dropped, dataStyle, numberStyle);
+		
+		rowIdx++; // Skip một dòng
+		
+		// Tỷ lệ và thời gian
+		addInfoRow(sheet, rowIdx++, "Tỷ lệ hoàn thành:", 
+				String.format("%.2f%%", completionRate), dataStyle);
+		addInfoRow(sheet, rowIdx++, "Thời gian trung bình hoàn thành:", avgTimeStr, dataStyle);
+		
+		rowIdx++; // Skip một dòng
+		
+		// Thông tin thời gian
+		if (firstResponse != null) {
+			addInfoRow(sheet, rowIdx++, "Phản hồi đầu tiên:", 
+					firstResponse.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")), dataStyle);
+		}
+		if (lastResponse != null) {
+			addInfoRow(sheet, rowIdx++, "Phản hồi cuối cùng:", 
+					lastResponse.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")), dataStyle);
+		}
+		
+		rowIdx++; // Skip một dòng
+		
+		// Thống kê câu hỏi
+		org.apache.poi.ss.usermodel.Row questionsTitleRow = sheet.createRow(rowIdx++);
+		org.apache.poi.ss.usermodel.Cell questionsTitleCell = questionsTitleRow.createCell(0);
+		questionsTitleCell.setCellValue("THỐNG KÊ CÂU HỎI");
+		questionsTitleCell.setCellStyle(statsTitleStyle);
+		sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowIdx - 1, rowIdx - 1, 0, 1));
+		
+		rowIdx++; // Skip một dòng
+		
+		addInfoRowWithNumber(sheet, rowIdx++, "Tổng số câu hỏi:", questions.size(), dataStyle, numberStyle);
+		addInfoRowWithNumber(sheet, rowIdx++, "Số câu hỏi bắt buộc:", requiredQuestions.size(), dataStyle, numberStyle);
+		addInfoRowWithNumber(sheet, rowIdx++, "Số câu hỏi tùy chọn:", 
+				questions.size() - requiredQuestions.size(), dataStyle, numberStyle);
+		
+		// Auto-size columns
+		sheet.autoSizeColumn(0);
+		sheet.autoSizeColumn(1);
+	}
+	
+	/**
+	 * Format thời gian từ giây sang định dạng dễ đọc
+	 */
+	private String formatDuration(int seconds) {
+		if (seconds < 60) {
+			return seconds + " giây";
+		} else if (seconds < 3600) {
+			int minutes = seconds / 60;
+			int secs = seconds % 60;
+			return minutes + " phút " + secs + " giây";
+		} else {
+			int hours = seconds / 3600;
+			int minutes = (seconds % 3600) / 60;
+			int secs = seconds % 60;
+			return hours + " giờ " + minutes + " phút " + secs + " giây";
+		}
+	}
+	
+	/**
+	 * Helper method để thêm một dòng thông tin với số
+	 */
+	private void addInfoRowWithNumber(org.apache.poi.ss.usermodel.Sheet sheet, int rowIdx, 
+			String label, int value, org.apache.poi.ss.usermodel.CellStyle labelStyle,
+			org.apache.poi.ss.usermodel.CellStyle numberStyle) {
+		org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx);
+		row.createCell(0).setCellValue(label);
+		row.createCell(1).setCellValue(value);
+		row.getCell(0).setCellStyle(labelStyle);
+		row.getCell(1).setCellStyle(numberStyle);
+	}
+	
+	/**
+	 * Tạo sheet Thống kê câu hỏi
+	 */
+	private void createQuestionStatsSheet(org.apache.poi.xssf.usermodel.XSSFWorkbook wb,
+			Survey survey, List<Response> responses, List<Question> questions,
+			org.apache.poi.ss.usermodel.CellStyle headerStyle,
+			org.apache.poi.ss.usermodel.CellStyle dataStyle,
+			org.apache.poi.ss.usermodel.CellStyle numberStyle) {
+		org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Thống kê câu hỏi");
+		int rowIdx = 0;
+		
+		// Title
+		org.apache.poi.ss.usermodel.Row titleRow = sheet.createRow(rowIdx++);
+		org.apache.poi.ss.usermodel.Cell titleCell = titleRow.createCell(0);
+		titleCell.setCellValue("THỐNG KÊ TỪNG CÂU HỎI");
+		org.apache.poi.ss.usermodel.Font titleFont = wb.createFont();
+		titleFont.setBold(true);
+		titleFont.setFontHeightInPoints((short) 14);
+		org.apache.poi.ss.usermodel.CellStyle titleStyle = wb.createCellStyle();
+		titleStyle.setFont(titleFont);
+		titleCell.setCellStyle(titleStyle);
+		sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(0, 0, 0, 4));
+		
+		rowIdx++; // Skip một dòng
+		
+		// Header row
+		org.apache.poi.ss.usermodel.Row header = sheet.createRow(rowIdx++);
+		header.createCell(0).setCellValue("STT");
+		header.createCell(1).setCellValue("Câu hỏi");
+		header.createCell(2).setCellValue("Số người trả lời");
+		header.createCell(3).setCellValue("Tỷ lệ (%)");
+		header.createCell(4).setCellValue("Loại câu hỏi");
+		
+		for (int i = 0; i < 5; i++) {
+			header.getCell(i).setCellStyle(headerStyle);
+		}
+		
+		// Tính tổng số responses
+		int totalResponses = responses.size();
+		
+		// Data rows
+		int stt = 1;
+		for (Question question : questions) {
+			org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
+			
+			// Đếm số người trả lời câu hỏi này
+			int answerCount = 0;
+			for (Response response : responses) {
+				List<Answer> answers = answerRepository.findByResponse(response);
+				boolean hasAnswer = answers.stream()
+						.anyMatch(a -> a.getQuestion() != null && 
+								a.getQuestion().getQuestionId().equals(question.getQuestionId()));
+				if (hasAnswer) {
+					answerCount++;
+				}
+			}
+			
+			// Tính tỷ lệ
+			double percentage = totalResponses > 0 ? (double) answerCount / totalResponses * 100 : 0.0;
+			
+			// STT
+			row.createCell(0).setCellValue(stt++);
+			row.getCell(0).setCellStyle(numberStyle);
+			
+			// Câu hỏi
+			String questionText = question.getQuestionText() != null ? question.getQuestionText() : "Câu hỏi " + question.getQuestionId();
+			row.createCell(1).setCellValue(questionText);
+			row.getCell(1).setCellStyle(dataStyle);
+			
+			// Số người trả lời
+			row.createCell(2).setCellValue(answerCount);
+			row.getCell(2).setCellStyle(numberStyle);
+			
+			// Tỷ lệ
+			row.createCell(3).setCellValue(percentage);
+			org.apache.poi.ss.usermodel.CellStyle percentageStyle = wb.createCellStyle();
+			percentageStyle.cloneStyleFrom(numberStyle);
+			org.apache.poi.ss.usermodel.CreationHelper createHelper = wb.getCreationHelper();
+			percentageStyle.setDataFormat(createHelper.createDataFormat().getFormat("0.00"));
+			row.getCell(3).setCellStyle(percentageStyle);
+			
+			// Loại câu hỏi
+			String questionType = question.getQuestionType() != null ? 
+					translateQuestionType(question.getQuestionType()) : "N/A";
+			row.createCell(4).setCellValue(questionType);
+			row.getCell(4).setCellStyle(dataStyle);
+		}
+		
+		rowIdx++; // Skip một dòng
+		
+		// Tổng cộng
+		org.apache.poi.ss.usermodel.Row totalRow = sheet.createRow(rowIdx++);
+		totalRow.createCell(0).setCellValue("TỔNG CỘNG");
+		totalRow.createCell(1).setCellValue("");
+		totalRow.createCell(2).setCellValue(totalResponses);
+		totalRow.createCell(3).setCellValue(100.0);
+		totalRow.createCell(4).setCellValue("");
+		
+		for (int i = 0; i < 5; i++) {
+			totalRow.getCell(i).setCellStyle(headerStyle);
+		}
+		
+		// Auto-size columns
+		for (int i = 0; i < 5; i++) {
+			sheet.autoSizeColumn(i);
+			int currentWidth = sheet.getColumnWidth(i);
+			sheet.setColumnWidth(i, currentWidth + 1000);
+			if (sheet.getColumnWidth(i) > 20000) {
+				sheet.setColumnWidth(i, 20000);
+			}
+		}
+	}
+	
+	/**
+	 * Tạo sheet Thống kê chi tiết từng câu hỏi (đáp án và số lượng)
+	 */
+	private void createDetailedQuestionStatsSheet(org.apache.poi.xssf.usermodel.XSSFWorkbook wb,
+			Survey survey, List<Response> responses, List<Question> questions,
+			org.apache.poi.ss.usermodel.CellStyle headerStyle,
+			org.apache.poi.ss.usermodel.CellStyle dataStyle,
+			org.apache.poi.ss.usermodel.CellStyle numberStyle) {
+		org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Thống kê chi tiết");
+		int rowIdx = 0;
+		
+		// Title
+		org.apache.poi.ss.usermodel.Row titleRow = sheet.createRow(rowIdx++);
+		org.apache.poi.ss.usermodel.Cell titleCell = titleRow.createCell(0);
+		titleCell.setCellValue("THỐNG KÊ CHI TIẾT TỪNG CÂU HỎI - ĐÁP ÁN VÀ SỐ LƯỢNG");
+		org.apache.poi.ss.usermodel.Font titleFont = wb.createFont();
+		titleFont.setBold(true);
+		titleFont.setFontHeightInPoints((short) 14);
+		org.apache.poi.ss.usermodel.CellStyle titleStyle = wb.createCellStyle();
+		titleStyle.setFont(titleFont);
+		titleCell.setCellStyle(titleStyle);
+		sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(0, 0, 0, 3));
+		
+		rowIdx++; // Skip một dòng
+		
+		// Tính tổng số responses
+		int totalResponses = responses.size();
+		
+		// Xử lý từng câu hỏi
+		for (Question question : questions) {
+			// Câu hỏi title
+			org.apache.poi.ss.usermodel.Row questionTitleRow = sheet.createRow(rowIdx++);
+			org.apache.poi.ss.usermodel.Cell questionTitleCell = questionTitleRow.createCell(0);
+			String questionText = question.getQuestionText() != null ? question.getQuestionText() : "Câu hỏi " + question.getQuestionId();
+			questionTitleCell.setCellValue(questionText);
+			org.apache.poi.ss.usermodel.Font questionFont = wb.createFont();
+			questionFont.setBold(true);
+			questionFont.setFontHeightInPoints((short) 12);
+			org.apache.poi.ss.usermodel.CellStyle questionStyle = wb.createCellStyle();
+			questionStyle.setFont(questionFont);
+			questionStyle.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.LIGHT_BLUE.getIndex());
+			questionStyle.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
+			questionTitleCell.setCellStyle(questionStyle);
+			sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(rowIdx - 1, rowIdx - 1, 0, 3));
+			
+			// Header cho bảng đáp án
+			org.apache.poi.ss.usermodel.Row header = sheet.createRow(rowIdx++);
+			header.createCell(0).setCellValue("Tùy chọn");
+			header.createCell(1).setCellValue("Số lượng");
+			header.createCell(2).setCellValue("Tỷ lệ (%)");
+			header.createCell(3).setCellValue("Loại câu hỏi");
+			
+			for (int i = 0; i < 4; i++) {
+				header.getCell(i).setCellStyle(headerStyle);
+			}
+			
+			// Xử lý theo loại câu hỏi
+			QuestionTypeEnum questionType = question.getQuestionType();
+			
+			if (questionType == QuestionTypeEnum.multiple_choice || 
+				questionType == QuestionTypeEnum.single_choice ||
+				questionType == QuestionTypeEnum.boolean_ ||
+				questionType == QuestionTypeEnum.rating) {
+				// Câu hỏi có options
+				List<Option> options = optionRepository.findByQuestionOrderByCreatedAt(question);
+				List<Answer> allAnswers = answerRepository.findByQuestion(question);
+				
+				// Đếm số lượng cho mỗi option
+				Map<Long, Integer> optionCounts = new HashMap<>();
+				for (Answer answer : allAnswers) {
+					if (answer.getOption() != null) {
+						Long optionId = answer.getOption().getOptionId();
+						optionCounts.put(optionId, optionCounts.getOrDefault(optionId, 0) + 1);
+					}
+				}
+				
+				// Tính tổng số responses cho câu hỏi này (unique responses)
+				int questionTotalResponses = (int) allAnswers.stream()
+						.map(a -> a.getResponse().getResponseId())
+						.distinct()
+						.count();
+				
+				// Hiển thị từng option
+				for (Option option : options) {
+					org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
+					int count = optionCounts.getOrDefault(option.getOptionId(), 0);
+					double percentage = questionTotalResponses > 0 ? (double) count / questionTotalResponses * 100 : 0.0;
+					
+					row.createCell(0).setCellValue(option.getOptionText() != null ? option.getOptionText() : "N/A");
+					row.createCell(1).setCellValue(count);
+					row.createCell(2).setCellValue(percentage);
+					row.createCell(3).setCellValue(translateQuestionType(questionType));
+					
+					row.getCell(0).setCellStyle(dataStyle);
+					row.getCell(1).setCellStyle(numberStyle);
+					
+					// Format percentage
+					org.apache.poi.ss.usermodel.CellStyle percentageStyle = wb.createCellStyle();
+					percentageStyle.cloneStyleFrom(numberStyle);
+					org.apache.poi.ss.usermodel.CreationHelper createHelper = wb.getCreationHelper();
+					percentageStyle.setDataFormat(createHelper.createDataFormat().getFormat("0.00"));
+					row.getCell(2).setCellStyle(percentageStyle);
+					row.getCell(3).setCellStyle(dataStyle);
+				}
+				
+				// Tổng cộng cho câu hỏi này
+				org.apache.poi.ss.usermodel.Row totalRow = sheet.createRow(rowIdx++);
+				totalRow.createCell(0).setCellValue("Tổng");
+				totalRow.createCell(1).setCellValue(questionTotalResponses);
+				totalRow.createCell(2).setCellValue(100.0);
+				totalRow.createCell(3).setCellValue("");
+				
+				for (int i = 0; i < 4; i++) {
+					totalRow.getCell(i).setCellStyle(headerStyle);
+				}
+				
+			} else if (questionType == QuestionTypeEnum.open_ended) {
+				// Câu hỏi mở - đếm số người trả lời
+				List<Answer> allAnswers = answerRepository.findByQuestion(question);
+				int answerCount = (int) allAnswers.stream()
+						.filter(a -> a.getAnswerText() != null && !a.getAnswerText().trim().isEmpty())
+						.map(a -> a.getResponse().getResponseId())
+						.distinct()
+						.count();
+				
+				org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
+				row.createCell(0).setCellValue("Câu hỏi mở");
+				row.createCell(1).setCellValue(answerCount);
+				double percentage = totalResponses > 0 ? (double) answerCount / totalResponses * 100 : 0.0;
+				row.createCell(2).setCellValue(percentage);
+				row.createCell(3).setCellValue(translateQuestionType(questionType));
+				
+				row.getCell(0).setCellStyle(dataStyle);
+				row.getCell(1).setCellStyle(numberStyle);
+				
+				org.apache.poi.ss.usermodel.CellStyle percentageStyle = wb.createCellStyle();
+				percentageStyle.cloneStyleFrom(numberStyle);
+				org.apache.poi.ss.usermodel.CreationHelper createHelper = wb.getCreationHelper();
+				percentageStyle.setDataFormat(createHelper.createDataFormat().getFormat("0.00"));
+				row.getCell(2).setCellStyle(percentageStyle);
+				row.getCell(3).setCellStyle(dataStyle);
+				
+			} else {
+				// Các loại câu hỏi khác
+				List<Answer> allAnswers = answerRepository.findByQuestion(question);
+				int answerCount = (int) allAnswers.stream()
+						.map(a -> a.getResponse().getResponseId())
+						.distinct()
+						.count();
+				
+				org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
+				row.createCell(0).setCellValue("Có trả lời");
+				row.createCell(1).setCellValue(answerCount);
+				double percentage = totalResponses > 0 ? (double) answerCount / totalResponses * 100 : 0.0;
+				row.createCell(2).setCellValue(percentage);
+				row.createCell(3).setCellValue(translateQuestionType(questionType));
+				
+				row.getCell(0).setCellStyle(dataStyle);
+				row.getCell(1).setCellStyle(numberStyle);
+				
+				org.apache.poi.ss.usermodel.CellStyle percentageStyle = wb.createCellStyle();
+				percentageStyle.cloneStyleFrom(numberStyle);
+				org.apache.poi.ss.usermodel.CreationHelper createHelper = wb.getCreationHelper();
+				percentageStyle.setDataFormat(createHelper.createDataFormat().getFormat("0.00"));
+				row.getCell(2).setCellStyle(percentageStyle);
+				row.getCell(3).setCellStyle(dataStyle);
+			}
+			
+			rowIdx++; // Skip một dòng giữa các câu hỏi
+		}
+		
+		// Auto-size columns
+		for (int i = 0; i < 4; i++) {
+			sheet.autoSizeColumn(i);
+			int currentWidth = sheet.getColumnWidth(i);
+			sheet.setColumnWidth(i, currentWidth + 1000);
+			if (sheet.getColumnWidth(i) > 20000) {
+				sheet.setColumnWidth(i, 20000);
+			}
+		}
+	}
+	
+	/**
+	 * Dịch loại câu hỏi sang tiếng Việt
+	 */
+	private String translateQuestionType(QuestionTypeEnum type) {
+		if (type == null) return "N/A";
+		switch (type) {
+			case multiple_choice:
+				return "Nhiều lựa chọn";
+			case single_choice:
+				return "Một lựa chọn";
+			case boolean_:
+				return "Có/Không";
+			case rating:
+				return "Đánh giá";
+			case open_ended:
+				return "Câu hỏi mở";
+			case ranking:
+				return "Xếp hạng";
+			case date_time:
+				return "Ngày/giờ";
+			case file_upload:
+				return "Tải file";
+			default:
+				return type.name();
+		}
+	}
+	
+	/**
+	 * Tạo sheet Danh sách phản hồi
+	 */
+	private void createResponsesSheet(org.apache.poi.xssf.usermodel.XSSFWorkbook wb,
+			Survey survey, List<Response> responses, boolean includeAnswers, List<Question> questions,
+			org.apache.poi.ss.usermodel.CellStyle headerStyle,
+			org.apache.poi.ss.usermodel.CellStyle dataStyle,
+			org.apache.poi.ss.usermodel.CellStyle dateStyle,
+			org.apache.poi.ss.usermodel.CellStyle numberStyle,
+			org.apache.poi.ss.usermodel.CellStyle completedStyle,
+			org.apache.poi.ss.usermodel.CellStyle partialStyle) {
+		org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Danh sách phản hồi");
+		int rowIdx = 0;
+		
+		// Header row
+		org.apache.poi.ss.usermodel.Row header = sheet.createRow(rowIdx++);
+		int col = 0;
+		
+		// Header tiếng Việt rõ ràng
+		String[] headerNames = {"STT", "Mã phản hồi", "Ngày gửi", "Thời gian (giây)", "Trạng thái"};
+		for (String headerName : headerNames) {
+			org.apache.poi.ss.usermodel.Cell cell = header.createCell(col++);
+			cell.setCellValue(headerName);
+			cell.setCellStyle(headerStyle);
+		}
+		
+		if (includeAnswers) {
+			for (Question q : questions) {
+				org.apache.poi.ss.usermodel.Cell cell = header.createCell(col++);
+				String questionText = q.getQuestionText() != null ? q.getQuestionText() : ("Câu hỏi " + q.getQuestionId());
+				// Giới hạn độ dài header
+				if (questionText.length() > 50) {
+					questionText = questionText.substring(0, 47) + "...";
+				}
+				cell.setCellValue(questionText);
+				cell.setCellStyle(headerStyle);
+			}
+		}
+		
+		// Freeze panes để header luôn hiển thị
+		sheet.createFreezePane(0, 1);
+		
+		List<Question> required = questions.stream().filter(q -> Boolean.TRUE.equals(q.getIsRequired())).toList();
+
+		// Data rows
+		int stt = 1;
+		for (Response r : responses) {
+			org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
+			int c = 0;
+			String status = determineCompletionStatus(r, required);
+			String statusVi = status.equals("completed") ? "Hoàn thành" : 
+							  status.equals("partial") ? "Chưa hoàn thành" : "Bỏ dở";
+			
+			// STT
+			org.apache.poi.ss.usermodel.Cell cell0 = row.createCell(c++);
+			cell0.setCellValue(stt++);
+			cell0.setCellStyle(numberStyle);
+			
+			// Response ID
+			org.apache.poi.ss.usermodel.Cell cell1 = row.createCell(c++);
+			cell1.setCellValue(r.getResponseId());
+			cell1.setCellStyle(numberStyle);
+			
+			// Submitted At (Date format - dd/MM/yyyy HH:mm:ss)
+			org.apache.poi.ss.usermodel.Cell cell2 = row.createCell(c++);
+			if (r.getSubmittedAt() != null) {
+				cell2.setCellValue(r.getSubmittedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")));
+				cell2.setCellStyle(dataStyle);
+			} else {
+				cell2.setCellValue("N/A");
+				cell2.setCellStyle(dataStyle);
+			}
+			
+			// Duration Seconds
+			org.apache.poi.ss.usermodel.Cell cell3 = row.createCell(c++);
+			cell3.setCellValue(r.getDurationSeconds() != null ? r.getDurationSeconds() : 0);
+			cell3.setCellStyle(numberStyle);
+			
+			// Completion Status (có màu)
+			org.apache.poi.ss.usermodel.Cell cell4 = row.createCell(c++);
+			cell4.setCellValue(statusVi);
+			if (status.equals("completed")) {
+				cell4.setCellStyle(completedStyle);
+			} else {
+				cell4.setCellStyle(partialStyle);
+			}
+			
+			if (includeAnswers) {
+				List<Answer> answers = answerRepository.findByResponse(r);
+				Map<Long, List<Answer>> byQ = answers.stream().collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
+				for (Question q : questions) {
+					List<Answer> list = byQ.getOrDefault(q.getQuestionId(), List.of());
+					String val = formatAnswerValue(list, q.getQuestionType());
+					org.apache.poi.ss.usermodel.Cell cell = row.createCell(c++);
+					cell.setCellValue(val);
+					cell.setCellStyle(dataStyle);
+				}
+			}
+		}
+		
+		// Auto-size columns với giới hạn
+		for (int i = 0; i < col; i++) {
+			sheet.autoSizeColumn(i);
+			int currentWidth = sheet.getColumnWidth(i);
+			// Thêm padding
+			sheet.setColumnWidth(i, currentWidth + 1000);
+			// Giới hạn độ rộng tối đa
+			if (sheet.getColumnWidth(i) > 15000) {
+				sheet.setColumnWidth(i, 15000);
+			}
+		}
+	}
+	
+	/**
+	 * Format giá trị câu trả lời
+	 */
+	private String formatAnswerValue(List<Answer> list, QuestionTypeEnum questionType) {
+		if (list == null || list.isEmpty()) {
+			return "";
+		}
+		
+		if (questionType == QuestionTypeEnum.multiple_choice || questionType == QuestionTypeEnum.ranking) {
+			// Nhiều lựa chọn - nối bằng dấu phẩy
+			return list.stream()
+					.filter(a -> a.getOption() != null)
+					.map(a -> a.getOption().getOptionText())
+					.filter(Objects::nonNull)
+					.collect(Collectors.joining(", "));
+		} else if (questionType == QuestionTypeEnum.single_choice || 
+				   questionType == QuestionTypeEnum.boolean_ || 
+				   questionType == QuestionTypeEnum.rating) {
+			Answer a = list.get(0);
+			if (a == null) return "";
+			if (a.getOption() != null && a.getOption().getOptionText() != null) {
+				return a.getOption().getOptionText();
+			}
+			return a.getAnswerText() != null ? a.getAnswerText() : "";
+		} else {
+			// Open-ended, date_time, file_upload, etc.
+			Answer a = list.get(0);
+			return a != null && a.getAnswerText() != null ? a.getAnswerText() : "";
+		}
+	}
+	
+	/**
+	 * Helper methods để tạo styles
+	 */
+	private org.apache.poi.ss.usermodel.CellStyle createHeaderStyle(org.apache.poi.xssf.usermodel.XSSFWorkbook wb) {
+		org.apache.poi.ss.usermodel.CellStyle style = wb.createCellStyle();
+		org.apache.poi.ss.usermodel.Font font = wb.createFont();
+		font.setBold(true);
+		font.setFontHeightInPoints((short) 11);
+		font.setColor(org.apache.poi.ss.usermodel.IndexedColors.WHITE.getIndex());
+		style.setFont(font);
+		style.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.DARK_BLUE.getIndex());
+		style.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
+		style.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+		style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+		style.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+		style.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+		style.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+		style.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+		return style;
+	}
+	
+	private org.apache.poi.ss.usermodel.CellStyle createDataStyle(org.apache.poi.xssf.usermodel.XSSFWorkbook wb) {
+		org.apache.poi.ss.usermodel.CellStyle style = wb.createCellStyle();
+		style.setBorderBottom(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+		style.setBorderTop(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+		style.setBorderLeft(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+		style.setBorderRight(org.apache.poi.ss.usermodel.BorderStyle.THIN);
+		style.setWrapText(true);
+		style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.TOP);
+		return style;
+	}
+	
+	private org.apache.poi.ss.usermodel.CellStyle createDateStyle(org.apache.poi.xssf.usermodel.XSSFWorkbook wb) {
+		org.apache.poi.ss.usermodel.CellStyle style = createDataStyle(wb);
+		org.apache.poi.ss.usermodel.CreationHelper createHelper = wb.getCreationHelper();
+		style.setDataFormat(createHelper.createDataFormat().getFormat("dd/mm/yyyy hh:mm:ss"));
+		return style;
+	}
+	
+	private org.apache.poi.ss.usermodel.CellStyle createNumberStyle(org.apache.poi.xssf.usermodel.XSSFWorkbook wb) {
+		org.apache.poi.ss.usermodel.CellStyle style = createDataStyle(wb);
+		style.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.RIGHT);
+		return style;
+	}
+	
+	private org.apache.poi.ss.usermodel.CellStyle createTitleStyle(org.apache.poi.xssf.usermodel.XSSFWorkbook wb) {
+		org.apache.poi.ss.usermodel.CellStyle style = wb.createCellStyle();
+		org.apache.poi.ss.usermodel.Font font = wb.createFont();
+		font.setBold(true);
+		font.setFontHeightInPoints((short) 16);
+		style.setFont(font);
+		style.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.LEFT);
+		style.setVerticalAlignment(org.apache.poi.ss.usermodel.VerticalAlignment.CENTER);
+		return style;
+	}
+	
+	private org.apache.poi.ss.usermodel.CellStyle createStatusStyle(org.apache.poi.xssf.usermodel.XSSFWorkbook wb, boolean isCompleted) {
+		org.apache.poi.ss.usermodel.CellStyle style = createDataStyle(wb);
+		org.apache.poi.ss.usermodel.Font font = wb.createFont();
+		font.setBold(true);
+		style.setFont(font);
+		if (isCompleted) {
+			style.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.LIGHT_GREEN.getIndex());
+		} else {
+			style.setFillForegroundColor(org.apache.poi.ss.usermodel.IndexedColors.LIGHT_YELLOW.getIndex());
+		}
+		style.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
+		style.setAlignment(org.apache.poi.ss.usermodel.HorizontalAlignment.CENTER);
+		return style;
+	}
+	
+	/**
+	 * Helper method để thêm một dòng thông tin
+	 */
+	private void addInfoRow(org.apache.poi.ss.usermodel.Sheet sheet, int rowIdx, 
+			String label, String value, org.apache.poi.ss.usermodel.CellStyle style) {
+		org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx);
+		row.createCell(0).setCellValue(label);
+		row.createCell(1).setCellValue(value);
+		row.getCell(0).setCellStyle(style);
+		row.getCell(1).setCellStyle(style);
 	}
 
 	private org.springframework.http.ResponseEntity<byte[]> buildDownload(byte[] bytes, String contentType, String filename) {
 		org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-		headers.add(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
+		
+		// Tạo filename với timestamp
+		String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+		String baseName = filename.substring(0, filename.lastIndexOf('.'));
+		String extension = filename.substring(filename.lastIndexOf('.'));
+		String finalFilename = baseName + "_" + timestamp + extension;
+		
+		// Sử dụng cả filename và filename* để hỗ trợ UTF-8
+		headers.add(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, 
+			"attachment; filename=\"" + finalFilename + "\"; filename*=UTF-8''" + java.net.URLEncoder.encode(finalFilename, StandardCharsets.UTF_8));
 		headers.add(org.springframework.http.HttpHeaders.CONTENT_TYPE, contentType);
 		return org.springframework.http.ResponseEntity.ok().headers(headers).body(bytes);
 	}

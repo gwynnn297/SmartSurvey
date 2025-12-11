@@ -55,7 +55,7 @@ public class StatisticsService {
 
         User currentUser = authService.getCurrentUser();
         if (!surveyPermissionService.canViewResults(survey, currentUser)) {
-            throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này");
+            throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này. Chỉ chủ sở hữu (OWNER) và phân tích viên (ANALYST) mới có quyền xem báo cáo.");
         }
 
         // Lấy tất cả responses của survey
@@ -112,7 +112,7 @@ public class StatisticsService {
 
         User currentUser = authService.getCurrentUser();
         if (!surveyPermissionService.canViewResults(survey, currentUser)) {
-            throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này");
+            throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này. Chỉ chủ sở hữu (OWNER) và phân tích viên (ANALYST) mới có quyền xem báo cáo.");
         }
 
         java.util.List<Question> questions = questionRepository.findBySurvey(survey);
@@ -147,7 +147,7 @@ public class StatisticsService {
 
         User currentUser = authService.getCurrentUser();
         if (!surveyPermissionService.canViewResults(survey, currentUser)) {
-            throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này");
+            throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này. Chỉ chủ sở hữu (OWNER) và phân tích viên (ANALYST) mới có quyền xem báo cáo.");
         }
 
         // Lấy tất cả responses của survey
@@ -543,7 +543,7 @@ public class StatisticsService {
 
         User currentUser = authService.getCurrentUser();
         if (!surveyPermissionService.canViewResults(survey, currentUser)) {
-            throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này");
+            throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này. Chỉ chủ sở hữu (OWNER) và phân tích viên (ANALYST) mới có quyền xem báo cáo.");
         }
 
         // Lấy tất cả questions của survey
@@ -1160,6 +1160,1531 @@ public class StatisticsService {
                 .byQuestion(byQuestion)
                 .trends(trends)
                 .build();
+    }
+
+    /**
+     * Xuất báo cáo PDF với biểu đồ cho survey
+     */
+    public byte[] exportSurveyReportPDF(Long surveyId) throws IdInvalidException {
+        // Kiểm tra survey tồn tại và quyền truy cập
+        Survey survey = surveyRepository.findById(surveyId)
+                .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
+
+        User currentUser = authService.getCurrentUser();
+        if (!surveyPermissionService.canViewResults(survey, currentUser)) {
+            throw new IdInvalidException("Bạn không có quyền xem thống kê khảo sát này. Chỉ chủ sở hữu (OWNER) và phân tích viên (ANALYST) mới có quyền xem báo cáo.");
+        }
+
+        // Lấy dữ liệu thống kê
+        SurveyOverviewResponseDTO overview = getSurveyOverview(surveyId);
+        SurveyChartsResponseDTO charts = getSurveyCharts(surveyId);
+        SurveyTimelineResponseDTO timeline = getSurveyTimeline(surveyId);
+        SurveySentimentResponseDTO sentiment = getSurveySentimentAnalysis(surveyId);
+
+        // Set headless mode cho AWT (cần thiết khi chạy trên server không có display)
+        System.setProperty("java.awt.headless", "true");
+
+        try {
+            // Tạo PDF document
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            com.itextpdf.kernel.pdf.PdfDocument pdfDoc = new com.itextpdf.kernel.pdf.PdfDocument(
+                    new com.itextpdf.kernel.pdf.PdfWriter(baos));
+            com.itextpdf.layout.Document document = new com.itextpdf.layout.Document(pdfDoc);
+            document.setMargins(50, 50, 50, 50);
+
+            // Fonts - Sử dụng font hỗ trợ tiếng Việt (Arial trên Windows)
+            com.itextpdf.kernel.font.PdfFont font;
+            com.itextpdf.kernel.font.PdfFont fontBold;
+            
+            try {
+                // Ưu tiên sử dụng Arial (hỗ trợ tiếng Việt tốt)
+                String osName = System.getProperty("os.name", "").toLowerCase();
+                String arialPath = null;
+                String arialBoldPath = null;
+                
+                if (osName.contains("win")) {
+                    // Windows
+                    arialPath = "C:/Windows/Fonts/arial.ttf";
+                    arialBoldPath = "C:/Windows/Fonts/arialbd.ttf";
+                } else if (osName.contains("mac")) {
+                    // macOS
+                    arialPath = "/System/Library/Fonts/Supplemental/Arial.ttf";
+                    arialBoldPath = "/System/Library/Fonts/Supplemental/Arial Bold.ttf";
+                } else {
+                    // Linux - thử DejaVu Sans
+                    arialPath = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf";
+                    arialBoldPath = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
+                }
+                
+                font = null;
+                fontBold = null;
+                
+                // Thử load Arial
+                if (arialPath != null) {
+                    try {
+                        java.io.File fontFile = new java.io.File(arialPath);
+                        if (fontFile.exists()) {
+                            byte[] fontBytes = java.nio.file.Files.readAllBytes(fontFile.toPath());
+                            font = com.itextpdf.kernel.font.PdfFontFactory.createFont(fontBytes, 
+                                    com.itextpdf.io.font.PdfEncodings.IDENTITY_H);
+                            log.info("Loaded Arial font from: {}", arialPath);
+                            
+                            // Thử load Arial Bold
+                            if (arialBoldPath != null) {
+                                java.io.File boldFile = new java.io.File(arialBoldPath);
+                                if (boldFile.exists()) {
+                                    byte[] boldBytes = java.nio.file.Files.readAllBytes(boldFile.toPath());
+                                    fontBold = com.itextpdf.kernel.font.PdfFontFactory.createFont(boldBytes, 
+                                            com.itextpdf.io.font.PdfEncodings.IDENTITY_H);
+                                    log.info("Loaded Arial Bold font from: {}", arialBoldPath);
+                                } else {
+                                    fontBold = font; // Dùng font thường nếu không có bold
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.warn("Could not load Arial font: {}", e.getMessage());
+                    }
+                }
+                
+                // Fallback về StandardFonts nếu không tìm thấy font Unicode
+                if (font == null) {
+                    log.warn("No Unicode font found, using StandardFonts (may lose Vietnamese characters)");
+                    font = com.itextpdf.kernel.font.PdfFontFactory.createFont(
+                            com.itextpdf.io.font.constants.StandardFonts.HELVETICA);
+                    fontBold = com.itextpdf.kernel.font.PdfFontFactory.createFont(
+                            com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD);
+                }
+            } catch (Exception e) {
+                log.error("Error loading fonts, using StandardFonts: {}", e.getMessage());
+                font = com.itextpdf.kernel.font.PdfFontFactory.createFont(
+                        com.itextpdf.io.font.constants.StandardFonts.HELVETICA);
+                fontBold = com.itextpdf.kernel.font.PdfFontFactory.createFont(
+                        com.itextpdf.io.font.constants.StandardFonts.HELVETICA_BOLD);
+            }
+
+            // Tiêu đề
+            com.itextpdf.layout.element.Paragraph title = new com.itextpdf.layout.element.Paragraph(
+                    overview.getSurveyTitle() != null ? overview.getSurveyTitle() : "Báo cáo khảo sát")
+                    .setFont(fontBold)
+                    .setFontSize(20)
+                    .setMarginBottom(10);
+            document.add(title);
+
+            // Thông tin survey
+            com.itextpdf.layout.element.Paragraph surveyInfo = new com.itextpdf.layout.element.Paragraph(
+                    String.format("ID: %d | Ngày tạo: %s | Trạng thái: %s",
+                            overview.getSurveyId(),
+                            overview.getCreatedAt() != null
+                                    ? overview.getCreatedAt().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                                    : "N/A",
+                            overview.getStatus()))
+                    .setFont(font)
+                    .setFontSize(10)
+                    .setMarginBottom(20);
+            document.add(surveyInfo);
+
+            // Thống kê tổng quan
+            com.itextpdf.layout.element.Paragraph overviewTitle = new com.itextpdf.layout.element.Paragraph(
+                    "Thống kê tổng quan")
+                    .setFont(fontBold)
+                    .setFontSize(16)
+                    .setMarginTop(20)
+                    .setMarginBottom(10);
+            document.add(overviewTitle);
+
+            // Bảng thống kê
+            float[] columnWidths = {1, 1};
+            com.itextpdf.layout.element.Table statsTable = new com.itextpdf.layout.element.Table(columnWidths);
+            statsTable.setWidth(480);
+
+            addTableRow(statsTable, "Tổng số phản hồi", String.valueOf(overview.getTotalResponses()), font, fontBold);
+            addTableRow(statsTable, "Số lượt xem", String.valueOf(overview.getViewership()), font, fontBold);
+            addTableRow(statsTable, "Tỷ lệ hoàn thành", String.format("%.2f%%", overview.getCompletionRate()), font,
+                    fontBold);
+            addTableRow(statsTable, "Thời gian trung bình", overview.getAvgCompletionTime() != null
+                    ? overview.getAvgCompletionTime()
+                    : "N/A", font, fontBold);
+
+            if (overview.getCompletionStats() != null) {
+                addTableRow(statsTable, "Hoàn thành đầy đủ",
+                        String.valueOf(overview.getCompletionStats().getCompleted()), font, fontBold);
+                addTableRow(statsTable, "Hoàn thành một phần",
+                        String.valueOf(overview.getCompletionStats().getPartial()), font, fontBold);
+                addTableRow(statsTable, "Đã bỏ dở",
+                        String.valueOf(overview.getCompletionStats().getDropped()), font, fontBold);
+            }
+
+            document.add(statsTable);
+
+            // Biểu đồ
+            if (charts != null) {
+                // Phân loại Multiple Choice Charts theo loại câu hỏi
+                if (charts.getMultipleChoiceData() != null && !charts.getMultipleChoiceData().isEmpty()) {
+                    // Phân loại
+                    List<SurveyChartsResponseDTO.MultipleChoiceDataDTO> multipleChoiceList = new ArrayList<>();
+                    List<SurveyChartsResponseDTO.MultipleChoiceDataDTO> singleChoiceList = new ArrayList<>();
+                    List<SurveyChartsResponseDTO.MultipleChoiceDataDTO> rankingList = new ArrayList<>();
+                    
+                    for (SurveyChartsResponseDTO.MultipleChoiceDataDTO chartData : charts.getMultipleChoiceData()) {
+                        Question question = questionRepository.findById(chartData.getQuestionId()).orElse(null);
+                        if (question != null) {
+                            if (question.getQuestionType() == QuestionTypeEnum.ranking) {
+                                rankingList.add(chartData);
+                            } else if (question.getQuestionType() == QuestionTypeEnum.single_choice) {
+                                singleChoiceList.add(chartData);
+                            } else {
+                                multipleChoiceList.add(chartData);
+                            }
+                        } else {
+                            // Mặc định là multiple choice nếu không tìm thấy
+                            multipleChoiceList.add(chartData);
+                        }
+                    }
+                    
+                    // 1. Multiple Choice Charts
+                    if (!multipleChoiceList.isEmpty()) {
+                        com.itextpdf.layout.element.Paragraph chartsTitle = new com.itextpdf.layout.element.Paragraph(
+                                "📊 Biểu đồ câu hỏi trắc nghiệm nhiều lựa chọn")
+                                .setFont(fontBold)
+                                .setFontSize(16)
+                                .setMarginTop(20)
+                                .setMarginBottom(10);
+                        document.add(chartsTitle);
+                        
+                        for (SurveyChartsResponseDTO.MultipleChoiceDataDTO chartData : multipleChoiceList) {
+                            addQuestionChartToPDF(document, chartData, "pie", font, fontBold, false);
+                        }
+                    }
+                    
+                    // 2. Single Choice Charts
+                    if (!singleChoiceList.isEmpty()) {
+                        com.itextpdf.layout.element.Paragraph chartsTitle = new com.itextpdf.layout.element.Paragraph(
+                                "📊 Biểu đồ câu hỏi trắc nghiệm một lựa chọn")
+                                .setFont(fontBold)
+                                .setFontSize(16)
+                                .setMarginTop(20)
+                                .setMarginBottom(10);
+                        document.add(chartsTitle);
+                        
+                        for (SurveyChartsResponseDTO.MultipleChoiceDataDTO chartData : singleChoiceList) {
+                            addQuestionChartToPDF(document, chartData, "pie", font, fontBold, false);
+                        }
+                    }
+                    
+                    // 3. Ranking Charts
+                    if (!rankingList.isEmpty()) {
+                        com.itextpdf.layout.element.Paragraph chartsTitle = new com.itextpdf.layout.element.Paragraph(
+                                "📊 Biểu đồ câu hỏi xếp hạng")
+                                .setFont(fontBold)
+                                .setFontSize(16)
+                                .setMarginTop(20)
+                                .setMarginBottom(10);
+                        document.add(chartsTitle);
+                        
+                        for (SurveyChartsResponseDTO.MultipleChoiceDataDTO chartData : rankingList) {
+                            addQuestionChartToPDF(document, chartData, "bar", font, fontBold, true);
+                        }
+                    }
+                }
+
+                // Rating Charts
+                if (charts.getRatingData() != null && !charts.getRatingData().isEmpty()) {
+                    com.itextpdf.layout.element.Paragraph ratingTitle = new com.itextpdf.layout.element.Paragraph(
+                            "⭐ Biểu đồ câu hỏi đánh giá (Rating)")
+                            .setFont(fontBold)
+                            .setFontSize(16)
+                            .setMarginTop(20)
+                            .setMarginBottom(10);
+                    document.add(ratingTitle);
+
+                    for (SurveyChartsResponseDTO.RatingDataDTO ratingData : charts.getRatingData()) {
+                        com.itextpdf.layout.element.Paragraph questionTitle = new com.itextpdf.layout.element.Paragraph(
+                                ratingData.getQuestionText() != null ? ratingData.getQuestionText() : "Câu hỏi")
+                                .setFont(fontBold)
+                                .setFontSize(12)
+                                .setMarginTop(15)
+                                .setMarginBottom(5);
+                        document.add(questionTitle);
+
+                        // Thông tin rating
+                        com.itextpdf.layout.element.Paragraph ratingInfo = new com.itextpdf.layout.element.Paragraph(
+                                String.format("Đánh giá trung bình: %.2f", ratingData.getAverageRating()))
+                                .setFont(font)
+                                .setFontSize(10)
+                                .setMarginBottom(10);
+                        document.add(ratingInfo);
+
+                        // Vẽ biểu đồ rating
+                        if (ratingData.getDistribution() != null && !ratingData.getDistribution().isEmpty()) {
+                            byte[] chartImage = createRatingBarChart(ratingData.getDistribution(),
+                                    ratingData.getQuestionText() != null ? ratingData.getQuestionText() : "Biểu đồ");
+                            if (chartImage != null) {
+                                com.itextpdf.io.image.ImageData imageData = com.itextpdf.io.image.ImageDataFactory
+                                        .create(chartImage);
+                                com.itextpdf.layout.element.Image image = new com.itextpdf.layout.element.Image(
+                                        imageData);
+                                image.setWidth(480);
+                                image.setAutoScale(true);
+                                document.add(image);
+                            }
+                            
+                            // Thêm bảng thống kê rating chi tiết
+                            addRatingStatsTable(document, ratingData.getDistribution(), ratingData.getAverageRating(), font, fontBold);
+                        }
+                    }
+                }
+
+                // Boolean Charts
+                if (charts.getBooleanData() != null && !charts.getBooleanData().isEmpty()) {
+                    com.itextpdf.layout.element.Paragraph booleanTitle = new com.itextpdf.layout.element.Paragraph(
+                            "✅ Biểu đồ câu hỏi Đúng/Sai (Yes/No)")
+                            .setFont(fontBold)
+                            .setFontSize(16)
+                            .setMarginTop(20)
+                            .setMarginBottom(10);
+                    document.add(booleanTitle);
+
+                    for (SurveyChartsResponseDTO.BooleanDataDTO booleanData : charts.getBooleanData()) {
+                        com.itextpdf.layout.element.Paragraph questionTitle = new com.itextpdf.layout.element.Paragraph(
+                                booleanData.getQuestionText() != null ? booleanData.getQuestionText() : "Câu hỏi")
+                                .setFont(fontBold)
+                                .setFontSize(12)
+                                .setMarginTop(15)
+                                .setMarginBottom(5);
+                        document.add(questionTitle);
+
+                        // Vẽ biểu đồ boolean
+                        byte[] chartImage = createBooleanPieChart(booleanData);
+                        if (chartImage != null) {
+                            com.itextpdf.io.image.ImageData imageData = com.itextpdf.io.image.ImageDataFactory
+                                    .create(chartImage);
+                            com.itextpdf.layout.element.Image image = new com.itextpdf.layout.element.Image(imageData);
+                            image.setWidth(480);
+                            image.setAutoScale(true);
+                            document.add(image);
+                        }
+                        
+                        // Thêm bảng thống kê boolean chi tiết
+                        addBooleanStatsTable(document, booleanData, font, fontBold);
+                    }
+                }
+                
+                // Open-Ended Questions (Text Responses)
+                addOpenEndedQuestionsToPDF(document, surveyId, font, fontBold);
+
+                // Timeline Charts
+                if (timeline != null && timeline.getDaily() != null && !timeline.getDaily().isEmpty()) {
+                    com.itextpdf.layout.element.Paragraph timelineTitle = new com.itextpdf.layout.element.Paragraph(
+                            "📈 Biểu đồ xu hướng phản hồi theo thời gian")
+                            .setFont(fontBold)
+                            .setFontSize(16)
+                            .setMarginTop(20)
+                            .setMarginBottom(10);
+                    document.add(timelineTitle);
+
+                    // Vẽ biểu đồ daily timeline
+                    byte[] timelineChartImage = createTimelineLineChart(timeline.getDaily());
+                    if (timelineChartImage != null) {
+                        com.itextpdf.io.image.ImageData imageData = com.itextpdf.io.image.ImageDataFactory
+                                .create(timelineChartImage);
+                        com.itextpdf.layout.element.Image image = new com.itextpdf.layout.element.Image(imageData);
+                        image.setWidth(450);
+                        image.setAutoScale(true);
+                        document.add(image);
+                    }
+                    
+                    // Thêm bảng thống kê timeline chi tiết
+                    addTimelineStatsTable(document, timeline.getDaily(), font, fontBold);
+                }
+
+                // Sentiment Charts
+                if (sentiment != null && sentiment.getOverall() != null) {
+                    SurveySentimentResponseDTO.SentimentOverallDTO overall = sentiment.getOverall();
+                    // Chỉ export nếu có ít nhất một giá trị > 0
+                    if ((overall.getPositive() != null && overall.getPositive() > 0) ||
+                            (overall.getNeutral() != null && overall.getNeutral() > 0) ||
+                            (overall.getNegative() != null && overall.getNegative() > 0)) {
+                        
+                        com.itextpdf.layout.element.Paragraph sentimentTitle = new com.itextpdf.layout.element.Paragraph(
+                                "😊 Biểu đồ phân tích cảm xúc (Sentiment Analysis)")
+                                .setFont(fontBold)
+                                .setFontSize(16)
+                                .setMarginTop(20)
+                                .setMarginBottom(10);
+                        document.add(sentimentTitle);
+
+                        // Vẽ biểu đồ sentiment overall
+                        byte[] sentimentChartImage = createSentimentPieChart(overall);
+                        if (sentimentChartImage != null) {
+                            com.itextpdf.io.image.ImageData imageData = com.itextpdf.io.image.ImageDataFactory
+                                    .create(sentimentChartImage);
+                            com.itextpdf.layout.element.Image image = new com.itextpdf.layout.element.Image(imageData);
+                            image.setWidth(480);
+                            image.setAutoScale(true);
+                            document.add(image);
+                        }
+
+                        // Thêm bảng thống kê sentiment chi tiết
+                        addSentimentStatsTable(document, overall, font, fontBold);
+                    }
+                }
+            }
+
+            // Footer
+            com.itextpdf.layout.element.Paragraph footer = new com.itextpdf.layout.element.Paragraph(
+                    String.format("Xuất báo cáo ngày: %s",
+                            LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))))
+                    .setFont(font)
+                    .setFontSize(8)
+                    .setMarginTop(30);
+            document.add(footer);
+
+            document.close();
+            pdfDoc.close();
+
+            // Lấy byte array từ ByteArrayOutputStream
+            return baos.toByteArray();
+
+        } catch (Exception e) {
+            log.error("Lỗi khi tạo PDF báo cáo: {}", e.getMessage(), e);
+            throw new RuntimeException("Không thể tạo PDF báo cáo: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Thêm một dòng vào bảng
+     */
+    private void addTableRow(com.itextpdf.layout.element.Table table, String label, String value,
+            com.itextpdf.kernel.font.PdfFont font, com.itextpdf.kernel.font.PdfFont fontBold) {
+        com.itextpdf.layout.element.Cell labelCell = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph(label).setFont(fontBold));
+        com.itextpdf.layout.element.Cell valueCell = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph(value).setFont(font));
+        table.addCell(labelCell);
+        table.addCell(valueCell);
+    }
+
+    /**
+     * Thêm bảng thống kê chi tiết cho Multiple Choice Chart
+     */
+    private void addMultipleChoiceStatsTable(com.itextpdf.layout.Document document,
+            List<SurveyChartsResponseDTO.MultipleChoiceDataDTO.ChartDataDTO> chartData,
+            com.itextpdf.kernel.font.PdfFont font, com.itextpdf.kernel.font.PdfFont fontBold) {
+        if (chartData == null || chartData.isEmpty()) {
+            return;
+        }
+
+        // Tính tổng
+        int total = chartData.stream()
+                .mapToInt(d -> d.getCount() != null ? d.getCount() : 0)
+                .sum();
+
+        if (total == 0) {
+            return;
+        }
+
+        // Tạo bảng
+        float[] columnWidths = {3, 1, 1};
+        com.itextpdf.layout.element.Table statsTable = new com.itextpdf.layout.element.Table(columnWidths);
+        statsTable.setWidth(480);
+        statsTable.setMarginTop(10);
+        statsTable.setMarginBottom(15);
+
+        // Header
+        com.itextpdf.layout.element.Cell header1 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Tùy chọn").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell header2 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Số lượng").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell header3 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Tỷ lệ (%)").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        statsTable.addHeaderCell(header1);
+        statsTable.addHeaderCell(header2);
+        statsTable.addHeaderCell(header3);
+
+        // Data rows - sắp xếp theo count giảm dần
+        List<SurveyChartsResponseDTO.MultipleChoiceDataDTO.ChartDataDTO> sortedData = new ArrayList<>(chartData);
+        sortedData.sort((a, b) -> {
+            int countA = a.getCount() != null ? a.getCount() : 0;
+            int countB = b.getCount() != null ? b.getCount() : 0;
+            return Integer.compare(countB, countA);
+        });
+
+        for (SurveyChartsResponseDTO.MultipleChoiceDataDTO.ChartDataDTO data : sortedData) {
+            String option = data.getOption() != null ? data.getOption() : "N/A";
+            int count = data.getCount() != null ? data.getCount() : 0;
+            double percentage = data.getPercentage() != null ? data.getPercentage() : 0.0;
+
+            com.itextpdf.layout.element.Cell cell1 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(option).setFont(font))
+                    .setPadding(5);
+            com.itextpdf.layout.element.Cell cell2 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.valueOf(count)).setFont(font))
+                    .setPadding(5);
+            com.itextpdf.layout.element.Cell cell3 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.format("%.2f%%", percentage)).setFont(font))
+                    .setPadding(5);
+
+            statsTable.addCell(cell1);
+            statsTable.addCell(cell2);
+            statsTable.addCell(cell3);
+        }
+
+        // Footer row - Tổng
+        com.itextpdf.layout.element.Cell footer1 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Tổng").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell footer2 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph(String.valueOf(total)).setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell footer3 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("100.00%").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        statsTable.addCell(footer1);
+        statsTable.addCell(footer2);
+        statsTable.addCell(footer3);
+
+        document.add(statsTable);
+    }
+
+    /**
+     * Thêm bảng thống kê chi tiết cho Rating Chart
+     */
+    private void addRatingStatsTable(com.itextpdf.layout.Document document,
+            java.util.Map<String, Integer> distribution, Double averageRating,
+            com.itextpdf.kernel.font.PdfFont font, com.itextpdf.kernel.font.PdfFont fontBold) {
+        if (distribution == null || distribution.isEmpty()) {
+            return;
+        }
+
+        // Tính tổng
+        int total = distribution.values().stream()
+                .mapToInt(count -> count != null ? count : 0)
+                .sum();
+
+        if (total == 0) {
+            return;
+        }
+
+        // Tạo bảng
+        float[] columnWidths = {2, 1, 1};
+        com.itextpdf.layout.element.Table statsTable = new com.itextpdf.layout.element.Table(columnWidths);
+        statsTable.setWidth(480);
+        statsTable.setMarginTop(10);
+        statsTable.setMarginBottom(15);
+
+        // Header
+        com.itextpdf.layout.element.Cell header1 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Đánh giá").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell header2 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Số lượng").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell header3 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Tỷ lệ (%)").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        statsTable.addHeaderCell(header1);
+        statsTable.addHeaderCell(header2);
+        statsTable.addHeaderCell(header3);
+
+        // Data rows - sắp xếp từ cao xuống thấp (5 sao -> 1 sao)
+        List<java.util.Map.Entry<String, Integer>> sortedEntries = new ArrayList<>(distribution.entrySet());
+        sortedEntries.sort((a, b) -> {
+            try {
+                int ratingA = Integer.parseInt(a.getKey());
+                int ratingB = Integer.parseInt(b.getKey());
+                return Integer.compare(ratingB, ratingA); // Giảm dần
+            } catch (NumberFormatException e) {
+                return a.getKey().compareTo(b.getKey());
+            }
+        });
+
+        for (java.util.Map.Entry<String, Integer> entry : sortedEntries) {
+            String rating = entry.getKey() + " sao";
+            int count = entry.getValue() != null ? entry.getValue() : 0;
+            double percentage = total > 0 ? (double) count / total * 100 : 0.0;
+
+            com.itextpdf.layout.element.Cell cell1 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(rating).setFont(font))
+                    .setPadding(5);
+            com.itextpdf.layout.element.Cell cell2 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.valueOf(count)).setFont(font))
+                    .setPadding(5);
+            com.itextpdf.layout.element.Cell cell3 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.format("%.2f%%", percentage)).setFont(font))
+                    .setPadding(5);
+
+            statsTable.addCell(cell1);
+            statsTable.addCell(cell2);
+            statsTable.addCell(cell3);
+        }
+
+        // Footer row - Tổng và Average
+        com.itextpdf.layout.element.Cell footer1 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Tổng / Trung bình").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell footer2 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph(String.valueOf(total)).setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell footer3 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph(
+                        averageRating != null ? String.format("%.2f", averageRating) : "N/A")
+                        .setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        statsTable.addCell(footer1);
+        statsTable.addCell(footer2);
+        statsTable.addCell(footer3);
+
+        document.add(statsTable);
+    }
+
+    /**
+     * Thêm bảng thống kê chi tiết cho Boolean Chart
+     */
+    private void addBooleanStatsTable(com.itextpdf.layout.Document document,
+            SurveyChartsResponseDTO.BooleanDataDTO booleanData,
+            com.itextpdf.kernel.font.PdfFont font, com.itextpdf.kernel.font.PdfFont fontBold) {
+        int trueCount = booleanData.getTrueCount() != null ? booleanData.getTrueCount() : 0;
+        int falseCount = booleanData.getFalseCount() != null ? booleanData.getFalseCount() : 0;
+        int total = trueCount + falseCount;
+
+        if (total == 0) {
+            return;
+        }
+
+        double truePercent = booleanData.getTruePercentage() != null ? booleanData.getTruePercentage() : 0.0;
+        double falsePercent = 100.0 - truePercent;
+
+        // Tạo bảng
+        float[] columnWidths = {2, 1, 1};
+        com.itextpdf.layout.element.Table statsTable = new com.itextpdf.layout.element.Table(columnWidths);
+        statsTable.setWidth(480);
+        statsTable.setMarginTop(10);
+        statsTable.setMarginBottom(15);
+
+        // Header
+        com.itextpdf.layout.element.Cell header1 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Lựa chọn").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell header2 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Số lượng").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell header3 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Tỷ lệ (%)").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        statsTable.addHeaderCell(header1);
+        statsTable.addHeaderCell(header2);
+        statsTable.addHeaderCell(header3);
+
+        // Data rows
+        if (trueCount > 0) {
+            com.itextpdf.layout.element.Cell cell1 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph("Có / Đúng").setFont(font))
+                    .setPadding(5);
+            com.itextpdf.layout.element.Cell cell2 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.valueOf(trueCount)).setFont(font))
+                    .setPadding(5);
+            com.itextpdf.layout.element.Cell cell3 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.format("%.2f%%", truePercent)).setFont(font))
+                    .setPadding(5);
+            statsTable.addCell(cell1);
+            statsTable.addCell(cell2);
+            statsTable.addCell(cell3);
+        }
+
+        if (falseCount > 0) {
+            com.itextpdf.layout.element.Cell cell1 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph("Không / Sai").setFont(font))
+                    .setPadding(5);
+            com.itextpdf.layout.element.Cell cell2 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.valueOf(falseCount)).setFont(font))
+                    .setPadding(5);
+            com.itextpdf.layout.element.Cell cell3 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.format("%.2f%%", falsePercent)).setFont(font))
+                    .setPadding(5);
+            statsTable.addCell(cell1);
+            statsTable.addCell(cell2);
+            statsTable.addCell(cell3);
+        }
+
+        // Footer row - Tổng
+        com.itextpdf.layout.element.Cell footer1 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Tổng").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell footer2 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph(String.valueOf(total)).setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell footer3 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("100.00%").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        statsTable.addCell(footer1);
+        statsTable.addCell(footer2);
+        statsTable.addCell(footer3);
+
+        document.add(statsTable);
+    }
+
+    /**
+     * Thêm bảng thống kê chi tiết cho Timeline Chart - Thiết kế đẹp và dễ phân tích
+     */
+    private void addTimelineStatsTable(com.itextpdf.layout.Document document,
+            List<SurveyTimelineResponseDTO.DailyDataDTO> dailyData,
+            com.itextpdf.kernel.font.PdfFont font, com.itextpdf.kernel.font.PdfFont fontBold) {
+        if (dailyData == null || dailyData.isEmpty()) {
+            return;
+        }
+
+        // Sắp xếp theo date
+        List<SurveyTimelineResponseDTO.DailyDataDTO> sortedData = new ArrayList<>(dailyData);
+        sortedData.sort((a, b) -> {
+            if (a.getDate() == null || b.getDate() == null) return 0;
+            return a.getDate().compareTo(b.getDate());
+        });
+
+        // Tính tổng
+        int totalCount = sortedData.stream()
+                .mapToInt(d -> d.getCount() != null ? d.getCount() : 0)
+                .sum();
+        int totalCompleted = sortedData.stream()
+                .mapToInt(d -> d.getCompleted() != null ? d.getCompleted() : 0)
+                .sum();
+        int totalPartial = totalCount - totalCompleted;
+
+        // Tạo bảng với 5 cột: Ngày, Tổng số, Hoàn thành, Chưa hoàn thành, Tỷ lệ
+        float[] columnWidths = {2.5f, 1.2f, 1.2f, 1.5f, 1.2f};
+        com.itextpdf.layout.element.Table statsTable = new com.itextpdf.layout.element.Table(columnWidths);
+        statsTable.setWidth(480);
+        statsTable.setMarginTop(10);
+        statsTable.setMarginBottom(15);
+
+        // Header với style giống các bảng khác (màu xám nhạt)
+        com.itextpdf.layout.element.Cell header1 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Ngày").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+        
+        com.itextpdf.layout.element.Cell header2 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Tổng số").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+        
+        com.itextpdf.layout.element.Cell header3 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Hoàn thành").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+        
+        com.itextpdf.layout.element.Cell header4 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Chưa hoàn thành").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+        
+        com.itextpdf.layout.element.Cell header5 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Tỷ lệ HT").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+        
+        statsTable.addHeaderCell(header1);
+        statsTable.addHeaderCell(header2);
+        statsTable.addHeaderCell(header3);
+        statsTable.addHeaderCell(header4);
+        statsTable.addHeaderCell(header5);
+
+        // Data rows với styling giống các bảng khác (nền trắng)
+        for (SurveyTimelineResponseDTO.DailyDataDTO data : sortedData) {
+            String date = data.getDate() != null ? data.getDate() : "N/A";
+            int count = data.getCount() != null ? data.getCount() : 0;
+            int completed = data.getCompleted() != null ? data.getCompleted() : 0;
+            int partial = data.getPartial() != null ? data.getPartial() : 0;
+            
+            // Tính tỷ lệ hoàn thành
+            double completionRate = count > 0 ? (double) completed / count * 100 : 0.0;
+
+            // Format date đẹp hơn: dd/MM/yyyy
+            String displayDate = date;
+            try {
+                if (date.length() >= 10) {
+                    // Format từ YYYY-MM-DD sang dd/MM/yyyy
+                    String year = date.substring(0, 4);
+                    String month = date.substring(5, 7);
+                    String day = date.substring(8, 10);
+                    displayDate = day + "/" + month + "/" + year;
+                }
+            } catch (Exception e) {
+                // Giữ nguyên nếu format lỗi
+            }
+
+            // Cell 1: Ngày
+            com.itextpdf.layout.element.Cell cell1 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(displayDate).setFont(font))
+                    .setPadding(5)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.LEFT)
+                    .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+
+            // Cell 2: Tổng số
+            com.itextpdf.layout.element.Cell cell2 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.valueOf(count)).setFont(font))
+                    .setPadding(5)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+
+            // Cell 3: Hoàn thành (màu đen)
+            com.itextpdf.layout.element.Cell cell3 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.valueOf(completed)).setFont(font))
+                    .setPadding(5)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+
+            // Cell 4: Chưa hoàn thành (màu đen)
+            com.itextpdf.layout.element.Cell cell4 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.valueOf(partial)).setFont(font))
+                    .setPadding(5)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+
+            // Cell 5: Tỷ lệ hoàn thành
+            com.itextpdf.layout.element.Cell cell5 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.format("%.1f%%", completionRate)).setFont(font))
+                    .setPadding(5)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+
+            statsTable.addCell(cell1);
+            statsTable.addCell(cell2);
+            statsTable.addCell(cell3);
+            statsTable.addCell(cell4);
+            statsTable.addCell(cell5);
+        }
+
+        // Footer row - Tổng với style giống các bảng khác (màu xám nhạt)
+        double totalCompletionRate = totalCount > 0 ? (double) totalCompleted / totalCount * 100 : 0.0;
+        
+        com.itextpdf.layout.element.Cell footer1 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("TỔNG CỘNG").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+        
+        com.itextpdf.layout.element.Cell footer2 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph(String.valueOf(totalCount)).setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+        
+        com.itextpdf.layout.element.Cell footer3 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph(String.valueOf(totalCompleted)).setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+        
+        com.itextpdf.layout.element.Cell footer4 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph(String.valueOf(totalPartial)).setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+        
+        com.itextpdf.layout.element.Cell footer5 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph(String.format("%.1f%%", totalCompletionRate)).setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE);
+        
+        statsTable.addCell(footer1);
+        statsTable.addCell(footer2);
+        statsTable.addCell(footer3);
+        statsTable.addCell(footer4);
+        statsTable.addCell(footer5);
+
+        document.add(statsTable);
+    }
+
+    /**
+     * Thêm bảng thống kê chi tiết cho Sentiment Chart
+     */
+    private void addSentimentStatsTable(com.itextpdf.layout.Document document,
+            SurveySentimentResponseDTO.SentimentOverallDTO overall,
+            com.itextpdf.kernel.font.PdfFont font, com.itextpdf.kernel.font.PdfFont fontBold) {
+        double positive = overall.getPositive() != null ? overall.getPositive() : 0.0;
+        double neutral = overall.getNeutral() != null ? overall.getNeutral() : 0.0;
+        double negative = overall.getNegative() != null ? overall.getNegative() : 0.0;
+        double total = positive + neutral + negative;
+
+        if (total == 0) {
+            return;
+        }
+
+        // Tạo bảng
+        float[] columnWidths = {2, 1};
+        com.itextpdf.layout.element.Table statsTable = new com.itextpdf.layout.element.Table(columnWidths);
+        statsTable.setWidth(480);
+        statsTable.setMarginTop(10);
+        statsTable.setMarginBottom(15);
+
+        // Header
+        com.itextpdf.layout.element.Cell header1 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Loại cảm xúc").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell header2 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Tỷ lệ (%)").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        statsTable.addHeaderCell(header1);
+        statsTable.addHeaderCell(header2);
+
+        // Data rows
+        if (positive > 0) {
+            com.itextpdf.layout.element.Cell cell1 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph("Tích cực").setFont(font))
+                    .setPadding(5);
+            com.itextpdf.layout.element.Cell cell2 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.format("%.2f%%", positive)).setFont(font))
+                    .setPadding(5);
+            statsTable.addCell(cell1);
+            statsTable.addCell(cell2);
+        }
+
+        if (neutral > 0) {
+            com.itextpdf.layout.element.Cell cell1 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph("Trung tính").setFont(font))
+                    .setPadding(5);
+            com.itextpdf.layout.element.Cell cell2 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.format("%.2f%%", neutral)).setFont(font))
+                    .setPadding(5);
+            statsTable.addCell(cell1);
+            statsTable.addCell(cell2);
+        }
+
+        if (negative > 0) {
+            com.itextpdf.layout.element.Cell cell1 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph("Tiêu cực").setFont(font))
+                    .setPadding(5);
+            com.itextpdf.layout.element.Cell cell2 = new com.itextpdf.layout.element.Cell()
+                    .add(new com.itextpdf.layout.element.Paragraph(String.format("%.2f%%", negative)).setFont(font))
+                    .setPadding(5);
+            statsTable.addCell(cell1);
+            statsTable.addCell(cell2);
+        }
+
+        // Footer row - Tổng
+        com.itextpdf.layout.element.Cell footer1 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph("Tổng").setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        com.itextpdf.layout.element.Cell footer2 = new com.itextpdf.layout.element.Cell()
+                .add(new com.itextpdf.layout.element.Paragraph(String.format("%.2f%%", total)).setFont(fontBold))
+                .setBackgroundColor(com.itextpdf.kernel.colors.ColorConstants.LIGHT_GRAY)
+                .setPadding(5);
+        statsTable.addCell(footer1);
+        statsTable.addCell(footer2);
+
+        document.add(statsTable);
+    }
+
+    /**
+     * Tạo biểu đồ Pie cho Multiple Choice
+     */
+    private byte[] createPieChart(List<SurveyChartsResponseDTO.MultipleChoiceDataDTO.ChartDataDTO> chartData,
+            String title) {
+        try {
+            if (chartData == null || chartData.isEmpty()) {
+                log.warn("Chart data is empty for pie chart: {}", title);
+                return null;
+            }
+
+            org.jfree.data.general.DefaultPieDataset<String> dataset = new org.jfree.data.general.DefaultPieDataset<>();
+            for (SurveyChartsResponseDTO.MultipleChoiceDataDTO.ChartDataDTO data : chartData) {
+                String optionText = data.getOption() != null ? data.getOption() : "N/A";
+                int count = data.getCount() != null ? data.getCount() : 0;
+                if (count > 0) { // Chỉ thêm vào dataset nếu có count > 0
+                    dataset.setValue(optionText, count);
+                }
+            }
+
+            if (dataset.getItemCount() == 0) {
+                log.warn("No valid data in dataset for pie chart: {}", title);
+                return null;
+            }
+
+            // Không set title trong chart vì đã có title dạng Paragraph trong PDF
+            org.jfree.chart.JFreeChart chart = org.jfree.chart.ChartFactory.createPieChart(
+                    null, // Không có title trong biểu đồ
+                    dataset,
+                    true, // legend
+                    true, // tooltips
+                    false // URLs
+            );
+
+            byte[] result = chartToByteArray(chart, 500, 400);
+            if (result == null) {
+                log.error("Failed to convert pie chart to byte array: {}", title);
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("Lỗi khi tạo pie chart: {}", e.getMessage(), e);
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Tạo biểu đồ Bar cho Multiple Choice (Ranking)
+     * @param isRanking true nếu là ranking question (dùng percentage), false nếu là multiple choice (dùng count)
+     */
+    private byte[] createMultipleChoiceBarChart(List<SurveyChartsResponseDTO.MultipleChoiceDataDTO.ChartDataDTO> chartData,
+            String title, boolean isRanking) {
+        try {
+            if (chartData == null || chartData.isEmpty()) {
+                log.warn("Chart data is empty for multiple choice bar chart: {}", title);
+                return null;
+            }
+
+            org.jfree.data.category.DefaultCategoryDataset dataset = new org.jfree.data.category.DefaultCategoryDataset();
+            for (SurveyChartsResponseDTO.MultipleChoiceDataDTO.ChartDataDTO data : chartData) {
+                // Với ranking: dùng percentage, với multiple choice: dùng count
+                double value;
+                String valueLabel;
+                if (isRanking) {
+                    value = data.getPercentage() != null ? data.getPercentage() : 0.0;
+                    valueLabel = "Điểm ưu tiên (%)";
+                } else {
+                    value = data.getCount() != null ? data.getCount() : 0;
+                    valueLabel = "Số lượng";
+                }
+                
+                if (value > 0) {
+                    dataset.addValue(value, 
+                            valueLabel, 
+                            data.getOption() != null ? data.getOption() : "N/A");
+                }
+            }
+
+            if (dataset.getRowCount() == 0) {
+                log.warn("No valid data in dataset for multiple choice bar chart: {}", title);
+                return null;
+            }
+
+
+            org.jfree.chart.JFreeChart chart = org.jfree.chart.ChartFactory.createBarChart(
+                    "",
+                    "Tùy chọn",
+                    isRanking ? "Điểm ưu tiên (%)" : "Điểm số",
+                    dataset,
+                    org.jfree.chart.plot.PlotOrientation.VERTICAL,
+                    true, // legend
+                    true, // tooltips
+                    false // URLs
+            );
+
+            byte[] result = chartToByteArray(chart, 500, 400);
+            if (result == null) {
+                log.error("Failed to convert multiple choice bar chart to byte array: {}", title);
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("Lỗi khi tạo multiple choice bar chart: {}", e.getMessage(), e);
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Tạo biểu đồ Bar cho Rating
+     */
+    private byte[] createRatingBarChart(java.util.Map<String, Integer> distribution, String title) {
+        try {
+            if (distribution == null || distribution.isEmpty()) {
+                log.warn("Distribution is empty for rating bar chart: {}", title);
+                return null;
+            }
+
+            org.jfree.data.category.DefaultCategoryDataset dataset = new org.jfree.data.category.DefaultCategoryDataset();
+            for (java.util.Map.Entry<String, Integer> entry : distribution.entrySet()) {
+                if (entry.getValue() != null && entry.getValue() > 0) {
+                    dataset.addValue(entry.getValue(), "Số lượng", entry.getKey());
+                }
+            }
+
+            if (dataset.getRowCount() == 0) {
+                log.warn("No valid data in dataset for rating bar chart: {}", title);
+                return null;
+            }
+
+        
+            org.jfree.chart.JFreeChart chart = org.jfree.chart.ChartFactory.createBarChart(
+                    "",
+                    "Đánh giá",
+                    "Số lượng",
+                    dataset,
+                    org.jfree.chart.plot.PlotOrientation.VERTICAL,
+                    false, // legend
+                    true, // tooltips
+                    false // URLs
+            );
+
+            byte[] result = chartToByteArray(chart, 500, 400);
+            if (result == null) {
+                log.error("Failed to convert rating bar chart to byte array: {}", title);
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("Lỗi khi tạo bar chart: {}", e.getMessage(), e);
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Tạo biểu đồ Pie cho Boolean
+     */
+    private byte[] createBooleanPieChart(SurveyChartsResponseDTO.BooleanDataDTO booleanData) {
+        try {
+            int trueCount = booleanData.getTrueCount() != null ? booleanData.getTrueCount() : 0;
+            int falseCount = booleanData.getFalseCount() != null ? booleanData.getFalseCount() : 0;
+            
+            if (trueCount == 0 && falseCount == 0) {
+                log.warn("No data for boolean chart");
+                return null;
+            }
+
+            org.jfree.data.general.DefaultPieDataset<String> dataset = new org.jfree.data.general.DefaultPieDataset<>();
+            if (trueCount > 0) {
+                dataset.setValue("Có", trueCount);
+            }
+            if (falseCount > 0) {
+                dataset.setValue("Không", falseCount);
+            }
+
+         
+            org.jfree.chart.JFreeChart chart = org.jfree.chart.ChartFactory.createPieChart(
+                    "",
+                    dataset,
+                    true, // legend
+                    true, // tooltips
+                    false // URLs
+            );
+
+            byte[] result = chartToByteArray(chart, 500, 400);
+            if (result == null) {
+                log.error("Failed to convert boolean pie chart to byte array");
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("Lỗi khi tạo boolean pie chart: {}", e.getMessage(), e);
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Tạo biểu đồ Line cho Timeline (Daily data)
+     */
+    private byte[] createTimelineLineChart(List<SurveyTimelineResponseDTO.DailyDataDTO> dailyData) {
+        try {
+            if (dailyData == null || dailyData.isEmpty()) {
+                log.warn("Daily data is empty for timeline chart");
+                return null;
+            }
+
+            org.jfree.data.category.DefaultCategoryDataset dataset = new org.jfree.data.category.DefaultCategoryDataset();
+            
+            // Sắp xếp theo date để đảm bảo thứ tự
+            List<SurveyTimelineResponseDTO.DailyDataDTO> sortedData = new ArrayList<>(dailyData);
+            sortedData.sort((a, b) -> {
+                if (a.getDate() == null || b.getDate() == null) return 0;
+                return a.getDate().compareTo(b.getDate());
+            });
+
+            for (SurveyTimelineResponseDTO.DailyDataDTO data : sortedData) {
+                String date = data.getDate() != null ? data.getDate() : "N/A";
+                int count = data.getCount() != null ? data.getCount() : 0;
+                int completed = data.getCompleted() != null ? data.getCompleted() : 0;
+                
+                // Format date để hiển thị ngắn gọn hơn (chỉ lấy ngày/tháng)
+                String displayDate = date;
+                if (date != null && date.length() >= 10 && !date.equals("N/A")) {
+                    try {
+                        // Kiểm tra format "yyyy-MM-dd"
+                        if (date.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                            displayDate = date.substring(5, 10); // Lấy "MM-DD"
+                        } else {
+                            displayDate = date; // Giữ nguyên nếu format khác
+                        }
+                    } catch (Exception e) {
+                        displayDate = date; // Giữ nguyên nếu có lỗi
+                    }
+                }
+                
+                // Log để debug
+                log.debug("Timeline chart data - Date: {}, Tổng số: {}, Hoàn thành: {}", displayDate, count, completed);
+                
+                // Chuyển đổi sang double để đảm bảo JFreeChart nhận đúng kiểu dữ liệu
+                // Luôn thêm cả hai series, ngay cả khi giá trị = 0 để đảm bảo hiển thị đầy đủ
+                dataset.addValue((double) count, "Tổng số", displayDate);
+                dataset.addValue((double) completed, "Hoàn thành", displayDate);
+            }
+
+            if (dataset.getRowCount() == 0) {
+                log.warn("No valid data in dataset for timeline chart");
+                return null;
+            }
+
+            org.jfree.chart.JFreeChart chart = org.jfree.chart.ChartFactory.createLineChart(
+                "Xu hướng phản hồi theo ngày", // Thêm title vào đây
+                "Ngày",
+                "Số lượng",
+                dataset,
+                org.jfree.chart.plot.PlotOrientation.VERTICAL,
+                true, // legend
+                true, // tooltips
+                false // URLs
+            );
+            
+            // ========== CẢI THIỆN STYLING CHO BIỂU ĐỒ ĐẸP HƠN ==========
+            
+            // Cấu hình title
+            org.jfree.chart.title.TextTitle chartTitle = chart.getTitle();
+            if (chartTitle != null) {
+                chartTitle.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));
+                chartTitle.setPaint(new java.awt.Color(52, 73, 94)); // Màu xám đậm đẹp
+            }
+            
+            // Cấu hình plot
+            org.jfree.chart.plot.CategoryPlot plot = (org.jfree.chart.plot.CategoryPlot) chart.getPlot();
+            plot.setBackgroundPaint(java.awt.Color.WHITE);
+            plot.setRangeGridlinePaint(new java.awt.Color(220, 220, 220)); // Grid line màu xám nhạt
+            plot.setRangeGridlinesVisible(true);
+            plot.setDomainGridlinesVisible(false);
+            
+            // Cấu hình renderer với màu sắc đẹp và chuyên nghiệp
+            org.jfree.chart.renderer.category.LineAndShapeRenderer renderer = 
+                (org.jfree.chart.renderer.category.LineAndShapeRenderer) plot.getRenderer();
+            
+            // Đảm bảo line và shape được hiển thị
+            renderer.setDefaultShapesVisible(true);
+            renderer.setDefaultShapesFilled(true);
+            renderer.setDefaultLinesVisible(true);
+            
+            // Màu sắc đẹp và chuyên nghiệp
+            // "Tổng số" - màu xanh dương đẹp (Professional Blue)
+            renderer.setSeriesPaint(0, new java.awt.Color(52, 152, 219)); 
+            // "Hoàn thành" - màu xanh lá đẹp (Success Green)
+            renderer.setSeriesPaint(1, new java.awt.Color(46, 204, 113));
+            
+            // Đặt độ dày của line (dày hơn để dễ nhìn)
+            renderer.setDefaultStroke(new java.awt.BasicStroke(3.0f, 
+                java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
+            
+            // Cấu hình shape (điểm dữ liệu) lớn hơn và đẹp hơn
+            // Sử dụng shape khác nhau để phân biệt rõ hai series
+            // "Tổng số" - hình vuông
+            renderer.setSeriesShape(0, new java.awt.geom.Rectangle2D.Double(-5, -5, 10, 10));
+            // "Hoàn thành" - hình tròn
+            renderer.setSeriesShape(1, new java.awt.geom.Ellipse2D.Double(-5, -5, 10, 10));
+            
+            // Đảm bảo cả hai series đều hiển thị rõ ràng
+            renderer.setSeriesShapesVisible(0, true);
+            renderer.setSeriesShapesVisible(1, true);
+            renderer.setSeriesShapesFilled(0, true);
+            renderer.setSeriesShapesFilled(1, true);
+            
+            // Cấu hình axis
+            org.jfree.chart.axis.CategoryAxis domainAxis = plot.getDomainAxis();
+            domainAxis.setLabelFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 12));
+            domainAxis.setTickLabelFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 10));
+            domainAxis.setTickLabelPaint(new java.awt.Color(44, 62, 80));
+            
+            org.jfree.chart.axis.NumberAxis rangeAxis = (org.jfree.chart.axis.NumberAxis) plot.getRangeAxis();
+            rangeAxis.setLabelFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 12));
+            rangeAxis.setTickLabelFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 10));
+            rangeAxis.setTickLabelPaint(new java.awt.Color(44, 62, 80));
+            rangeAxis.setStandardTickUnits(org.jfree.chart.axis.NumberAxis.createIntegerTickUnits());
+            
+            // Cấu hình legend đẹp hơn
+            org.jfree.chart.title.LegendTitle legend = chart.getLegend();
+            if (legend != null) {
+                legend.setItemFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 11));
+                legend.setBackgroundPaint(java.awt.Color.WHITE);
+            }
+
+            byte[] result = chartToByteArray(chart, 500, 400);
+            if (result == null) {
+                log.error("Failed to convert timeline chart to byte array");
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("Lỗi khi tạo timeline chart: {}", e.getMessage(), e);
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Tạo biểu đồ Pie cho Sentiment Analysis
+     */
+    private byte[] createSentimentPieChart(SurveySentimentResponseDTO.SentimentOverallDTO overall) {
+        try {
+            double positive = overall.getPositive() != null ? overall.getPositive() : 0.0;
+            double neutral = overall.getNeutral() != null ? overall.getNeutral() : 0.0;
+            double negative = overall.getNegative() != null ? overall.getNegative() : 0.0;
+            
+            if (positive == 0 && neutral == 0 && negative == 0) {
+                log.warn("No data for sentiment chart");
+                return null;
+            }
+
+            org.jfree.data.general.DefaultPieDataset<String> dataset = new org.jfree.data.general.DefaultPieDataset<>();
+            if (positive > 0) {
+                dataset.setValue("Tích cực", positive);
+            }
+            if (neutral > 0) {
+                dataset.setValue("Trung tính", neutral);
+            }
+            if (negative > 0) {
+                dataset.setValue("Tiêu cực", negative);
+            }
+
+            if (dataset.getItemCount() == 0) {
+                log.warn("No valid data in dataset for sentiment chart");
+                return null;
+            }
+
+            org.jfree.chart.JFreeChart chart = org.jfree.chart.ChartFactory.createPieChart(
+                    "Phân tích cảm xúc tổng quan",
+                    dataset,
+                    true, // legend
+                    true, // tooltips
+                    false // URLs
+            );
+
+            chart.setTitle(new org.jfree.chart.title.TextTitle(
+                    "Phân tích cảm xúc tổng quan",
+                    new java.awt.Font("Arial", java.awt.Font.BOLD, 14)));
+
+            byte[] result = chartToByteArray(chart, 500, 400);
+            if (result == null) {
+                log.error("Failed to convert sentiment chart to byte array");
+            }
+            return result;
+        } catch (Exception e) {
+            log.error("Lỗi khi tạo sentiment chart: {}", e.getMessage(), e);
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Chuyển JFreeChart thành byte array (PNG)
+     */
+    private byte[] chartToByteArray(org.jfree.chart.JFreeChart chart, int width, int height) {
+        try {
+            // Đảm bảo headless mode
+            System.setProperty("java.awt.headless", "true");
+            
+            // Tạo BufferedImage với type RGB để đảm bảo tương thích
+            java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(width, height, 
+                    java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.awt.Graphics2D g2 = image.createGraphics();
+            
+            // Set rendering hints để có chất lượng tốt hơn
+            g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, 
+                    java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, 
+                    java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            
+            // Vẽ chart vào image
+            chart.draw(g2, new java.awt.geom.Rectangle2D.Double(0, 0, width, height));
+            g2.dispose();
+            
+            // Chuyển thành PNG
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(image, "PNG", baos);
+            byte[] result = baos.toByteArray();
+            
+            log.debug("Chart converted successfully, size: {} bytes", result.length);
+            return result;
+        } catch (Exception e) {
+            log.error("Lỗi khi chuyển chart thành image: {}", e.getMessage(), e);
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * Helper method để thêm biểu đồ câu hỏi vào PDF
+     * @param isRanking true nếu là ranking question, false nếu là multiple choice
+     */
+    private void addQuestionChartToPDF(com.itextpdf.layout.Document document,
+            SurveyChartsResponseDTO.MultipleChoiceDataDTO chartData,
+            String chartType,
+            com.itextpdf.kernel.font.PdfFont font, com.itextpdf.kernel.font.PdfFont fontBold,
+            boolean isRanking) {
+        // Tiêu đề câu hỏi
+        com.itextpdf.layout.element.Paragraph questionTitle = new com.itextpdf.layout.element.Paragraph(
+                chartData.getQuestionText() != null ? chartData.getQuestionText() : "Câu hỏi")
+                .setFont(fontBold)
+                .setFontSize(12)
+                .setMarginTop(15)
+                .setMarginBottom(5);
+        document.add(questionTitle);
+
+        // Vẽ biểu đồ
+        if (chartData.getChartData() != null && !chartData.getChartData().isEmpty()) {
+            byte[] chartImage = null;
+            
+            if ("bar".equals(chartType)) {
+                chartImage = createMultipleChoiceBarChart(chartData.getChartData(),
+                        chartData.getQuestionText() != null ? chartData.getQuestionText() : "Biểu đồ",
+                        isRanking);
+            } else {
+                chartImage = createPieChart(chartData.getChartData(),
+                        chartData.getQuestionText() != null ? chartData.getQuestionText() : "Biểu đồ");
+            }
+            
+            if (chartImage != null) {
+                com.itextpdf.io.image.ImageData imageData = com.itextpdf.io.image.ImageDataFactory
+                        .create(chartImage);
+                com.itextpdf.layout.element.Image image = new com.itextpdf.layout.element.Image(imageData);
+                image.setWidth(480);
+                image.setAutoScale(true);
+                document.add(image);
+            }
+            
+            // Thêm bảng thống kê chi tiết
+            addMultipleChoiceStatsTable(document, chartData.getChartData(), font, fontBold);
+        }
+    }
+
+    /**
+     * Thêm câu hỏi mở (Open-Ended) vào PDF
+     */
+    private void addOpenEndedQuestionsToPDF(com.itextpdf.layout.Document document,
+            Long surveyId,
+            com.itextpdf.kernel.font.PdfFont font, com.itextpdf.kernel.font.PdfFont fontBold) {
+        try {
+            Survey survey = surveyRepository.findById(surveyId).orElse(null);
+            if (survey == null) {
+                return;
+            }
+
+            // Lấy tất cả open-ended questions
+            List<Question> openEndedQuestions = questionRepository.findBySurveyOrderByDisplayOrderAsc(survey)
+                    .stream()
+                    .filter(q -> q.getQuestionType() == QuestionTypeEnum.open_ended)
+                    .collect(Collectors.toList());
+
+            if (openEndedQuestions.isEmpty()) {
+                return;
+            }
+
+            // Tiêu đề section
+            com.itextpdf.layout.element.Paragraph openEndedTitle = new com.itextpdf.layout.element.Paragraph(
+                    "📝 Câu hỏi mở (Open-Ended Questions)")
+                    .setFont(fontBold)
+                    .setFontSize(16)
+                    .setMarginTop(20)
+                    .setMarginBottom(10);
+            document.add(openEndedTitle);
+
+            // Xử lý từng câu hỏi
+            for (Question question : openEndedQuestions) {
+                // Tiêu đề câu hỏi
+                com.itextpdf.layout.element.Paragraph questionTitle = new com.itextpdf.layout.element.Paragraph(
+                        question.getQuestionText() != null ? question.getQuestionText() : "Câu hỏi")
+                        .setFont(fontBold)
+                        .setFontSize(12)
+                        .setMarginTop(15)
+                        .setMarginBottom(5);
+                document.add(questionTitle);
+
+                // Lấy tất cả answers
+                List<Answer> answers = answerRepository.findByQuestion(question);
+                List<Answer> validAnswers = answers.stream()
+                        .filter(a -> a.getAnswerText() != null && !a.getAnswerText().trim().isEmpty())
+                        .collect(Collectors.toList());
+
+                if (validAnswers.isEmpty()) {
+                    com.itextpdf.layout.element.Paragraph noAnswer = new com.itextpdf.layout.element.Paragraph(
+                            "Chưa có câu trả lời")
+                            .setFont(font)
+                            .setFontSize(10)
+                            .setFontColor(com.itextpdf.kernel.colors.ColorConstants.GRAY)
+                            .setMarginBottom(10);
+                    document.add(noAnswer);
+                    continue;
+                }
+
+                // Thống kê
+                int totalAnswers = validAnswers.size();
+
+                com.itextpdf.layout.element.Paragraph stats = new com.itextpdf.layout.element.Paragraph(
+                        String.format("Tổng số câu trả lời: %d", totalAnswers))
+                        .setFont(font)
+                        .setFontSize(10)
+                        .setMarginBottom(10);
+                document.add(stats);
+
+                // Hiển thị các câu trả lời (giới hạn 10 câu đầu để không quá dài)
+                int maxDisplay = Math.min(10, validAnswers.size());
+                for (int i = 0; i < maxDisplay; i++) {
+                    Answer answer = validAnswers.get(i);
+                    com.itextpdf.layout.element.Paragraph answerText = new com.itextpdf.layout.element.Paragraph(
+                            String.format("%d. %s", i + 1, answer.getAnswerText()))
+                            .setFont(font)
+                            .setFontSize(9)
+                            .setMarginBottom(5)
+                            .setPaddingLeft(10);
+                    document.add(answerText);
+                }
+
+                if (validAnswers.size() > maxDisplay) {
+                    com.itextpdf.layout.element.Paragraph moreText = new com.itextpdf.layout.element.Paragraph(
+                            String.format("... và %d câu trả lời khác", validAnswers.size() - maxDisplay))
+                            .setFont(font)
+                            .setFontSize(9)
+                            .setFontColor(com.itextpdf.kernel.colors.ColorConstants.GRAY)
+                            .setMarginBottom(10);
+                    document.add(moreText);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Lỗi khi thêm open-ended questions vào PDF: {}", e.getMessage(), e);
+        }
     }
 
 }
