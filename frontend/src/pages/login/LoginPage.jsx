@@ -38,7 +38,21 @@ const Login = () => {
             }
         } catch (err) {
             console.error('Login error:', err);
-            if (err.response?.data?.message) {
+
+            // Lấy thông báo lỗi từ các nguồn khác nhau
+            const errorMessage = err.response?.data?.message ||
+                err.response?.data?.error ||
+                err.message || '';
+
+            // Kiểm tra nếu là lỗi sai tài khoản/mật khẩu
+            const isBadCredentials = errorMessage.toLowerCase().includes('bad credentials') ||
+                errorMessage.toLowerCase().includes('sai thông tin đăng nhập') ||
+                errorMessage.toLowerCase().includes('tài khoản hoặc mật khẩu') ||
+                err.response?.status === 401;
+
+            if (isBadCredentials) {
+                setError('Email hoặc mật khẩu không chính xác!');
+            } else if (err.response?.data?.message) {
                 setError(`Đăng nhập thất bại: ${err.response.data.message}`);
             } else if (err.response?.data?.error) {
                 setError(`Đăng nhập thất bại: ${err.response.data.error}`);

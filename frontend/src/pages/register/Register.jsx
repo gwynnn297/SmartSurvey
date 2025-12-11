@@ -51,7 +51,29 @@ const Register = () => {
         } catch (err) {
             console.error("Register page error:", err);
 
-            setError(err.message || "Đăng ký thất bại! Vui lòng kiểm tra lại thông tin.");
+            // Lấy thông báo lỗi từ các nguồn khác nhau
+            const errorMessage = err.response?.data?.message ||
+                err.response?.data?.error ||
+                err.message || '';
+
+            // Kiểm tra nếu là lỗi email trùng
+            const isEmailExists = errorMessage.toLowerCase().includes('email đã được sử dụng') ||
+                errorMessage.toLowerCase().includes('email đã tồn tại') ||
+                errorMessage.toLowerCase().includes('email already exists') ||
+                errorMessage.toLowerCase().includes('email đã được đăng ký') ||
+                errorMessage.toLowerCase().includes('full authentication is required to access this resource');
+
+            if (isEmailExists) {
+                setError('Email đã tồn tại!');
+            } else if (err.response?.data?.message) {
+                setError(err.response.data.message);
+            } else if (err.response?.data?.error) {
+                setError(err.response.data.error);
+            } else if (err.message) {
+                setError(err.message);
+            } else {
+                setError('Đăng ký thất bại! Vui lòng kiểm tra lại thông tin.');
+            }
 
             // Reset password để nhập lại
             setFormData((prev) => ({

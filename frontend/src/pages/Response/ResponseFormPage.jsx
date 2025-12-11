@@ -447,7 +447,7 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
                     handleChange(q.id, file);
                   }
                 }}
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg"
               />
             </div>
             {selectedFile && (

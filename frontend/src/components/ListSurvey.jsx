@@ -126,60 +126,133 @@ const ListSurvey = () => {
         }
     };
 
-    useEffect(() => {
-        const loadData = async () => {
+    // Function to load surveys data - extracted to be reusable
+    const loadSurveysData = React.useCallback(async (forceRefresh = false) => {
+        try {
+            setLoading(true);
+
+            // Always try to get data from API first (to get latest updates)
+            let apiSurveys = null;
             try {
-                // Check token before making API calls
-                const token = localStorage.getItem('token');
-                // Load surveys from localStorage first
-                const localSurveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
-                // Try to get data from API
-                let apiSurveys = null;
-                try {
-                    apiSurveys = await surveyService.getSurveys(currentPage, pageSize);
-                } catch (error) {
-                    console.log('ListSurvey: API surveys failed, using local data');
-                }
-
-                // Set surveys data (prefer API, fallback to local)
-                let surveysList = [];
-                if (apiSurveys) {
-                    // Backend trả về { meta: {...}, result: [...] }
-                    if (apiSurveys.meta) {
-                        // Có thông tin phân trang từ API
-                        surveysList = Array.isArray(apiSurveys.result) ? apiSurveys.result : [];
-                        setTotalPages(apiSurveys.meta.pages || 0);
-                        setTotalElements(apiSurveys.meta.total || 0);
-                    } else {
-                        // Không có thông tin phân trang, xử lý như cũ
-                        surveysList = Array.isArray(apiSurveys?.result) ? apiSurveys.result :
-                            Array.isArray(apiSurveys) ? apiSurveys : localSurveys;
-                        setTotalPages(1);
-                        setTotalElements(surveysList.length);
-                    }
-                } else {
-                    // Fallback to local data with pagination
-                    const startIndex = currentPage * pageSize;
-                    const endIndex = startIndex + pageSize;
-                    surveysList = localSurveys.slice(startIndex, endIndex);
-                    setTotalPages(Math.ceil(localSurveys.length / pageSize));
-                    setTotalElements(localSurveys.length);
-                }
-
-                setSurveys(surveysList);
-
-                // Fetch response counts for the surveys
-                fetchResponseCounts(surveysList);
+                apiSurveys = await surveyService.getSurveys(currentPage, pageSize);
             } catch (error) {
-                console.error('ListSurvey: Error loading data:', error);
-                console.error('ListSurvey: Error details:', error.response?.data);
-            } finally {
-                setLoading(false);
+                console.log('ListSurvey: API surveys failed, using local data');
+            }
+
+            // Set surveys data (prefer API, fallback to local)
+            let surveysList = [];
+            if (apiSurveys) {
+                // Backend trả về { meta: {...}, result: [...] }
+                if (apiSurveys.meta) {
+                    // Có thông tin phân trang từ API
+                    surveysList = Array.isArray(apiSurveys.result) ? apiSurveys.result : [];
+                    setTotalPages(apiSurveys.meta.pages || 0);
+                    setTotalElements(apiSurveys.meta.total || 0);
+                } else {
+                    // Không có thông tin phân trang, xử lý như cũ
+                    surveysList = Array.isArray(apiSurveys?.result) ? apiSurveys.result :
+                        Array.isArray(apiSurveys) ? apiSurveys : [];
+                    setTotalPages(1);
+                    setTotalElements(surveysList.length);
+                }
+
+                // Update localStorage with latest API data if we got data from API
+                if (forceRefresh && surveysList.length > 0) {
+                    try {
+                        // Update localStorage with latest survey info
+                        const localSurveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
+                        const updatedSurveys = localSurveys.map(localSurvey => {
+                            const apiSurvey = surveysList.find(s => (s.id || s._id) === (localSurvey.id || localSurvey._id));
+                            if (apiSurvey) {
+                                // Update with latest data from API
+                                return {
+                                    ...localSurvey,
+                                    title: apiSurvey.title || localSurvey.title,
+                                    description: apiSurvey.description || localSurvey.description,
+                                    status: apiSurvey.status || localSurvey.status,
+                                    categoryId: apiSurvey.categoryId || apiSurvey.category?.id || localSurvey.categoryId,
+                                    categoryName: apiSurvey.categoryName || apiSurvey.category?.categoryName || localSurvey.categoryName,
+                                    updatedAt: apiSurvey.updatedAt || apiSurvey.updated_at || localSurvey.updatedAt
+                                };
+                            }
+                            return localSurvey;
+                        });
+
+                        // Add new surveys from API that don't exist in localStorage
+                        surveysList.forEach(apiSurvey => {
+                            const exists = updatedSurveys.some(s => (s.id || s._id) === (apiSurvey.id || apiSurvey._id));
+                            if (!exists) {
+                                updatedSurveys.push({
+                                    id: apiSurvey.id || apiSurvey._id,
+                                    title: apiSurvey.title,
+                                    description: apiSurvey.description,
+                                    status: apiSurvey.status,
+                                    categoryId: apiSurvey.categoryId || apiSurvey.category?.id,
+                                    categoryName: apiSurvey.categoryName || apiSurvey.category?.categoryName,
+                                    createdAt: apiSurvey.createdAt || apiSurvey.created_at,
+                                    updatedAt: apiSurvey.updatedAt || apiSurvey.updated_at
+                                });
+                            }
+                        });
+
+                        localStorage.setItem('userSurveys', JSON.stringify(updatedSurveys));
+                    } catch (updateError) {
+                        console.error('Error updating localStorage:', updateError);
+                    }
+                }
+            } else {
+                // Fallback to local data with pagination (only if API fails)
+                const localSurveys = JSON.parse(localStorage.getItem('userSurveys') || '[]');
+                const startIndex = currentPage * pageSize;
+                const endIndex = startIndex + pageSize;
+                surveysList = localSurveys.slice(startIndex, endIndex);
+                setTotalPages(Math.ceil(localSurveys.length / pageSize));
+                setTotalElements(localSurveys.length);
+            }
+
+            setSurveys(surveysList);
+
+            // Fetch response counts for the surveys
+            fetchResponseCounts(surveysList);
+        } catch (error) {
+            console.error('ListSurvey: Error loading data:', error);
+            console.error('ListSurvey: Error details:', error.response?.data);
+        } finally {
+            setLoading(false);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentPage, pageSize]);
+
+    // Load surveys on mount and when page changes
+    useEffect(() => {
+        loadSurveysData(false);
+    }, [currentPage, pageSize]);
+
+    // Auto-refresh when window gains focus (user returns to tab/window)
+    useEffect(() => {
+        const handleFocus = () => {
+            // Reload surveys when user returns to the page
+            console.log('ListSurvey: Window focused, refreshing surveys...');
+            loadSurveysData(true);
+        };
+
+        window.addEventListener('focus', handleFocus);
+
+        // Also refresh when page becomes visible (if using visibility API)
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                console.log('ListSurvey: Page became visible, refreshing surveys...');
+                loadSurveysData(true);
             }
         };
 
-        loadData();
-    }, [currentPage, pageSize]);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            window.removeEventListener('focus', handleFocus);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [loadSurveysData]);
 
     // Pagination handlers
     const handlePageChange = (newPage) => {

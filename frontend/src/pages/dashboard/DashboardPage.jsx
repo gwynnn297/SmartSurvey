@@ -5,6 +5,22 @@ import Sidebar from "../../components/Sidebar";
 import MainLayout from "../../layouts/MainLayout";
 import { surveyService } from "../../services/surveyService";
 import { responseService } from "../../services/responseService";
+import { dashboardReportService } from "../../services/dashboardReportService";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  BarChart,
+  Bar,
+} from "recharts";
 import "./DashboardPage.css";
 
 const METRIC_CARDS = [
@@ -49,9 +65,9 @@ const CHART_PLACEHOLDERS = [
     )
   },
   {
-    title: "Xu hướng phản hồi",
+    title: "Xu hướng khảo sát theo danh mục",
     type: "Biểu đồ đường",
-    description: "Biểu đồ đường hiển thị xu hướng phản hồi theo thời gian",
+    description: "Biểu đồ đường hiển thị số lượng khảo sát được tạo theo từng danh mục",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 3v18h18" />
@@ -80,7 +96,7 @@ const DEFAULT_PAGE_SIZE = 10;
 const calculateRealStats = async (surveysData, metaData = null, responseCounts = {}) => {
   const totalSurveys = metaData?.total ?? surveysData.length;
 
-  // Tính tổng phản hồi từ API response counts thay vì từ dữ liệu local
+  // Tính tổng phản hồi từ API response counts
   const totalResponses = surveysData.reduce((sum, survey) => {
     const surveyId = survey.id || survey._id;
     const apiCount = responseCounts[surveyId] || 0;
@@ -135,6 +151,713 @@ const ChartCard = ({ title, type, description, icon }) => (
     </div>
   </article>
 );
+
+// Component biểu đồ phân bố trạng thái khảo sát
+const StatusDistributionChart = ({ surveysData, loading }) => {
+  // Tính toán phân bố trạng thái
+  const statusDistribution = useMemo(() => {
+    if (!surveysData || surveysData.length === 0) {
+      return [];
+    }
+
+    const statusCounts = {
+      published: 0,
+      archived: 0,
+      draft: 0,
+    };
+
+    surveysData.forEach((survey) => {
+      const status = survey.status || "draft";
+      if (statusCounts.hasOwnProperty(status)) {
+        statusCounts[status]++;
+      } else {
+        statusCounts.draft++;
+      }
+    });
+
+    const total = surveysData.length;
+    const data = [
+      {
+        name: "Đang mở",
+        value: statusCounts.published,
+        count: statusCounts.published,
+        percentage: total > 0 ? Math.round((statusCounts.published / total) * 100) : 0,
+        color: "#22c55e", // green
+      },
+      {
+        name: "Đã đóng",
+        value: statusCounts.archived,
+        count: statusCounts.archived,
+        percentage: total > 0 ? Math.round((statusCounts.archived / total) * 100) : 0,
+        color: "#ef4444", // red
+      },
+      {
+        name: "Bản nháp",
+        value: statusCounts.draft,
+        count: statusCounts.draft,
+        percentage: total > 0 ? Math.round((statusCounts.draft / total) * 100) : 0,
+        color: "#3b82f6", // blue
+      },
+    ].filter((item) => item.value > 0); // Chỉ hiển thị các trạng thái có dữ liệu
+
+    return data;
+  }, [surveysData]);
+
+  if (loading) {
+    return (
+      <article className="dash-chart">
+        <header className="dash-chart__header">
+          <div>
+            <h3>Phân bố trạng thái khảo sát</h3>
+            <p>Biểu đồ tròn hiển thị tỷ lệ khảo sát theo trạng thái</p>
+          </div>
+          <span className="dash-chart__type">Biểu đồ tròn</span>
+        </header>
+        <div className="dash-chart__placeholder">
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '240px' }}>
+            <p>Đang tải dữ liệu...</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  if (statusDistribution.length === 0) {
+    return (
+      <article className="dash-chart">
+        <header className="dash-chart__header">
+          <div>
+            <h3>Phân bố trạng thái khảo sát</h3>
+            <p>Biểu đồ tròn hiển thị tỷ lệ khảo sát theo trạng thái</p>
+          </div>
+          <span className="dash-chart__type">Biểu đồ tròn</span>
+        </header>
+        <div className="dash-chart__placeholder">
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '240px', flexDirection: 'column', gap: '12px' }}>
+            <span className="dash-chart__icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M8 12h8" />
+                <path d="M12 8v8" />
+              </svg>
+            </span>
+            <p style={{ margin: 0, color: 'rgba(15, 23, 42, 0.6)' }}>Chưa có dữ liệu khảo sát</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  return (
+    <article className="dash-chart">
+      <header className="dash-chart__header">
+        <div>
+          <h3>Phân bố trạng thái khảo sát</h3>
+          <p>Biểu đồ tròn hiển thị tỷ lệ khảo sát theo trạng thái</p>
+        </div>
+        <span className="dash-chart__type">Biểu đồ tròn</span>
+      </header>
+      <div style={{ padding: '20px', minHeight: '280px' }}>
+        <ResponsiveContainer width="100%" height={240}>
+          <PieChart>
+            <Pie
+              data={statusDistribution}
+              dataKey="value"
+              cx="50%"
+              cy="50%"
+              outerRadius={80}
+              labelLine={false}
+              label={({ name, percentage }) =>
+                `${name}: ${percentage}%`
+              }
+            >
+              {statusDistribution.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(value, name, props) => [
+                `${props.payload.count} khảo sát (${props.payload.percentage}%)`,
+                props.payload.name,
+              ]}
+            />
+            <Legend
+              formatter={(value, entry) => {
+                const data = statusDistribution.find((d) => d.name === value);
+                return `${value}: ${data?.count || 0} (${data?.percentage || 0}%)`;
+              }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    </article>
+  );
+};
+
+// Component biểu đồ so sánh khảo sát
+const SurveyComparisonChart = ({ surveysData, responseCounts, loading }) => {
+  // Tính toán dữ liệu so sánh
+  const comparisonData = useMemo(() => {
+    if (!surveysData || surveysData.length === 0 || !responseCounts) {
+      return [];
+    }
+
+    // Lấy top 10 surveys có nhiều phản hồi nhất
+    const surveysWithCounts = surveysData
+      .map(survey => {
+        const surveyId = String(survey.id || survey._id);
+        const count = responseCounts[surveyId] || 0;
+        return {
+          name: survey.title || "Không tiêu đề",
+          count: count,
+          surveyId: surveyId,
+          status: survey.status || "draft"
+        };
+      })
+      .filter(item => item.count > 0) // Chỉ hiển thị surveys có phản hồi
+      .sort((a, b) => b.count - a.count) // Sắp xếp giảm dần
+      .slice(0, 10); // Lấy top 10
+
+    return surveysWithCounts;
+  }, [surveysData, responseCounts]);
+
+  if (loading) {
+    return (
+      <article className="dash-chart">
+        <header className="dash-chart__header">
+          <div>
+            <h3>So sánh khảo sát</h3>
+            <p>Biểu đồ cột so sánh số lượng phản hồi giữa các khảo sát</p>
+          </div>
+          <span className="dash-chart__type">Biểu đồ cột</span>
+        </header>
+        <div className="dash-chart__placeholder">
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '240px' }}>
+            <p>Đang tải dữ liệu...</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  if (comparisonData.length === 0) {
+    return (
+      <article className="dash-chart">
+        <header className="dash-chart__header">
+          <div>
+            <h3>So sánh khảo sát</h3>
+            <p>Biểu đồ cột so sánh số lượng phản hồi giữa các khảo sát</p>
+          </div>
+          <span className="dash-chart__type">Biểu đồ cột</span>
+        </header>
+        <div className="dash-chart__placeholder">
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '240px', flexDirection: 'column', gap: '12px' }}>
+            <span className="dash-chart__icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <rect x="7" y="8" width="3" height="8" />
+                <rect x="12" y="5" width="3" height="11" />
+                <rect x="17" y="10" width="3" height="6" />
+              </svg>
+            </span>
+            <p style={{ margin: 0, color: 'rgba(15, 23, 42, 0.6)' }}>Chưa có dữ liệu phản hồi</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  // Rút ngắn tên khảo sát nếu quá dài
+  const formatName = (name) => {
+    if (name.length > 20) {
+      return name.substring(0, 20) + '...';
+    }
+    return name;
+  };
+
+  return (
+    <article className="dash-chart">
+      <header className="dash-chart__header">
+        <div>
+          <h3>So sánh khảo sát</h3>
+          <p>Biểu đồ cột so sánh số lượng phản hồi giữa các khảo sát (Top {comparisonData.length})</p>
+        </div>
+        <span className="dash-chart__type">Biểu đồ cột</span>
+      </header>
+      <div style={{ padding: '20px', minHeight: '280px' }}>
+        <ResponsiveContainer width="100%" height={240}>
+          <BarChart
+            data={comparisonData}
+            margin={{ top: 5, right: 30, bottom: 60, left: 5 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.2)" />
+            <XAxis
+              type="category"
+              dataKey="name"
+              stroke="rgba(15, 23, 42, 0.6)"
+              style={{ fontSize: '11px' }}
+              angle={-45}
+              textAnchor="end"
+              height={60}
+              tick={{ fontSize: '10px' }}
+              tickFormatter={formatName}
+            />
+            <YAxis
+              type="number"
+              stroke="rgba(15, 23, 42, 0.6)"
+              style={{ fontSize: '12px' }}
+              label={{ value: 'Số lượng phản hồi', angle: -90, position: 'insideLeft', style: { fontSize: '12px', fill: 'rgba(15, 23, 42, 0.6)', textAnchor: 'middle' } }}
+            />
+            <Tooltip
+              formatter={(value) => [`${value} phản hồi`, 'Số lượng']}
+              labelFormatter={(label) => `Khảo sát: ${label}`}
+              contentStyle={{
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                border: '1px solid rgba(148, 163, 184, 0.3)',
+                borderRadius: '8px',
+                padding: '8px'
+              }}
+            />
+            <Bar
+              dataKey="count"
+              fill="#3b82f6"
+              radius={[4, 4, 0, 0]}
+            >
+              {comparisonData.map((entry, index) => {
+                // Màu sắc dựa trên số lượng phản hồi
+                const maxCount = Math.max(...comparisonData.map(d => d.count));
+                const ratio = entry.count / maxCount;
+                let color = "#3b82f6"; // Mặc định xanh dương
+
+                if (ratio >= 0.7) {
+                  color = "#22c55e"; // Xanh lá - Nhiều phản hồi
+                } else if (ratio >= 0.4) {
+                  color = "#3b82f6"; // Xanh dương - Trung bình
+                } else {
+                  color = "#8b5cf6"; // Tím - Ít phản hồi
+                }
+
+                return (
+                  <Cell key={`cell-${index}`} fill={color} />
+                );
+              })}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </article>
+  );
+};
+
+// Component bộ lọc thời gian
+const TimeFilter = ({ timeFilter, setTimeFilter, customDateRange, setCustomDateRange, showCustomDatePicker, setShowCustomDatePicker }) => {
+  const timeFilterOptions = [
+    { value: 'today', label: 'Hôm nay' },
+    { value: 'yesterday', label: 'Hôm qua' },
+    { value: '7days', label: '7 ngày trước' },
+    { value: '14days', label: '14 ngày trước' },
+    { value: '30days', label: '30 ngày trước' },
+    { value: 'thisMonth', label: 'Tháng này' },
+    { value: 'lastMonth', label: 'Tháng trước' },
+    { value: 'custom', label: 'Tùy chọn' }
+  ];
+
+  const selectedLabel = timeFilterOptions.find(opt => opt.value === timeFilter)?.label || 'Hôm nay';
+
+  const handleTimeFilterChange = (value) => {
+    setTimeFilter(value);
+    if (value === 'custom') {
+      setShowCustomDatePicker(true);
+    } else {
+      setShowCustomDatePicker(false);
+    }
+  };
+
+  const handleCustomDateChange = (type, value) => {
+    setCustomDateRange(prev => ({
+      ...prev,
+      [type]: value
+    }));
+  };
+
+  return (
+    <div className="time-filter-dropdown">
+      <label htmlFor="time-filter-select" style={{ fontSize: '14px', color: 'rgba(15, 23, 42, 0.7)', fontWeight: '500' }}>
+        Bộ lọc thời gian:
+      </label>
+      <div className="time-filter-dropdown__wrapper">
+        <select
+          id="time-filter-select"
+          value={timeFilter}
+          onChange={(e) => handleTimeFilterChange(e.target.value)}
+          style={{
+            padding: '8px 12px',
+            fontSize: '14px',
+            border: '1px solid rgba(148, 163, 184, 0.3)',
+            borderRadius: '6px',
+            backgroundColor: 'white',
+            color: 'rgba(15, 23, 42, 0.9)',
+            cursor: 'pointer',
+            outline: 'none',
+            transition: 'all 0.2s',
+            minWidth: '180px',
+          }}
+          onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+          onBlur={(e) => e.target.style.borderColor = 'rgba(148, 163, 184, 0.3)'}
+        >
+          {timeFilterOptions.map(option => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        {showCustomDatePicker && timeFilter === 'custom' && (
+          <div className="time-filter-dropdown__custom-picker">
+            <div className="time-filter-dropdown__date-input">
+              <label>Từ ngày:</label>
+              <input
+                type="date"
+                value={customDateRange.startDate || ''}
+                onChange={(e) => handleCustomDateChange('startDate', e.target.value)}
+              />
+            </div>
+            <div className="time-filter-dropdown__date-input">
+              <label>Đến ngày:</label>
+              <input
+                type="date"
+                value={customDateRange.endDate || ''}
+                onChange={(e) => handleCustomDateChange('endDate', e.target.value)}
+                min={customDateRange.startDate || ''}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Component biểu đồ xu hướng View và Completed
+const ViewCompletedTrendChart = ({ surveysData, responseCounts, loading, dateRange, timeFilter }) => {
+  const [viewCounts, setViewCounts] = useState({});
+  const [loadingViews, setLoadingViews] = useState(false);
+
+  // Fetch view counts cho các surveys
+  useEffect(() => {
+    const fetchViewCounts = async () => {
+      if (!surveysData || surveysData.length === 0) {
+        return;
+      }
+
+      setLoadingViews(true);
+      const viewCountsMap = {};
+
+      try {
+        // Fetch view count cho từng survey (song song để tối ưu)
+        const promises = surveysData.map(async (survey) => {
+          const surveyId = survey.id || survey._id;
+          if (!surveyId) return null;
+
+          try {
+            const overview = await dashboardReportService.getSurveyOverview(surveyId);
+            return {
+              surveyId: String(surveyId),
+              views: overview.viewership || 0
+            };
+          } catch (error) {
+            // Nếu API không khả dụng, sử dụng giá trị mặc định
+            console.warn(`Could not fetch view count for survey ${surveyId}:`, error);
+            return {
+              surveyId: String(surveyId),
+              views: 0
+            };
+          }
+        });
+
+        const results = await Promise.all(promises);
+        results.forEach(result => {
+          if (result) {
+            viewCountsMap[result.surveyId] = result.views;
+          }
+        });
+
+        setViewCounts(viewCountsMap);
+      } catch (error) {
+        console.error('Error fetching view counts:', error);
+        setViewCounts({});
+      } finally {
+        setLoadingViews(false);
+      }
+    };
+
+    fetchViewCounts();
+  }, [surveysData]);
+
+  // Tính toán dữ liệu biểu đồ
+  const trendData = useMemo(() => {
+    if (!surveysData || surveysData.length === 0 || loadingViews) {
+      return [];
+    }
+
+    const { startDate, endDate } = dateRange || {};
+
+    if (!startDate || !endDate) {
+      return [];
+    }
+
+    // Xác định xem nên hiển thị theo giờ hay ngày
+    const isHourly = timeFilter === 'today' || timeFilter === 'yesterday';
+    const isCustomShortRange = timeFilter === 'custom' &&
+      (endDate.getTime() - startDate.getTime()) <= 2 * 24 * 60 * 60 * 1000; // <= 2 ngày
+
+    const useHourly = isHourly || isCustomShortRange;
+    const timeMap = {};
+
+    if (useHourly) {
+      // Khởi tạo các giờ trong ngày (0-23)
+      const currentHour = new Date(startDate);
+      currentHour.setHours(0, 0, 0, 0);
+      const endHour = new Date(endDate);
+      endHour.setHours(23, 59, 59, 999);
+
+      while (currentHour <= endHour) {
+        const hourKey = `${currentHour.getFullYear()}-${String(currentHour.getMonth() + 1).padStart(2, '0')}-${String(currentHour.getDate()).padStart(2, '0')}-${String(currentHour.getHours()).padStart(2, '0')}`;
+        timeMap[hourKey] = {
+          views: 0,
+          completed: 0,
+          timestamp: new Date(currentHour)
+        };
+        currentHour.setHours(currentHour.getHours() + 1);
+      }
+
+      // Đếm view và completed theo giờ
+      surveysData.forEach(survey => {
+        try {
+          const createdDate = new Date(survey.createdAt || survey.created_at);
+          const hourKey = `${createdDate.getFullYear()}-${String(createdDate.getMonth() + 1).padStart(2, '0')}-${String(createdDate.getDate()).padStart(2, '0')}-${String(createdDate.getHours()).padStart(2, '0')}`;
+
+          if (timeMap[hourKey] && createdDate >= startDate && createdDate <= endDate) {
+            const surveyId = String(survey.id || survey._id);
+            const views = viewCounts[surveyId] || 0;
+            const completed = responseCounts[surveyId] || 0;
+
+            // Phân bổ view và completed theo tỷ lệ (vì view count là tổng, không phải theo giờ)
+            // Ở đây ta sẽ tính dựa trên số lượng survey được tạo trong giờ đó
+            timeMap[hourKey].views += views;
+            timeMap[hourKey].completed += completed;
+          }
+        } catch (error) {
+          console.error('Error parsing date:', error);
+        }
+      });
+
+      // Chuyển đổi thành mảng để hiển thị
+      const result = Object.keys(timeMap)
+        .sort()
+        .map(hourKey => {
+          const timestamp = timeMap[hourKey].timestamp;
+          const hourLabel = `${String(timestamp.getHours()).padStart(2, '0')}:00`;
+
+          return {
+            time: hourLabel,
+            fullTime: hourKey,
+            'Lượt xem': timeMap[hourKey].views,
+            'Đã hoàn thành': timeMap[hourKey].completed
+          };
+        });
+
+      return result;
+    } else {
+      // Hiển thị theo ngày
+      const currentDate = new Date(startDate);
+      currentDate.setHours(0, 0, 0, 0);
+      const endDay = new Date(endDate);
+      endDay.setHours(23, 59, 59, 999);
+
+      while (currentDate <= endDay) {
+        const dayKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+        timeMap[dayKey] = {
+          views: 0,
+          completed: 0,
+          timestamp: new Date(currentDate)
+        };
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      // Đếm view và completed theo ngày
+      surveysData.forEach(survey => {
+        try {
+          const createdDate = new Date(survey.createdAt || survey.created_at);
+          const dayKey = `${createdDate.getFullYear()}-${String(createdDate.getMonth() + 1).padStart(2, '0')}-${String(createdDate.getDate()).padStart(2, '0')}`;
+
+          if (timeMap[dayKey] && createdDate >= startDate && createdDate <= endDate) {
+            const surveyId = String(survey.id || survey._id);
+            const views = viewCounts[surveyId] || 0;
+            const completed = responseCounts[surveyId] || 0;
+
+            timeMap[dayKey].views += views;
+            timeMap[dayKey].completed += completed;
+          }
+        } catch (error) {
+          console.error('Error parsing date:', error);
+        }
+      });
+
+      // Chuyển đổi thành mảng để hiển thị
+      const result = Object.keys(timeMap)
+        .sort()
+        .map(dayKey => {
+          const timestamp = timeMap[dayKey].timestamp;
+          const dayLabel = timestamp.toLocaleDateString('vi-VN', {
+            day: '2-digit',
+            month: '2-digit',
+            ...(timeFilter === 'thisMonth' || timeFilter === 'lastMonth' ? {} : { year: '2-digit' })
+          });
+
+          return {
+            time: dayLabel,
+            fullTime: dayKey,
+            'Lượt xem': timeMap[dayKey].views,
+            'Đã hoàn thành': timeMap[dayKey].completed
+          };
+        });
+
+      return result;
+    }
+  }, [surveysData, viewCounts, responseCounts, dateRange, loadingViews, timeFilter]);
+
+  if (loading || loadingViews) {
+    return (
+      <article className="dash-chart">
+        <header className="dash-chart__header">
+          <div>
+            <h3>Xu hướng lượt xem và hoàn thành</h3>
+            <p>Biểu đồ đường hiển thị số lượng lượt xem và phản hồi đã hoàn thành {timeFilter === 'today' || timeFilter === 'yesterday' ? 'theo giờ' : 'theo thời gian'}</p>
+          </div>
+          <span className="dash-chart__type">Biểu đồ đường</span>
+        </header>
+        <div className="dash-chart__placeholder">
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '240px' }}>
+            <p>Đang tải dữ liệu...</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  if (!trendData || trendData.length === 0) {
+    return (
+      <article className="dash-chart">
+        <header className="dash-chart__header">
+          <div>
+            <h3>Xu hướng lượt xem và hoàn thành</h3>
+            <p>Biểu đồ đường hiển thị số lượng lượt xem và phản hồi đã hoàn thành {timeFilter === 'today' || timeFilter === 'yesterday' ? 'theo giờ' : 'theo thời gian'}</p>
+          </div>
+          <span className="dash-chart__type">Biểu đồ đường</span>
+        </header>
+        <div className="dash-chart__placeholder">
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '240px', flexDirection: 'column', gap: '12px' }}>
+            <span className="dash-chart__icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3v18h18" />
+                <path d="M19 17V9l-5 5-3-3-4 4" />
+              </svg>
+            </span>
+            <p style={{ margin: 0, color: 'rgba(15, 23, 42, 0.6)' }}>Chưa có dữ liệu</p>
+          </div>
+        </div>
+      </article>
+    );
+  }
+
+  const isHourly = timeFilter === 'today' || timeFilter === 'yesterday' ||
+    (timeFilter === 'custom' && dateRange && (dateRange.endDate.getTime() - dateRange.startDate.getTime()) <= 2 * 24 * 60 * 60 * 1000);
+
+  // Xác định interval cho XAxis
+  // - 30days, thisMonth, lastMonth: hiển thị mỗi 5 ngày (interval = 4)
+  // - Custom > 14 ngày: hiển thị mỗi 4 ngày (interval = 3)
+  // - Các trường hợp khác: hiển thị tất cả (interval = 0)
+  const needsInterval5Days = timeFilter === '30days' || timeFilter === 'thisMonth' || timeFilter === 'lastMonth';
+
+  // Kiểm tra custom date range > 14 ngày
+  const isCustomOver14Days = timeFilter === 'custom' && dateRange &&
+    (dateRange.endDate.getTime() - dateRange.startDate.getTime()) > 14 * 24 * 60 * 60 * 1000;
+
+  let xAxisInterval = 0;
+  if (needsInterval5Days) {
+    xAxisInterval = 4; // Hiển thị mỗi 5 ngày (index 0, 5, 10, ... tức là interval = 4)
+  } else if (isCustomOver14Days) {
+    xAxisInterval = 3; // Hiển thị mỗi 4 ngày (index 0, 4, 8, ... tức là interval = 3)
+  }
+
+  return (
+    <article className="dash-chart">
+      <header className="dash-chart__header">
+        <div>
+          <h3>Xu hướng lượt xem và hoàn thành</h3>
+          <p>Biểu đồ đường hiển thị số lượng lượt xem và phản hồi đã hoàn thành {isHourly ? 'theo giờ' : 'theo thời gian'}</p>
+        </div>
+        <span className="dash-chart__type">Biểu đồ đường</span>
+      </header>
+      <div style={{ padding: '20px', minHeight: '280px' }}>
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={trendData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.2)" />
+            <XAxis
+              dataKey="time"
+              stroke="rgba(15, 23, 42, 0.6)"
+              style={{ fontSize: '12px' }}
+              angle={isHourly ? 0 : -45}
+              textAnchor={isHourly ? 'middle' : 'end'}
+              height={isHourly ? 40 : 60}
+              interval={isHourly ? 'preserveStartEnd' : xAxisInterval}
+            />
+            <YAxis
+              stroke="rgba(15, 23, 42, 0.6)"
+              style={{ fontSize: '12px' }}
+            />
+            <Tooltip
+              formatter={(value, name) => {
+                if (name === 'Lượt xem') {
+                  return [`${value} lượt xem`, name];
+                } else if (name === 'Đã hoàn thành') {
+                  return [`${value} phản hồi`, name];
+                }
+                return [value, name];
+              }}
+              labelFormatter={(label) => isHourly ? `Giờ: ${label}` : `Ngày: ${label}`}
+              contentStyle={{
+                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                border: '1px solid rgba(148, 163, 184, 0.3)',
+                borderRadius: '8px',
+                padding: '8px'
+              }}
+            />
+            <Legend
+              wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
+            />
+            <Line
+              type="monotone"
+              dataKey="Lượt xem"
+              stroke="#3b82f6"
+              strokeWidth={2}
+              dot={{ fill: '#3b82f6', r: 3 }}
+              activeDot={{ r: 5 }}
+              name="Lượt xem"
+            />
+            <Line
+              type="monotone"
+              dataKey="Đã hoàn thành"
+              stroke="#22c55e"
+              strokeWidth={2}
+              dot={{ fill: '#22c55e', r: 3 }}
+              activeDot={{ r: 5 }}
+              name="Đã hoàn thành"
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </article>
+  );
+};
 
 const RecentSurveyItem = ({ survey, index, onOpen, responseCounts, loadingResponseCounts }) => {
   const statusLabel = survey.status === "published" ? "Đang mở" : survey.status === "archived" ? "Đã đóng" : "Bản nháp";
@@ -195,10 +918,117 @@ export default function DashboardPage() {
   const [pageSize] = useState(DEFAULT_PAGE_SIZE);
   const [responseCounts, setResponseCounts] = useState({});
   const [loadingResponseCounts, setLoadingResponseCounts] = useState(false);
+  const [allSurveysForChart, setAllSurveysForChart] = useState([]);
+  const [timeFilter, setTimeFilter] = useState('30days'); // 'today', 'yesterday', '7days', '14days', '30days', 'thisMonth', 'lastMonth', 'custom'
+  const [customDateRange, setCustomDateRange] = useState({ startDate: null, endDate: null });
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
 
   const displayName = user?.name || user?.username || user?.fullName || "User";
 
-  const recentSurveys = useMemo(() => surveys.slice(0, 5), [surveys]);
+  // Tính toán date range từ time filter
+  const dateRange = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let startDate, endDate;
+
+    switch (timeFilter) {
+      case 'today':
+        startDate = new Date(today);
+        endDate = new Date(today);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'yesterday':
+        startDate = new Date(today);
+        startDate.setDate(startDate.getDate() - 1);
+        endDate = new Date(startDate);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case '7days':
+        startDate = new Date(today);
+        startDate.setDate(startDate.getDate() - 7);
+        endDate = new Date(today);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case '14days':
+        startDate = new Date(today);
+        startDate.setDate(startDate.getDate() - 14);
+        endDate = new Date(today);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case '30days':
+        startDate = new Date(today);
+        startDate.setDate(startDate.getDate() - 30);
+        endDate = new Date(today);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      case 'thisMonth':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        break;
+      case 'lastMonth':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+        break;
+      case 'custom':
+        if (customDateRange.startDate && customDateRange.endDate) {
+          startDate = new Date(customDateRange.startDate);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(customDateRange.endDate);
+          endDate.setHours(23, 59, 59, 999);
+        } else {
+          // Fallback to today if custom dates not set
+          startDate = new Date(today);
+          endDate = new Date(today);
+          endDate.setHours(23, 59, 59, 999);
+        }
+        break;
+      default:
+        startDate = new Date(today);
+        endDate = new Date(today);
+        endDate.setHours(23, 59, 59, 999);
+    }
+
+    return { startDate, endDate };
+  }, [timeFilter, customDateRange]);
+
+  // Filter surveys theo date range
+  const filteredSurveysByTime = useMemo(() => {
+    if (!allSurveysForChart || allSurveysForChart.length === 0) {
+      return [];
+    }
+
+    const { startDate, endDate } = dateRange;
+
+    return allSurveysForChart.filter(survey => {
+      try {
+        const createdDate = new Date(survey.createdAt || survey.created_at);
+        if (isNaN(createdDate.getTime())) {
+          return false;
+        }
+        return createdDate >= startDate && createdDate <= endDate;
+      } catch (error) {
+        console.error('Error parsing date:', error);
+        return false;
+      }
+    });
+  }, [allSurveysForChart, dateRange]);
+
+  // Lấy 5 khảo sát mới tạo gần đây nhất
+  const recentSurveys = useMemo(() => {
+    if (!allSurveysForChart || allSurveysForChart.length === 0) {
+      return [];
+    }
+
+    // Sắp xếp theo ngày tạo (mới nhất trước)
+    const sortedSurveys = [...allSurveysForChart].sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.created_at || 0);
+      const dateB = new Date(b.createdAt || b.created_at || 0);
+      return dateB - dateA; // Sắp xếp giảm dần (mới nhất trước)
+    });
+
+    // Lấy 5 khảo sát đầu tiên
+    return sortedSurveys.slice(0, 5);
+  }, [allSurveysForChart]);
 
   const openSurveyForEditing = useCallback(
     (survey) => navigate("/create-survey", { state: { editSurvey: survey } }),
@@ -325,12 +1155,19 @@ export default function DashboardPage() {
               : [];
           if (allSurveys.length > 0) {
             surveysForStatistics = allSurveys;
+            setAllSurveysForChart(allSurveys); // Lưu tất cả surveys cho biểu đồ
+          } else {
+            setAllSurveysForChart(surveysForDisplay);
           }
         } catch (error) {
           console.log("Dashboard: Unable to fetch all surveys, using current page for statistics");
+          setAllSurveysForChart(surveysForDisplay);
         }
       } else if (!pageResponse) {
         surveysForStatistics = localSurveys;
+        setAllSurveysForChart(localSurveys);
+      } else {
+        setAllSurveysForChart(surveysForDisplay);
       }
 
       const [countsMap, apiTotalResponses] = await Promise.all([
@@ -421,13 +1258,33 @@ export default function DashboardPage() {
 
         <section className="dash-charts" aria-label="Thống kê nhanh">
           <header className="dash-section__header">
-            <h2>Thống kê nhanh</h2>
-            <p>Cập nhật tổng quan trực quan để bạn sẵn sàng ra quyết định.</p>
+            <div>
+              <h2>Thống kê nhanh</h2>
+              <p>Cập nhật tổng quan trực quan để bạn sẵn sàng ra quyết định.</p>
+            </div>
+            <TimeFilter
+              timeFilter={timeFilter}
+              setTimeFilter={setTimeFilter}
+              customDateRange={customDateRange}
+              setCustomDateRange={setCustomDateRange}
+              showCustomDatePicker={showCustomDatePicker}
+              setShowCustomDatePicker={setShowCustomDatePicker}
+            />
           </header>
           <div className="dash-charts__grid">
-            {CHART_PLACEHOLDERS.map((chart) => (
-              <ChartCard key={chart.title} {...chart} />
-            ))}
+            <StatusDistributionChart surveysData={filteredSurveysByTime} loading={loading} />
+            <ViewCompletedTrendChart
+              surveysData={filteredSurveysByTime}
+              responseCounts={responseCounts}
+              loading={loading || loadingResponseCounts}
+              dateRange={dateRange}
+              timeFilter={timeFilter}
+            />
+            <SurveyComparisonChart
+              surveysData={filteredSurveysByTime}
+              responseCounts={responseCounts}
+              loading={loading || loadingResponseCounts}
+            />
           </div>
         </section>
 
@@ -467,7 +1324,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        {totalElements > pageSize && (
+        {/* {totalElements > pageSize && (
           <div className="dash-pagination" role="navigation" aria-label="Phân trang khảo sát">
             <button type="button" className="dash-pagination__btn" onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 0))} disabled={currentPage === 0}>
               Trước
@@ -484,7 +1341,7 @@ export default function DashboardPage() {
               Tiếp
             </button>
           </div>
-        )}
+        )} */}
 
         {showCreateModal && (
           <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>

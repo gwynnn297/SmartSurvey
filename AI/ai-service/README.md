@@ -153,3 +153,34 @@ Gọi các endpoint:
 - cache_hit tăng dần sau khi gọi lại cùng survey
 - p95_ms < 5s
 - success_rate ~100%
+
+
+## Chatbot AI & Hybrid RAG (Smart Query)
+Tính năng hỏi đáp thông minh dựa trên dữ liệu khảo sát, kết hợp giữa Rule-based (SQL) cho thống kê chính xác và Semantic Search (Vector DB) cho thấu hiểu ngữ nghĩa.
+## Cài đặt & Cấu hình
+- pip install chromadb
+
+## API Reference
+A. Nạp dữ liệu (Ingest) - Cần chạy trước khi chat
+POST /ai/rag/ingest/{survey_id}
+Chức năng: Đọc toàn bộ câu trả lời từ MySQL -> Tạo Vector (Gemini Embedding) -> Lưu vào ChromaDB.
+Hiệu năng: Sử dụng Multi-threading (ThreadPoolExecutor) để xử lý song song, tốc độ nhanh gấp 8-10 lần so với tuần tự.
+Response:
+## JSON
+{ "ok": true, "ingested": 150, "survey_id": 1 }
+B. Chat với dữ liệu
+POST /ai/chat
+Body:
+JSON
+{
+  "survey_id": 1,
+  "question_text": "Khách hàng phàn nàn những gì về tính năng thanh toán?",
+  "top_k": 5
+}
+Response:
+JSON
+{
+  "answer_text": "Khách hàng thường gặp lỗi timeout khi thanh toán qua ví điện tử...",
+  "context": ["Lỗi thanh toán momo...", "Không checkout được..."],
+  "top_k": 5
+}

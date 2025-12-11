@@ -4,6 +4,7 @@ import MainLayout from '../../layouts/MainLayout';
 import { dashboardReportService } from '../../services/dashboardReportService';
 import { surveyService } from '../../services/surveyService';
 import ToolbarResult from '../../components/ToolbarResult';
+import AIChat, { AIChatButton } from '../../components/AIChat';
 
 import './DashboardReportPage.css';
 
@@ -41,6 +42,7 @@ const ProgressItem = ({ label, valueLabel, percent, colorClass, showPlus = false
 export default function DashboardReportPage() {
     const navigate = useNavigate();
     const location = useLocation();
+    const [showAIChat, setShowAIChat] = useState(false);
 
     // Lấy dữ liệu survey từ state
     const surveyData = location.state || {};
@@ -697,6 +699,27 @@ export default function DashboardReportPage() {
 
                 </section>
             </div>
+
+            {/* AI Chat Button - Hiển thị khi có surveyId */}
+            {surveyId && (
+                <>
+                    {!showAIChat && (
+                        <AIChatButton
+                            onClick={() => setShowAIChat(true)}
+                            surveyId={surveyId}
+                        />
+                    )}
+                    {showAIChat && (
+                        <AIChat
+                            surveyId={surveyId}
+                            surveyTitle={surveyTitle}
+                            surveyDescription={surveyDescription}
+                            onClose={() => setShowAIChat(false)}
+                            isOpen={showAIChat}
+                        />
+                    )}
+                </>
+            )}
         </MainLayout>
     );
 }

@@ -7,7 +7,6 @@ import { getSurveyPublicInfo } from "../../services/dashboardReportService";
 import { isValidTokenFormat, generateUniqueToken } from "../../utils/tokenGenerator";
 import logoSmartSurvey from "../../assets/logoSmartSurvey.png";
 import { apiClient } from "../../services/authService";
-import { publicApiClient } from "../../services/publicApiClient";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -487,10 +486,15 @@ const PublicResponsePage = () => {
                 formData.append('durationSeconds', String(durationSeconds));
             }
 
-            const response = await publicApiClient.post('/api/public/responses/with-files', formData, {
+            const response = await apiClient.post('/api/public/responses/with-files', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
+                timeout: 60000, // 60s for file uploads
+                onUploadProgress: (progressEvent) => {
+                    const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+                    console.log('📤 Upload progress:', percentCompleted + '%');
+                }
             });
             return response.data;
         } else {
@@ -557,7 +561,7 @@ const PublicResponsePage = () => {
                 }
             });
 
-            const response = await publicApiClient.post('/api/public/responses', payload);
+            const response = await apiClient.post('/api/public/responses', payload);
             return response.data;
         }
     };
@@ -620,7 +624,23 @@ const PublicResponsePage = () => {
         } catch (err) {
             console.error("❌ Submit failed:", err);
             console.error("❌ Error details:", err.response?.data);
-            const errorMessage = err.response?.data?.message || err.message || "Có lỗi xảy ra khi gửi phản hồi. Vui lòng thử lại.";
+            console.error("❌ Error status:", err.response?.status);
+            console.error("❌ Error config:", err.config?.url);
+            
+            let errorMessage = "Có lỗi xảy ra khi gửi phản hồi. Vui lòng thử lại.";
+            
+            if (err.code === 'ECONNABORTED') {
+                errorMessage = "Upload quá lâu, vui lòng kiểm tra kết nối mạng và thử lại.";
+            } else if (err.response?.status === 413) {
+                errorMessage = "File quá lớn để upload. Vui lòng chọn file nhỏ hơn.";
+            } else if (err.response?.status === 400) {
+                errorMessage = err.response?.data?.message || "Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.";
+            } else if (err.response?.status === 403) {
+                errorMessage = "Không có quyền truy cập. Vui lòng thử lại.";
+            } else if (err.response?.data?.message) {
+                errorMessage = err.response.data.message;
+            }
+            
             showNotification('error', errorMessage);
         } finally {
             setLoading(false);
@@ -794,10 +814,46 @@ const PublicResponsePage = () => {
                                 onChange={(e) => {
                                     const file = e.target.files?.[0];
                                     if (file) {
+                                        // Validate file size (50MB limit)
+                                        const maxSize = 50 * 1024 * 1024; // 50MB
+                                        if (file.size > maxSize) {
+                                            showNotification('error', `File "${file.name}" quá lớn. Kích thước tối đa là 50MB.`);
+                                            e.target.value = ''; // Clear input
+                                            return;
+                                        }
+                                        
+                                        // Validate file type
+                                        const allowedTypes = [
+                                            'application/pdf',
+                                            'application/msword',
+                                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                            'application/vnd.ms-excel',
+                                            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                            'application/vnd.ms-powerpoint',
+                                            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                                            'text/plain',
+                                            'application/zip',
+                                            'application/x-rar-compressed',
+                                            'image/jpeg',
+                                            'image/jpg',
+                                            'image/png',
+                                            'image/gif',
+                                            'image/webp',
+                                            'image/bmp',
+                                            'image/svg+xml'
+                                        ];
+                                        
+                                        if (!allowedTypes.includes(file.type) && !file.name.toLowerCase().endsWith('.rar')) {
+                                            showNotification('error', `File "${file.name}" có định dạng không được hỗ trợ.`);
+                                            e.target.value = ''; // Clear input
+                                            return;
+                                        }
+                                        
+                                        console.log('📁 File selected:', file.name, 'Size:', (file.size / 1024 / 1024).toFixed(2), 'MB', 'Type:', file.type);
                                         handleChange(q.id, file);
                                     }
                                 }}
-                                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg"
                             />
                         </div>
                         {selectedFile && (

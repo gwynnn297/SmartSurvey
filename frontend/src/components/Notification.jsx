@@ -330,6 +330,12 @@ const Notification = ({ onInvitationUpdate }) => {
 
     // Handle notification click
     const handleNotificationClick = async (notification) => {
+        // Với TEAM_INVITATION chưa đọc, không cho phép click vào notification item
+        // Chỉ cho phép click vào 2 nút Accept/Reject
+        if (notification.type === 'TEAM_INVITATION' && !notification.isRead) {
+            return; // Không làm gì cả, chỉ cho phép click vào 2 nút Accept/Reject
+        }
+
         // Mark as read
         if (!notification.isRead) {
             await handleMarkAsRead(notification.notificationId);
@@ -337,7 +343,7 @@ const Notification = ({ onInvitationUpdate }) => {
 
         // Navigate based on notification type
         if (notification.type === 'TEAM_INVITATION' && notification.relatedEntityId) {
-            // For team invitations, navigate to team management
+            // For team invitations (đã đọc), navigate to team management
             navigate('/team-management');
             setShowModal(false);
         } else if (notification.relatedEntityType === 'surveys' && notification.relatedEntityId) {
@@ -587,43 +593,48 @@ const Notification = ({ onInvitationUpdate }) => {
                             <p className="notificationteam-empty">Không có thông báo nào.</p>
                         ) : (
                             <div className="notifications-list">
-                                {notifications.map((notification) => (
-                                    <div
-                                        key={notification.notificationId}
-                                        className={`notification-item ${!notification.isRead ? 'unread' : ''}`}
-                                        onClick={() => handleNotificationClick(notification)}
-                                    >
-                                        <div className="notification-icon">
-                                            <i className={getNotificationIcon(notification.type)}></i>
-                                        </div>
-                                        <div className="notification-content">
-                                            <div className="notification-title">{notification.title}</div>
-                                            <div className="notification-message">{notification.message}</div>
-                                            <div className="notification-time">{formatDate(notification.createdAt)}</div>
-                                        </div>
-                                        {notification.type === 'TEAM_INVITATION' && !notification.isRead && (
-                                            <div className="notification-actions" onClick={(e) => e.stopPropagation()}>
-                                                <button
-                                                    className="btn-accept-small"
-                                                    onClick={(e) => handleAcceptInvitation(e, notification)}
-                                                    title="Chấp nhận"
-                                                >
-                                                    <i className="fa-solid fa-check"></i>
-                                                </button>
-                                                <button
-                                                    className="btn-reject-small"
-                                                    onClick={(e) => handleRejectInvitation(e, notification)}
-                                                    title="Từ chối"
-                                                >
-                                                    <i className="fa-solid fa-times"></i>
-                                                </button>
+                                {notifications.map((notification) => {
+                                    // Với TEAM_INVITATION chưa đọc, không cho phép click vào notification item
+                                    const isTeamInvitationUnread = notification.type === 'TEAM_INVITATION' && !notification.isRead;
+
+                                    return (
+                                        <div
+                                            key={notification.notificationId}
+                                            className={`notification-item ${!notification.isRead ? 'unread' : ''} ${isTeamInvitationUnread ? 'no-click' : ''}`}
+                                            onClick={!isTeamInvitationUnread ? () => handleNotificationClick(notification) : undefined}
+                                        >
+                                            <div className="notification-icon">
+                                                <i className={getNotificationIcon(notification.type)}></i>
                                             </div>
-                                        )}
-                                        {!notification.isRead && (
-                                            <div className="notification-unread-dot"></div>
-                                        )}
-                                    </div>
-                                ))}
+                                            <div className="notification-content">
+                                                <div className="notification-title">{notification.title}</div>
+                                                <div className="notification-message">{notification.message}</div>
+                                                <div className="notification-time">{formatDate(notification.createdAt)}</div>
+                                            </div>
+                                            {notification.type === 'TEAM_INVITATION' && !notification.isRead && (
+                                                <div className="notification-actions" onClick={(e) => e.stopPropagation()}>
+                                                    <button
+                                                        className="btn-accept-small"
+                                                        onClick={(e) => handleAcceptInvitation(e, notification)}
+                                                        title="Chấp nhận"
+                                                    >
+                                                        <i className="fa-solid fa-check"></i>
+                                                    </button>
+                                                    <button
+                                                        className="btn-reject-small"
+                                                        onClick={(e) => handleRejectInvitation(e, notification)}
+                                                        title="Từ chối"
+                                                    >
+                                                        <i className="fa-solid fa-times"></i>
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {!notification.isRead && (
+                                                <div className="notification-unread-dot"></div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>

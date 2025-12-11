@@ -9,6 +9,21 @@ import {
     ResponsiveContainer,
 } from "recharts";
 
+const NEON_PALETTE = [
+    "#00F0FF",  // Neon Cyan
+    "#7B2FF7",  // Electric Purple
+    "#FF2E63",  // Neon Pink
+    "#FF8F00",  // Neon Amber
+    "#38FF7A",  // Neon Green
+    "#FF00F5",  // Ultra Violet Neon
+    "#00FF9F",  // Neon Aqua Green
+    "#FFD500",  // Neon Yellow
+    "#3A0CA3",  // Deep Neon Violet
+    "#7209B7",  // Cyber Grape Neon
+];
+
+const COLORS = NEON_PALETTE;
+
 const RatingChart = ({ data }) => {
     if (!data || !data.distribution) {
         return (
@@ -35,7 +50,7 @@ const RatingChart = ({ data }) => {
     if (distributionData.length === 0) {
         return (
             <div className="question-chart-wrapper">
-                <h4 className="question-title">{data.questionText}</h4>
+                <h4 className="question-title"> Câu hỏi : {data.questionText}</h4>
                 <div style={{ padding: "1rem", textAlign: "center", color: "#666" }}>
                     Chưa có phản hồi nào
                 </div>
@@ -67,7 +82,7 @@ const RatingChart = ({ data }) => {
 
     return (
         <div className="question-chart-wrapper">
-            <h4 className="question-title">{data.questionText}</h4>
+            <h4 className="question-title"> Câu hỏi : {data.questionText}</h4>
 
             {/* Average Rating Display */}
             <div className="rating-average-box">
@@ -84,49 +99,41 @@ const RatingChart = ({ data }) => {
                     <Tooltip
                         formatter={(value) => [`${value} (${((value / total) * 100).toFixed(1)}%)`, "Số lượng"]}
                     />
-                    <Bar dataKey="count" fill="#fbbf24" radius={[4, 4, 0, 0]}>
-                        {distributionData.map((entry, index) => (
-                            <Cell
-                                key={`cell-${index}`}
-                                fill={entry.ratingNum >= 4 ? "#10b981" : entry.ratingNum >= 3 ? "#fbbf24" : "#ef4444"}
-                            />
-                        ))}
+                    <Bar
+                        dataKey="count"
+                        fill={NEON_PALETTE[0]}
+                        radius={[4, 4, 0, 0]}
+                        label={{
+                            position: 'top',
+                            formatter: (value) => {
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return `${percentage}%`;
+                            },
+                            style: {
+                                fontSize: '12px',
+                                fill: '#374151',
+                                fontWeight: '500'
+                            }
+                        }}
+                    >
+                        {distributionData.map((entry, index) => {
+
+                            const colorIndex = (5 - entry.ratingNum) % NEON_PALETTE.length;
+                            const color = NEON_PALETTE[colorIndex];
+
+                            return (
+                                <Cell
+                                    key={`cell-${index}`}
+                                    fill={color}
+                                />
+                            );
+                        })}
                     </Bar>
                 </BarChart>
             </ResponsiveContainer>
-            {/* Bảng thống kê chi tiết */}
-            <div className="ranking-summary-table">
-                <h5 className="chart-subtitle">Bảng thống kê chi tiết</h5>
-                <table className="ranking-table">
-                    <thead>
-                        <tr>
-                            <th>Đánh giá</th>
-                            <th>Số lượng</th>
-                            <th>Tỷ lệ (%)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {tableData.map((item, index) => {
-                            const percentage = total > 0 ? (item.count / total) * 100 : 0;
-                            return (
-                                <tr key={index}>
-                                    <td className="option-name">
-                                        <strong>{item.rating}</strong>
-                                    </td>
-                                    <td><strong>{item.count}</strong></td>
-                                    <td className="weighted-score">
-                                        <strong>{percentage.toFixed(2)}%</strong>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
 
             <div className="chart-stats">
                 <p>Tổng: <strong>{total}</strong> phản hồi</p>
-                <p>Đánh giá trung bình: <strong>{averageRating.toFixed(2)}</strong> / 5.0</p>
             </div>
 
         </div>

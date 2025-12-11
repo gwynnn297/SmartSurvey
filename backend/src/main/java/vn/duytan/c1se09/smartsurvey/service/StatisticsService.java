@@ -569,11 +569,21 @@ public class StatisticsService {
                     booleanData.add(buildBooleanData(question));
                     break;
                 case ranking:
-                    // Ranking cũng được xử lý như multiple choice để hiển thị thống kê
+                    // Ranking được xử lý như multiple choice với weighted scoring
                     multipleChoiceData.add(buildMultipleChoiceData(question));
                     break;
+                case date_time:
+                    // Date/time questions - hiển thị thống kê responses theo thời gian
+                    // TODO: Implement specific date/time statistics in future
+                    // For now, skip these questions in charts
+                    break;
+                case file_upload:
+                    // File upload questions - hiển thị thống kê file uploads
+                    // TODO: Implement specific file upload statistics in future
+                    // For now, skip these questions in charts
+                    break;
                 default:
-                    // Bỏ qua các loại câu hỏi khác (open_ended, file_upload, date_time, matrix)
+                    // Bỏ qua các loại câu hỏi khác (open_ended)
                     break;
             }
         }
@@ -642,7 +652,8 @@ public class StatisticsService {
     /**
      * Xây dựng dữ liệu biểu đồ cho câu hỏi ranking với weighted scoring
      */
-    private SurveyChartsResponseDTO.MultipleChoiceDataDTO buildRankingData(Question question, List<Option> options, List<Answer> answers) {
+    private SurveyChartsResponseDTO.MultipleChoiceDataDTO buildRankingData(Question question, List<Option> options,
+            List<Answer> answers) {
         // Group answers by response để validate ranking
         Map<Long, List<Answer>> answersByResponse = answers.stream()
                 .collect(Collectors.groupingBy(answer -> answer.getResponse().getResponseId()));
@@ -653,10 +664,10 @@ public class StatisticsService {
 
         for (Map.Entry<Long, List<Answer>> entry : answersByResponse.entrySet()) {
             List<Answer> responseAnswers = entry.getValue();
-            
+
             // Validate ranking: phải xếp hạng đủ tất cả options
             if (responseAnswers.size() != options.size()) {
-                log.warn("Response {} has incomplete ranking: {} answers for {} options", 
+                log.warn("Response {} has incomplete ranking: {} answers for {} options",
                         entry.getKey(), responseAnswers.size(), options.size());
                 continue; // Bỏ qua response không hợp lệ
             }
@@ -664,7 +675,7 @@ public class StatisticsService {
             // Validate ranking positions (1 to n)
             Set<Integer> usedRanks = new HashSet<>();
             boolean validRanking = true;
-            
+
             for (Answer answer : responseAnswers) {
                 try {
                     if (answer.getAnswerText() == null || answer.getAnswerText().trim().isEmpty()) {
@@ -692,7 +703,7 @@ public class StatisticsService {
             validResponses++;
             for (Answer answer : responseAnswers) {
                 Long optionId;
-                
+
                 // Handle cả trường hợp có option_id và không có option_id
                 if (answer.getOption() != null) {
                     // Old format: có option_id
@@ -701,9 +712,9 @@ public class StatisticsService {
                     // New format: option_id = NULL, map theo thứ tự trong responseAnswers
                     // Sắp xếp answers theo created_at để đảm bảo thứ tự
                     List<Answer> sortedAnswers = responseAnswers.stream()
-                        .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()))
-                        .collect(Collectors.toList());
-                    
+                            .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()))
+                            .collect(Collectors.toList());
+
                     int answerIndex = sortedAnswers.indexOf(answer);
                     if (answerIndex >= 0 && answerIndex < options.size()) {
                         optionId = options.get(answerIndex).getOptionId();
@@ -712,16 +723,16 @@ public class StatisticsService {
                         continue;
                     }
                 }
-                
+
                 int rank = Integer.parseInt(answer.getAnswerText().trim());
                 // Score = (n - rank + 1) where n = total options
                 // Rank 1 = highest score, Rank n = lowest score
                 double score = options.size() - rank + 1;
-                
-                optionWeightedScores.put(optionId, 
-                    optionWeightedScores.getOrDefault(optionId, 0.0) + score);
-                optionRankCounts.put(optionId, 
-                    optionRankCounts.getOrDefault(optionId, 0) + 1);
+
+                optionWeightedScores.put(optionId,
+                        optionWeightedScores.getOrDefault(optionId, 0.0) + score);
+                optionRankCounts.put(optionId,
+                        optionRankCounts.getOrDefault(optionId, 0) + 1);
             }
         }
 
@@ -733,7 +744,7 @@ public class StatisticsService {
             double weightedScore = optionWeightedScores.getOrDefault(option.getOptionId(), 0.0);
             int count = optionRankCounts.getOrDefault(option.getOptionId(), 0);
             double percentage = maxScore > 0 ? (weightedScore / maxScore) * 100.0 : 0.0;
-            
+
             chartData.add(SurveyChartsResponseDTO.MultipleChoiceDataDTO.ChartDataDTO.builder()
                     .option(option.getOptionText())
                     .count(count) // Số lần được xếp hạng

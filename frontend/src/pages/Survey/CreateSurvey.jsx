@@ -6,6 +6,7 @@ import { questionService, optionService } from '../../services/questionSurvey';
 import { aiSurveyService } from '../../services/aiSurveyService';
 import NotificationModal from '../../components/NotificationModal';
 import AddUserSurvey from '../../components/AddUserSurvey';
+import AIChat, { AIChatButton } from '../../components/AIChat';
 import './CreateSurvey.css';
 import '../Response/ResponseFormPage.css';
 import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
@@ -518,7 +519,7 @@ function ResponseFormContent({ survey: surveyProp, isView = true }) {
                                         handleChange(q.id, file);
                                     }
                                 }}
-                                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg"
                                 disabled={isView}
                             />
                         </div>
@@ -722,6 +723,7 @@ const CreateSurvey = () => {
     const isNavigatingToPreviewOrShare = React.useRef(false); // Để theo dõi navigation tới preview/share
     const [notification, setNotification] = useState(null); // State để quản lý notification
     const [showInviteModal, setShowInviteModal] = useState(false);
+    const [showAIChat, setShowAIChat] = useState(false);
 
     const [surveyData, setSurveyData] = useState({
         title: '',
@@ -1146,9 +1148,7 @@ const CreateSurvey = () => {
                     if (draftData.editSurveyId) {
                         setEditSurveyId(draftData.editSurveyId);
                     }
-                    if (draftData.isEditMode !== undefined) {
-                        setIsEditMode(draftData.isEditMode);
-                    }
+                    // KHÔNG set isEditMode ở đây - chỉ set sau khi load từ API server
                     return true;
                 } else {
                     // Xóa draft cũ
@@ -1223,6 +1223,36 @@ const CreateSurvey = () => {
     }, [showPreviewDropdown]);
 
 
+    // Function để load survey data mới nhất từ server khi edit
+    const loadLatestSurveyFromServer = React.useCallback(async (surveyId, editSurvey) => {
+        try {
+            const latestSurvey = await surveyService.getSurveyById(surveyId);
+            setSurveyData({
+                title: latestSurvey.title || editSurvey.title || '',
+                description: latestSurvey.description || editSurvey.description || '',
+                category_id: latestSurvey.categoryId || latestSurvey.category?.id || editSurvey.categoryId || '',
+                status: latestSurvey.status || editSurvey.status || 'draft'
+            });
+
+            // CHỈ set edit mode sau khi đã load thành công dữ liệu từ API server
+            setIsEditMode(true);
+
+            // Load questions từ server (luôn load mới nhất)
+            loadQuestionsFromServer(surveyId);
+        } catch (error) {
+            console.error('Error loading latest survey data:', error);
+            // Nếu có lỗi, KHÔNG set edit mode - chỉ hiển thị edit mode khi load thành công từ API
+            // Fallback: dùng data từ location.state nhưng không bật edit mode
+            setSurveyData({
+                title: editSurvey.title || '',
+                description: editSurvey.description || '',
+                category_id: editSurvey.categoryId || '',
+                status: editSurvey.status || 'draft'
+            });
+            // KHÔNG set isEditMode khi có lỗi - chỉ hiển thị edit mode khi đã đọc thành công từ API
+        }
+    }, []);
+
     useEffect(() => {
         loadCategories();
 
@@ -1242,7 +1272,7 @@ const CreateSurvey = () => {
         // Kiểm tra nếu đang edit survey
         const editSurvey = location.state?.editSurvey;
         if (editSurvey) {
-            setIsEditMode(true);
+            // KHÔNG set isEditMode ngay - chỉ set sau khi load xong data từ server
             const surveyId = editSurvey.id;
             setEditSurveyId(surveyId);
             draftStorageKey.current = `survey_draft_${surveyId || 'new'}`;
@@ -1250,24 +1280,31 @@ const CreateSurvey = () => {
             // Thử khôi phục từ localStorage trước (nếu có draft chưa lưu)
             const restored = restoreDraftFromLocalStorage();
             if (!restored) {
-                // Load dữ liệu survey từ location.state
-                setSurveyData({
-                    title: editSurvey.title || '',
-                    description: editSurvey.description || '',
-                    category_id: editSurvey.categoryId || '',
-                    status: editSurvey.status || 'draft'
-                });
-
-                // Load questions từ server nếu có surveyId
+                // Luôn load dữ liệu mới nhất từ server để đảm bảo có thông tin cập nhật
                 if (surveyId && !surveyId.toString().startsWith('temp_')) {
-                    loadQuestionsFromServer(surveyId);
+                    // Load survey data mới nhất từ server (sẽ set isEditMode sau khi load xong từ API)
+                    loadLatestSurveyFromServer(surveyId, editSurvey);
                 } else if (editSurvey.questions && editSurvey.questions.length > 0) {
-                    // Fallback: load từ location.state
+                    // Fallback: chỉ khi không có surveyId thực, dùng data từ location.state
+                    // Nhưng vẫn không set edit mode vì không phải từ API server
+                    setSurveyData({
+                        title: editSurvey.title || '',
+                        description: editSurvey.description || '',
+                        category_id: editSurvey.categoryId || '',
+                        status: editSurvey.status || 'draft'
+                    });
                     setQuestions(editSurvey.questions);
+                    // KHÔNG set edit mode vì không load từ API server
                 }
             } else {
-                // Đã khôi phục từ localStorage, không cần load từ server
+                // Đã khôi phục từ localStorage, nhưng vẫn cần load từ server để có data mới nhất
                 console.log('✅ Restored draft from localStorage');
+                // Nếu có surveyId thực, vẫn load từ server để cập nhật data mới nhất
+                if (surveyId && !surveyId.toString().startsWith('temp_')) {
+                    // Load từ server để đảm bảo có data mới nhất (sẽ set isEditMode sau khi load xong)
+                    loadLatestSurveyFromServer(surveyId, editSurvey);
+                }
+                // KHÔNG set edit mode ở đây - chỉ set sau khi load xong từ API server
             }
         } else {
             // Không có editSurvey, kiểm tra xem có draft không
@@ -1278,7 +1315,7 @@ const CreateSurvey = () => {
                 setShowDraftModal(true);
             }
         }
-    }, [location.state]);
+    }, [location.state, loadLatestSurveyFromServer]);
 
     // Kiểm tra xem có draft tồn tại không
     const checkDraftExists = () => {
@@ -3325,6 +3362,27 @@ const CreateSurvey = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* AI Chat Button - Hiển thị khi có surveyId */}
+            {editSurveyId && (
+                <>
+                    {!showAIChat && (
+                        <AIChatButton
+                            onClick={() => setShowAIChat(true)}
+                            surveyId={editSurveyId}
+                        />
+                    )}
+                    {showAIChat && (
+                        <AIChat
+                            surveyId={editSurveyId}
+                            surveyTitle={surveyData.title}
+                            surveyDescription={surveyData.description}
+                            onClose={() => setShowAIChat(false)}
+                            isOpen={showAIChat}
+                        />
+                    )}
+                </>
             )}
         </MainLayout>
     );

@@ -345,7 +345,7 @@ public class ResponseService {
 				}
 			}
 			
-			// For all question types: check if there are uploaded files
+			// For file upload questions: always load file info regardless of other conditions
 			if (question.getQuestionType() == QuestionTypeEnum.file_upload) {
 				List<FileUpload> files = fileUploadRepository.findByAnswer(firstAnswer);
 				if (!files.isEmpty()) {
@@ -353,6 +353,10 @@ public class ResponseService {
 							.map(this::mapToFileUploadInfo)
 							.toList();
 					ad.setUploadedFiles(fileInfos);
+					// Clear the "File uploaded successfully" message since we have the actual file info
+					if (ad.getAnswerText() != null && ad.getAnswerText().startsWith("File uploaded successfully")) {
+						ad.setAnswerText(null);
+					}
 				}
 			}
 			
@@ -1959,17 +1963,6 @@ public class ResponseService {
 						default:
 							break;
 					}
-				}
-			}
-			
-			// For all question types: check if there are uploaded files
-			if (question.getQuestionType() == QuestionTypeEnum.file_upload) {
-				List<FileUpload> files = fileUploadRepository.findByAnswer(firstAnswer);
-				if (!files.isEmpty()) {
-					List<AnswerDTO.FileUploadInfo> fileInfos = files.stream()
-							.map(this::mapToFileUploadInfo)
-							.toList();
-					ad.setUploadedFiles(fileInfos);
 				}
 			}
 			

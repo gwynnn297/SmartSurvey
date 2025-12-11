@@ -175,11 +175,9 @@ const ChangePassword = () => {
             <div className="change-password-container" style={{ paddingTop: '80px' }}>
                 {/* Modern Header with centered title */}
                 <div className="change-password-header">
-                    <div className="header-content">
-                        <div className="header-center">
+                    <div className="header-content">  
                             <h1 className="page-title">Đổi mật khẩu</h1>
-                            <p className="page-description">Thay đổi mật khẩu để bảo mật tài khoản của bạn</p>
-                        </div>
+                            <p className="page-description">Thay đổi mật khẩu để bảo mật tài khoản của bạn</p>                        
                     </div>
                 </div>
 

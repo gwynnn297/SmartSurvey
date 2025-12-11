@@ -1,14 +1,45 @@
 # db.py
 from datetime import datetime
+import os
+from urllib.parse import quote_plus, urlparse, unquote
 from sqlalchemy import (
     create_engine, Column, BigInteger, Integer, String, DateTime, Text,
     ForeignKey, func
 )
 from sqlalchemy.dialects.mysql import DECIMAL, JSON as MYSQL_JSON
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
-from settings import settings
+from dotenv import load_dotenv
 
-engine = create_engine(settings.DB_URL, pool_pre_ping=True, future=True)
+load_dotenv()  # đọc .env
+
+def _build_engine_url() -> str:
+    """
+    1) Ưu tiên DATABASE_URL (hoặc DB_URL) — dạng: mysql+pymysql://user:pass@host:port/db
+    2) Nếu không có, build từ các biến rời rạc:
+       DB_HOST/DB_PORT/DB_USER/DB_PASS/DB_NAME
+       (fallback tương thích: MYSQL_* nếu DB_* thiếu)
+    """
+    url = os.getenv("DATABASE_URL") or os.getenv("DB_URL")
+    if url:
+        return url
+
+    host = os.getenv("DB_HOST") or os.getenv("MYSQL_HOST") or "127.0.0.1"
+    port = os.getenv("DB_PORT") or os.getenv("MYSQL_PORT") or "3306"
+    user = os.getenv("DB_USER") or os.getenv("MYSQL_USER") or "root"
+    pwd  = os.getenv("DB_PASS") or os.getenv("MYSQL_PWD") or ""
+    name = os.getenv("DB_NAME") or os.getenv("MYSQL_DB") or ""
+
+    # Scheme mặc định cho SQLAlchemy + PyMySQL
+    scheme = os.getenv("DB_SCHEME", "mysql+pymysql")
+
+    # Encode user/pass phòng ký tự đặc biệt
+    user_q = quote_plus(user)
+    pwd_q  = quote_plus(pwd)
+
+    return f"{scheme}://{user_q}:{pwd_q}@{host}:{port}/{name}"
+
+ENGINE_URL = _build_engine_url()
+engine = create_engine(ENGINE_URL, pool_pre_ping=True, future=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, future=True)
 Base = declarative_base()
 
