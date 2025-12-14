@@ -892,15 +892,14 @@ const SentimentPage = () => {
               surveyId={location.state.surveyId}
             />
           )}
-          {showAIChat && (
-            <AIChat
-              surveyId={location.state.surveyId}
-              surveyTitle={location.state.surveyTitle}
-              surveyDescription={location.state.surveyDescription}
-              onClose={() => setShowAIChat(false)}
-              isOpen={showAIChat}
-            />
-          )}
+          {/* Keep AIChat mounted to preserve chat history */}
+          <AIChat
+            surveyId={location.state.surveyId}
+            surveyTitle={location.state.surveyTitle}
+            surveyDescription={location.state.surveyDescription}
+            onClose={() => setShowAIChat(false)}
+            isOpen={showAIChat}
+          />
         </>
       )}
     </MainLayout>

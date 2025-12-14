@@ -14,7 +14,11 @@ from datetime import datetime
 from pydantic import BaseModel
 from app.core.gemini_client import GeminiOverloadedError
 import re, math
-load_dotenv()
+from pathlib import Path
+
+# Load .env từ thư mục gốc của project
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 from math import ceil
 SURVEY_AI_FALLBACK = os.getenv("SURVEY_AI_FALLBACK", "1") != "0"
@@ -653,41 +657,49 @@ def generate_survey(request: SurveyGenerationRequest):
         # 4) Chọn Top-N theo score & không placeholder
         topN = _pick_valid(parsed, N)
 
-        # 5) Fallback mềm (không pad MCQ/SC)
-        if len(topN) < N and SURVEY_AI_FALLBACK:
-            need = N - len(topN)
-            padding_types = choose_target_types(need)
-            for idx, t in enumerate(padding_types, start=1):
-                if t in ("multiple_choice", "single_choice"):
-                    t = "rating"  # an toàn
-                qtext = f"Câu hỏi bổ sung {idx}: vui lòng cho biết ý kiến của bạn."
-                opts = []
-                if t == "ranking":
-                    opts = ["Mục 1", "Mục 2", "Mục 3", "Mục 4", "Mục 5"]
-                topN.append({"question_text": qtext, "type": t, "options": opts})
-
-        # Nếu vẫn <3 và có fallback → pad tới 3
-        if len(topN) < 3 and SURVEY_AI_FALLBACK:
-            need = 3 - len(topN)
-            padding_types = choose_target_types(need)
-            for idx, t in enumerate(padding_types, start=1):
-                if t in ("multiple_choice", "single_choice"):
-                    t = "open_ended"
-                qtext = f"Câu hỏi bổ sung {idx}: vui lòng cho biết ý kiến của bạn."
-                opts = []
-                if t == "ranking":
-                    opts = ["Mục 1", "Mục 2", "Mục 3", "Mục 4", "Mục 5"]
-                topN.append({"question_text": qtext, "type": t, "options": opts})
-
+        # 5) Kiểm tra số lượng câu hỏi hợp lệ - KHÔNG DÙNG FALLBACK CỨ
         if not topN:
+            logger.error(f"❌ AI không sinh được câu hỏi hợp lệ nào. Parsed: {len(parsed)}, Valid: 0")
             return SurveyGenerationResponse(
                 success=False,
-                message="AI không trả về câu hỏi hợp lệ.",
-                error_details={"hint": "no_valid_questions"}
+                message="AI không thể tạo câu hỏi phù hợp. Vui lòng thử lại với prompt rõ ràng hơn hoặc giảm số lượng câu hỏi.",
+                error_details={
+                    "hint": "no_valid_questions",
+                    "parsed_count": len(parsed),
+                    "suggestions": [
+                        "Thử giảm số lượng câu hỏi (3-5 câu)",
+                        "Làm rõ hơn prompt/mô tả",
+                        "Kiểm tra kết nối API"
+                    ]
+                }
+            )
+        
+        # 5b) Nếu thiếu một ít (< 50%), cảnh báo nhưng vẫn trả về
+        if len(topN) < N:
+            shortage = N - len(topN)
+            logger.warning(f"⚠️ Chỉ sinh được {len(topN)}/{N} câu hỏi hợp lệ. Thiếu {shortage} câu.")
+            # Không pad thêm câu rác, chỉ trả về số có được
+        
+        # 5c) Nếu quá ít câu (< 50% yêu cầu), trả lỗi thay vì trả câu rác
+        if len(topN) < max(3, N // 2):
+            logger.error(f"❌ Chỉ sinh được {len(topN)}/{N} câu ({len(topN)*100//N}%), quá thấp!")
+            return SurveyGenerationResponse(
+                success=False,
+                message=f"Chỉ tạo được {len(topN)}/{N} câu hỏi hợp lệ. Vui lòng thử lại với yêu cầu đơn giản hơn.",
+                error_details={
+                    "hint": "insufficient_quality",
+                    "generated": len(topN),
+                    "requested": N,
+                    "suggestions": [
+                        "Giảm số câu hỏi xuống 3-5",
+                        "Cung cấp prompt cụ thể hơn",
+                        "Kiểm tra API key còn quota"
+                    ]
+                }
             )
 
-        # 6) Cắt đúng N (nhưng đảm bảo tối thiểu 3)
-        topN = topN[:max(3, N)]
+        # 6) Cắt đúng N (không cần tối thiểu 3 nữa)
+        topN = topN[:N]
 
         # 7) Build response theo schema Pydantic
         gen = GeneratedSurveyResponse(
@@ -715,6 +727,7 @@ def generate_survey(request: SurveyGenerationRequest):
     except GeminiOverloadedError:
         raise HTTPException(status_code=503, detail="AI provider đang quá tải (503). Vui lòng thử lại.")
     except Exception as e:
+        logger.error(f"❌ LỖI KHI TẠO KHẢO SÁT: {type(e).__name__}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -1,5 +1,6 @@
 package vn.duytan.c1se09.smartsurvey.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -20,6 +21,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class AiChatLog {
 
     @Id
@@ -50,12 +52,14 @@ public class AiChatLog {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    // Relationships
+    // Relationships - Ignore in JSON serialization to prevent lazy loading issues
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "survey_id", insertable = false, updatable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "user", "responses", "questions"})
     private Survey survey;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", insertable = false, updatable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "surveys", "responses"})
     private User user;
 }

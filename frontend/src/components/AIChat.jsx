@@ -70,23 +70,25 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
         try {
             const response = await aiChatService.getChatHistory(surveyId, 20);
             if (response && response.chat_history) {
+                console.log('[AIChat] Chat history loaded:', response.chat_history);
                 // Format chat history thành messages
                 const formattedMessages = response.chat_history
-                    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+                    .sort((a, b) => new Date(a.createdAt || a.created_at) - new Date(b.createdAt || b.created_at))
                     .flatMap(item => [
                         {
-                            id: `q-${item.chat_id}`,
+                            id: `q-${item.chatId || item.chat_id}`,
                             type: 'user',
-                            text: item.question_text,
-                            timestamp: item.created_at
+                            text: item.questionText || item.question_text || '',
+                            timestamp: item.createdAt || item.created_at
                         },
                         {
-                            id: `a-${item.chat_id}`,
+                            id: `a-${item.chatId || item.chat_id}`,
                             type: 'ai',
-                            text: item.ai_response,
-                            timestamp: item.created_at
+                            text: item.aiResponse || item.ai_response || '',
+                            timestamp: item.createdAt || item.created_at
                         }
                     ]);
+                console.log('[AIChat] Formatted messages:', formattedMessages);
                 setMessages(formattedMessages);
                 setChatHistory(response.chat_history);
             }
@@ -478,7 +480,7 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
                         {messages.map((message) => (
                             <div key={message.id} className={`ai-chat-message ${message.type}`}>
                                 <div className="ai-chat-message-content">
-                                    {message.text}
+                                    {message.text || message.questionText || message.aiResponse || '(Không có nội dung)'}
                                 </div>
                             </div>
                         ))}

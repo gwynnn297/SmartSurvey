@@ -97,7 +97,7 @@ python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
 #### Cách 3: Inline environment variables (một lệnh)
 ```bash
 # Chạy từ thư mục survey-generator
-GEMINI_API_KEY=AIzaSyAN9uAXEsT4wQEG1xgPQ2VL-ZAcuB9qDok python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8002
+GEMINI_API_KEY=AIzaSyAGB9sSlWRf0BOxJaEOrb8sJX7wQGlIO6o python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8002
 ```
 
 > **💡 Lưu ý**: 

@@ -26,7 +26,7 @@ class GeminiOverloadedError(Exception):
 class GeminiConfig:
     api_key: str
     base_url: str = "https://generativelanguage.googleapis.com/v1beta"
-    model: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    model: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     temperature: float = 0.4
     max_tokens: int = 8192
 
@@ -256,7 +256,7 @@ class GeminiClient:
             texts = self._call_gemini_api(
                 prompt if not context else f"{prompt}\n\nNgữ cảnh: {context}",
                 candidate_count=3,
-                max_output_tokens=1536,          # tăng chút cho batch survey
+                max_output_tokens=3072,          # tăng lên 3072 để tránh cắt JSON (mỗi câu ~200-300 tokens)
                 response_schema=SURVEY_SCHEMA
             )
             if not texts:
@@ -493,18 +493,36 @@ Tạo CHÍNH XÁC {num_questions} câu hỏi. Dùng multiple_choice, open_ended,
                 time.sleep(backoff + random.uniform(0, 0.3))
                 backoff *= 2
 
-        # Fallback model nếu vẫn fail (đặc biệt 503)
-        if (self.config.model_name or "").startswith("gemini-2.5"):
+        # Fallback model nếu vẫn fail (đặc biệt 429/503)
+        current_model = self.config.model_name or self.config.model
+        
+        # Nếu đang dùng gemini-2.5-flash và gặp lỗi 429 (quota exceeded) → thử gemini-2.5-flash-lite
+        if current_model == "gemini-2.5-flash" and "429" in str(last_err):
+            logger.warning(f"⚠️ Model {current_model} hết quota (429). Fallback sang gemini-2.5-flash-lite...")
             try:
                 return self._call_gemini_api(
                     prompt,
                     max_output_tokens=max_output_tokens,
                     candidate_count=candidate_count,
                     response_schema=response_schema,
-                    model_name="gemini-2.0-flash"
+                    model_name="gemini-2.5-flash-lite"
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Fallback gemini-2.5-flash-lite cũng thất bại: {e}")
+        
+        # Nếu đang dùng gemini-2.5-flash-lite và gặp lỗi 503 → thử gemini-2.5-flash (nếu quota còn)
+        elif current_model == "gemini-2.5-flash-lite" and "503" in str(last_err):
+            logger.warning(f"⚠️ Model {current_model} gặp lỗi 503. Thử gemini-2.5-flash...")
+            try:
+                return self._call_gemini_api(
+                    prompt,
+                    max_output_tokens=max_output_tokens,
+                    candidate_count=candidate_count,
+                    response_schema=response_schema,
+                    model_name="gemini-2.5-flash"
+                )
+            except Exception as e:
+                logger.error(f"Fallback gemini-2.5-flash cũng thất bại: {e}")
 
         raise RuntimeError(f"Gemini API unavailable after retries. Last error: {last_err}")
 
@@ -559,13 +577,15 @@ Tạo CHÍNH XÁC {num_questions} câu hỏi. Dùng multiple_choice, open_ended,
         try:
             json_text = self._extract_json_from_text(response_text)
             if not json_text:
-                preview = (response_text or "")[:180].replace("\n", " ")
-                logger.debug(f"[gemini] no-json preview: {preview}")
+                preview = (response_text or "")[:300].replace("\n", " ")
+                logger.warning(f"[gemini] ⚠️ Không tìm thấy JSON block. Preview (300 chars): {preview}")
                 # thử sửa JSON bị cắt cụt rồi parse lại
                 fixed = self._fix_incomplete_json(response_text or "")
                 try:
                     data = json.loads(fixed)
-                except Exception:
+                    logger.info(f"[gemini] ✅ Đã sửa được JSON bị cắt: {len(fixed)} chars")
+                except Exception as e:
+                    logger.error(f"[gemini] ❌ Fix JSON thất bại: {e}. Raw length: {len(response_text or '')}")
                     raise ValueError("Không tìm thấy JSON trong phản hồi")
             else:
                 data = json.loads(json_text)
@@ -591,6 +611,7 @@ Tạo CHÍNH XÁC {num_questions} câu hỏi. Dùng multiple_choice, open_ended,
         Bóc JSON từ phản hồi LLM theo kiểu 'chịu lỗi':
         - Ưu tiên khối ```json ... ``` hoặc ``` ... ```
         - Nếu không có, lấy từ dấu '{' đầu tiên đến '}' cuối cùng (cân bằng ngoặc)
+        - Nếu JSON bị cắt, thử sửa bằng _fix_incomplete_json()
         """
         if not text:
             return None
@@ -619,26 +640,40 @@ Tạo CHÍNH XÁC {num_questions} câu hỏi. Dùng multiple_choice, open_ended,
                 # có thể thừa }, giữ nguyên
                 pass
             elif open_cnt > close_cnt:
-                # thiếu }, không parse được
-                return None
+                # thiếu }, thử fix
+                fixed = self._fix_incomplete_json(candidate)
+                try:
+                    json.loads(fixed)  # validate
+                    return fixed
+                except Exception:
+                    return None
             return candidate
 
         return None
 
 
     def _fix_incomplete_json(self, json_str: str) -> str:
-        """Cố gắng sửa JSON bị cắt bằng cách thêm dấu đóng ngoặc"""
+        """Cố gắng sửa JSON bị cắt bằng cách thêm dấu đóng ngoặc và xoá string chưa đóng"""
         if not json_str:
             return json_str
+        
+        result = json_str
+        
+        # Xoá string literals chưa đóng ở cuối (ví dụ: "text": "Đế mỏng gi)
+        # Tìm dấu " cuối cùng
+        last_quote = result.rfind('"')
+        if last_quote != -1:
+            # Đếm số dấu " trước đó để xem có lẻ không
+            quotes_before = result[:last_quote].count('"')
+            if quotes_before % 2 == 0:  # nếu chẵn → dấu " cuối là mở
+                # Cắt bỏ string chưa đóng
+                result = result[:last_quote].rstrip(',').rstrip()
             
         # Đếm số dấu mở và đóng
-        open_braces = json_str.count('{')
-        close_braces = json_str.count('}')
-        open_brackets = json_str.count('[')
-        close_brackets = json_str.count(']')
-        
-        # Thêm dấu đóng nếu thiếu
-        result = json_str
+        open_braces = result.count('{')
+        close_braces = result.count('}')
+        open_brackets = result.count('[')
+        close_brackets = result.count(']')
         
         # Thêm dấu đóng ngoặc vuông nếu thiếu
         for _ in range(open_brackets - close_brackets):
@@ -730,5 +765,7 @@ Tạo CHÍNH XÁC {num_questions} câu hỏi. Dùng multiple_choice, open_ended,
 # Hàm factory để tạo Gemini client
 def create_gemini_client(api_key: str) -> GeminiClient:
     """Hàm factory để tạo Gemini client với cấu hình mặc định"""
-    config = GeminiConfig(api_key=api_key)
+    # Đọc model từ biến môi trường, fallback về gemini-2.5-flash
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    config = GeminiConfig(api_key=api_key, model=model)
     return GeminiClient(config)

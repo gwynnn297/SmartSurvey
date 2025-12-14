@@ -1,5 +1,6 @@
 package vn.duytan.c1se09.smartsurvey.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -14,6 +15,7 @@ import java.time.LocalDateTime;
 @Table(name = "categories")
 @Getter
 @Setter
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Category {
 
     @Id
