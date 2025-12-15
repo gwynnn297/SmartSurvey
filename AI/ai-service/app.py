@@ -158,6 +158,58 @@ def call_gemini_json(url: str, key: str, payload: dict, timeout: float, max_retr
             back = min(3.0, (0.2 * (2**attempt))) + random.uniform(0, 0.2)
             _t.sleep(back)
 
+# --- OpenAI (CHỈ dùng cho CHAT trả lời theo RAG; các phần khác vẫn giữ Gemini) ---
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
+OPENAI_MAX_OUTPUT_TOKENS = int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "450"))
+
+def _extract_openai_output_text(resp: dict) -> str:
+    # Một số SDK có field output_text; raw JSON thường có output[].
+    ot = resp.get("output_text")
+    if isinstance(ot, str) and ot.strip():
+        return ot.strip()
+    out_chunks = []
+    for item in (resp.get("output") or []):
+        if item.get("type") != "message":
+            continue
+        for c in (item.get("content") or []):
+            if c.get("type") == "output_text":
+                t = c.get("text") or ""
+                if t:
+                    out_chunks.append(t)
+    return "\n".join(out_chunks).strip()
+
+def call_openai_text(prompt: str, timeout: float, max_retry: int = 4, temperature: float = 0.2) -> str:
+    if not OPENAI_API_KEY:
+        raise RuntimeError("Missing OPENAI_API_KEY")
+    url = "https://api.openai.com/v1/responses"
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": OPENAI_CHAT_MODEL,
+        "input": prompt,
+        "temperature": float(temperature),
+        "max_output_tokens": int(OPENAI_MAX_OUTPUT_TOKENS),
+    }
+
+    for attempt in range(max_retry + 1):
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                r = client.post(url, headers=headers, json=payload)
+                # 429: rate limit; 5xx: retry
+                if r.status_code in (429, 500, 502, 503, 504):
+                    raise RuntimeError(f"OpenAIHTTP{r.status_code}")
+                r.raise_for_status()
+                data = r.json()
+                return _extract_openai_output_text(data)
+        except Exception:
+            if attempt >= max_retry:
+                raise
+            back = min(3.0, (0.2 * (2 ** attempt))) + random.uniform(0, 0.2)
+            _t.sleep(back)
+
 def _gen_answer_from_ctx(question: str, contexts: list[str], history: str = "") -> str:
     if not contexts:
         return "Chưa đủ ngữ cảnh để trả lời."
@@ -188,23 +240,17 @@ def _gen_answer_from_ctx(question: str, contexts: list[str], history: str = "") 
         f"{question}"
     )
 
-    data = call_gemini_json(
-        os.getenv("EXT_SUMM_URL"),
-        os.getenv("EXT_SENTI_KEY"),
-        {"contents": [{"parts": [{"text": prompt}]}]},   # <-- đúng cấu trúc
-        timeout=float(os.getenv("EXT_SENTI_TIMEOUT", "12.0")),
-        max_retry=int(os.getenv("EXT_SENTI_MAX_RETRY", "4")),
-    )
-
     try:
-        cand = (data.get("candidates") or [{}])[0]
-        parts = (cand.get("content") or {}).get("parts") or [{}]
-        txt = (parts[0].get("text") or "").strip()
+        txt = call_openai_text(
+            prompt,
+            timeout=float(os.getenv("EXT_SENTI_TIMEOUT", "12.0")),
+            max_retry=int(os.getenv("EXT_SENTI_MAX_RETRY", "4")),
+            temperature=0.2,
+        )
         return txt or "Chưa đủ thông tin."
     except Exception:
+
         return "Chưa đủ thông tin."
-
-
 
 # --- Token-bucket rate limiting ---
 class TokenBucket:
@@ -1094,11 +1140,11 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
                 except Exception as e:
                     print(f"[ai_chat] chroma query error: {e}")
 
-            # (C) Lấy lịch sử hội thoại từ DB (tối đa 5 cặp Q/A)
-            history = get_chat_history(db, user_id=user_id, survey_id=req.survey_id, limit=5)
+            # (C) Lấy lịch sử hội thoại từ DB (tối đa 12 cặp Q/A)
+            history = get_chat_history(db, user_id=user_id, survey_id=req.survey_id, limit=12)
 
             if topk_ctx:
-                # Gọi Gemini với cả CONTEXT + HISTORY
+                # Gọi Open AI với cả CONTEXT + HISTORY
                 answer = _gen_answer_from_ctx(q_norm, topk_ctx, history=history)
             else:
                 # Fallback TF-IDF nếu vecto rỗng hoặc Chroma fail
@@ -1145,7 +1191,7 @@ print("[startup] EXT_SENTI_KEY set? ", bool(os.getenv("EXT_SENTI_KEY")))
 
 # ============================ Conversational Memory ============================
 
-def get_chat_history(db: Session, user_id: Optional[int], survey_id: int, limit: int = 5) -> str:
+def get_chat_history(db: Session, user_id: Optional[int], survey_id: int, limit: int = 12) -> str:
     """
     Lấy 'limit' bản ghi chat gần nhất của user trong survey, theo thời gian tăng dần
     và chuẩn hoá về chuỗi:
@@ -1552,7 +1598,6 @@ def _gemini_summarize(responses: _List[str]) -> str:
         SUMMARY_CACHE.set(ck, summ)
         _rec_latency("summary_latency_ms", 1000.0*(_time.perf_counter()-t0))
         return summ
-
 
 # ---- throttle đơn giản cho /ai/summary ----
 _SUMMARY_THROTTLE = {}
