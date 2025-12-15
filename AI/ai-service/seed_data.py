@@ -14,7 +14,7 @@ DB_PASS = os.getenv("DB_PASS", "123456")
 DB_NAME = os.getenv("DB_NAME", "smartsurvey")
 
 # Cấu hình số lượng
-NUM_RECORDS = 1000  # Số lượng câu trả lời muốn tạo
+NUM_RECORDS = 20  # Số lượng câu trả lời muốn tạo
 TARGET_SURVEY_ID = 1 # Survey ID muốn nhồi dữ liệu vào
 
 fake = Faker('vi_VN') # Dùng tiếng Việt
@@ -125,7 +125,7 @@ def main():
             print("Đang tạo Answers giả...")
             ans_vals = []
             # Giả sử question_id = 1 là câu hỏi mở (Open-ended)
-            target_question_id = 1 
+            target_question_id = 10 
             
             for rid in response_ids:
                 text = generate_text()
