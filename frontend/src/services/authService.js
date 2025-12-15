@@ -25,7 +25,7 @@ apiClient.interceptors.request.use(
     console.log('🔑 Request interceptor - Token from localStorage:', token ? 'Found' : 'Not found');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log('✅ Authorization header set:', config.headers.Authorization);
+      // console.log('✅ Authorization header set:', config.headers.Authorization);
     } else {
       console.warn('⚠️ No token found in localStorage');
     }

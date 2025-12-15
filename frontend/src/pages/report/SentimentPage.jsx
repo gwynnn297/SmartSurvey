@@ -19,6 +19,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { normalizeAiText, normalizeAiTextArray } from "../../utils/normalizeAiText";
 
 const SentimentPage = () => {
   const location = useLocation();
@@ -225,7 +226,6 @@ const SentimentPage = () => {
       isFetchingRef.current = false;
     }
   };
-
 
   // Hàm để tải dữ liệu summary (có chặn gọi trùng)
   const loadSummaryData = async () => {
@@ -542,12 +542,21 @@ const SentimentPage = () => {
     }];
   };
 
-  // Lấy summary text từ summaryData
-  const summaryText = summaryData?.summary || null;
+  // Lấy summary text từ summaryData và normalize
+  const rawSummaryText = summaryData?.summary || null;
+  const summaryText = rawSummaryText ? normalizeAiText(rawSummaryText) : null;
   const parsedSummary = summaryText ? parseSummaryText(summaryText) : null;
 
   // Parse analysis text theo các mục: Tích cực, Tiêu cực, Đề xuất, Nhiễu
   const parsedAnalysis = summaryText ? parseAnalysisText(summaryText) : null;
+
+  // Gộp tất cả các ý chính từ tất cả các trạng thái thành một danh sách và normalize
+  const allMainPoints = parsedAnalysis ? normalizeAiTextArray([
+    ...parsedAnalysis.positive,
+    ...parsedAnalysis.negative,
+    ...parsedAnalysis.suggestion,
+    ...parsedAnalysis.noise
+  ]) : null;
 
   // Kiểm tra có surveyId từ location.state không
   const surveyId = location.state?.surveyId;
@@ -680,77 +689,67 @@ const SentimentPage = () => {
               <div className="loading-summary">
                 <p>Đang tải tóm tắt...</p>
               </div>
-            ) : parsedAnalysis ? (
-              <div className="ai-analysis-categorized">
-                <div className="analysis-grid">
-                  {/* Mục Tích cực */}
-                  {parsedAnalysis.positive.length > 0 && (
-                    <div className="analysis-category">
-                      <h4 className="analysis-category-title" style={{ color: '#22c55e' }}>
-                        <i className="fa-solid fa-circle-check" style={{ marginRight: '8px' }}></i>
-                        Tích cực
-                      </h4>
-                      <ul className="analysis-items">
-                        {parsedAnalysis.positive.map((item, index) => (
-                          <li key={index} style={{ color: '#22c55e', marginBottom: '0.5rem', lineHeight: '1.6' }}>
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Mục Tiêu cực */}
-                  {parsedAnalysis.negative.length > 0 && (
-                    <div className="analysis-category">
-                      <h4 className="analysis-category-title" style={{ color: '#ef4444' }}>
-                        <i className="fa-solid fa-circle-exclamation" style={{ marginRight: '8px' }}></i>
-                        Tiêu cực
-                      </h4>
-                      <ul className="analysis-items">
-                        {parsedAnalysis.negative.map((item, index) => (
-                          <li key={index} style={{ color: '#ef4444', marginBottom: '0.5rem', lineHeight: '1.6' }}>
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Mục Đề xuất */}
-                  {parsedAnalysis.suggestion.length > 0 && (
-                    <div className="analysis-category">
-                      <h4 className="analysis-category-title" style={{ color: '#3b82f6' }}>
-                        <i className="fa-solid fa-lightbulb" style={{ marginRight: '8px' }}></i>
-                        Đề xuất
-                      </h4>
-                      <ul className="analysis-items">
-                        {parsedAnalysis.suggestion.map((item, index) => (
-                          <li key={index} style={{ color: '#3b82f6', marginBottom: '0.5rem', lineHeight: '1.6' }}>
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Mục Nhiễu */}
-                  {parsedAnalysis.noise.length > 0 && (
-                    <div className="analysis-category">
-                      <h4 className="analysis-category-title" style={{ color: '#eab308' }}>
-                        <i className="fa-solid fa-triangle-exclamation" style={{ marginRight: '8px' }}></i>
-                        Nhiễu
-                      </h4>
-                      <ul className="analysis-items">
-                        {parsedAnalysis.noise.map((item, index) => (
-                          <li key={index} style={{ color: '#eab308', marginBottom: '0.5rem', lineHeight: '1.6' }}>
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
+            ) : summaryText ? (
+              <div className="ai-summary-all">
+                {allMainPoints && allMainPoints.length > 0 ? (
+                  <ul className="summary-items-list" style={{ listStyle: 'none', padding: 0 }}>
+                    {allMainPoints.map((item, index) => (
+                      <li
+                        key={index}
+                        style={{
+                          marginBottom: '1rem',
+                          lineHeight: '1.8',
+                          paddingLeft: '1.5rem',
+                          position: 'relative'
+                        }}
+                      >
+                        <span style={{
+                          position: 'absolute',
+                          left: 0,
+                          color: '#3b82f6',
+                          fontWeight: 'bold'
+                        }}>•</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : parsedSummary ? (
+                  <ul className="summary-items-list" style={{ listStyle: 'none', padding: 0 }}>
+                    {parsedSummary.map((item) => (
+                      <li
+                        key={item.id}
+                        style={{
+                          marginBottom: '1rem',
+                          lineHeight: '1.8',
+                          paddingLeft: item.isBullet ? '1.5rem' : '0',
+                          position: 'relative'
+                        }}
+                      >
+                        {item.isBullet && (
+                          <span style={{
+                            position: 'absolute',
+                            left: 0,
+                            color: '#3b82f6',
+                            fontWeight: 'bold'
+                          }}>•</span>
+                        )}
+                        <span>
+                          {item.text.map((part, idx) => (
+                            part.highlight ? (
+                              <strong key={idx} style={{ color: '#3b82f6' }}>"{part.text}"</strong>
+                            ) : (
+                              <span key={idx}>{part.text}</span>
+                            )
+                          ))}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="summary-text" style={{ lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>
+                    {summaryText}
+                  </div>
+                )}
               </div>
             ) : summaryData?.ok === false ? (
               <div className="error-summary">

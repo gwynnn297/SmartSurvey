@@ -128,6 +128,7 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
         };
 
         setMessages(prev => [...prev, userMessage]);
+        const inputTextValue = inputText.trim();
         setInputText('');
         setIsLoading(true);
         setError(null);
@@ -135,7 +136,7 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
         try {
             const response = await aiChatService.processChat({
                 surveyId: surveyId,
-                questionText: userMessage.text,
+                questionText: inputTextValue,
                 topK: 5
             });
 
@@ -148,8 +149,16 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
 
             setMessages(prev => [...prev, aiMessage]);
 
-            // Reload chat history để có đầy đủ dữ liệu
-            await loadChatHistory();
+            // Chỉ reload chat history để update sidebar, không reload messages để tránh duplicate
+            try {
+                const historyResponse = await aiChatService.getChatHistory(surveyId, 20);
+                if (historyResponse && historyResponse.chat_history) {
+                    setChatHistory(historyResponse.chat_history);
+                }
+            } catch (historyError) {
+                console.error('Error reloading chat history:', historyError);
+                // Không hiển thị lỗi cho user vì tin nhắn đã được gửi thành công
+            }
         } catch (error) {
             console.error('Error sending message:', error);
             setError('Không thể gửi tin nhắn. Vui lòng thử lại.');
@@ -214,22 +223,25 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
 
     const handleSelectChat = (chatItem) => {
         // Hiển thị tất cả chat history từ đầu đến chat được chọn (bao gồm cả chat được chọn)
-        const selectedIndex = chatHistory.findIndex(item => item.chat_id === chatItem.chat_id);
+        const chatId = chatItem.chat_id || chatItem.chatId;
+        const selectedIndex = chatHistory.findIndex(item =>
+            (item.chat_id || item.chatId) === chatId
+        );
         const messagesToShow = chatHistory
             .slice(0, selectedIndex + 1) // Lấy tất cả từ đầu đến chat được chọn
-            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+            .sort((a, b) => new Date(a.created_at || a.createdAt) - new Date(b.created_at || b.createdAt))
             .flatMap(item => [
                 {
-                    id: `q-${item.chat_id}`,
+                    id: `q-${item.chat_id || item.chatId}`,
                     type: 'user',
-                    text: item.question_text,
-                    timestamp: item.created_at
+                    text: item.question_text || item.questionText || '',
+                    timestamp: item.created_at || item.createdAt
                 },
                 {
-                    id: `a-${item.chat_id}`,
+                    id: `a-${item.chat_id || item.chatId}`,
                     type: 'ai',
-                    text: item.ai_response,
-                    timestamp: item.created_at
+                    text: item.ai_response || item.aiResponse || '',
+                    timestamp: item.created_at || item.createdAt
                 }
             ]);
 
@@ -245,7 +257,8 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
 
         // Group by date
         const groupedByDate = chatHistory.reduce((acc, item) => {
-            const date = new Date(item.created_at).toLocaleDateString('vi-VN', {
+            const createdAt = item.created_at || item.createdAt;
+            const date = new Date(createdAt).toLocaleDateString('vi-VN', {
                 year: 'numeric',
                 month: 'long',
                 day: 'numeric'
@@ -271,7 +284,9 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
             });
         });
 
-        return sessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        return sessions.sort((a, b) =>
+            new Date(b.created_at || b.createdAt) - new Date(a.created_at || a.createdAt)
+        );
     };
 
     const capabilities = [
@@ -290,7 +305,7 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
     return (
         <div className="ai-chat-overlay" onClick={(e) => e.target === e.currentTarget && handleToggleChat()}>
             <div className="ai-chat-container" ref={chatContainerRef} onClick={(e) => e.stopPropagation()}>
-                {/* Sidebar Menu Overlay */}
+                {/* Sidebar Menu */}
                 {showMenu && (
                     <>
                         <div className="ai-chat-menu-backdrop" onClick={() => setShowMenu(false)}></div>
@@ -336,15 +351,15 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
                                                     <button
                                                         className="ai-chat-menu-item ai-chat-menu-item-history"
                                                         onClick={() => handleSelectChat(chatItem)}
-                                                        title={chatItem.question_text}
+                                                        title={chatItem.question_text || chatItem.questionText}
                                                     >
                                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                                                         </svg>
                                                         <span className="ai-chat-menu-item-text">
-                                                            {chatItem.question_text.length > 40
-                                                                ? `${chatItem.question_text.substring(0, 40)}...`
-                                                                : chatItem.question_text}
+                                                            {(chatItem.question_text || chatItem.questionText || '').length > 40
+                                                                ? `${(chatItem.question_text || chatItem.questionText || '').substring(0, 40)}...`
+                                                                : (chatItem.question_text || chatItem.questionText || '')}
                                                         </span>
                                                     </button>
                                                 </div>
