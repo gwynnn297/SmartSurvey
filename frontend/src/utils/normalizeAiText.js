@@ -105,6 +105,53 @@ export const normalizeAiText = (text) => {
 };
 
 /**
+ * Hàm merge các items liên tiếp không có label với item trước đó
+ * @param {string[]} items - Mảng các text items
+ * @returns {string[]} - Mảng các text đã được merge
+ */
+const mergeContinuationItems = (items) => {
+    if (!Array.isArray(items) || items.length === 0) {
+        return items;
+    }
+
+    const merged = [];
+    // Các từ khóa bắt đầu câu mới (không merge) - ưu tiên kiểm tra trước
+    const newSentenceKeywords = [
+        /^(một|hai|ba|bốn|năm|sáu|bảy|tám|chín|mười|người|ngược lại|tuy nhiên|nhưng|mặt khác|đề xuất|kết luận|tóm lại|tổng kết)/i
+    ];
+
+    // Các pattern để nhận biết dòng là phần tiếp theo
+    const continuationPatterns = [
+        /^(nhấn mạnh|đồng thời|ngoài ra|bên cạnh đó|hơn nữa|thêm vào đó|đặc biệt|quan trọng là|đáng chú ý|nổi bật|và|với|vì|do|từ|theo|về|cho|trong|trên|dưới|sau|trước|khi|nếu|mà|của|để|được|bị|sẽ|đã|đang)/i,
+        /^[a-zàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/ // Bắt đầu bằng chữ thường
+    ];
+
+    for (let i = 0; i < items.length; i++) {
+        const current = items[i]?.trim();
+        if (!current || current.length === 0) {
+            continue;
+        }
+
+        // Kiểm tra xem có phải là câu mới không (bắt đầu bằng từ khóa đặc biệt)
+        const isNewSentence = newSentenceKeywords.some(pattern => pattern.test(current));
+
+        // Kiểm tra xem item hiện tại có phải là phần tiếp theo không
+        const isContinuation = !isNewSentence && continuationPatterns.some(pattern => pattern.test(current));
+
+        if (isContinuation && merged.length > 0) {
+            // Gộp với item trước đó
+            const lastIndex = merged.length - 1;
+            merged[lastIndex] = merged[lastIndex] + ' ' + current;
+        } else {
+            // Thêm item mới
+            merged.push(current);
+        }
+    }
+
+    return merged;
+};
+
+/**
  * Hàm normalize một mảng các text items
  * @param {string[]} items - Mảng các text cần normalize
  * @returns {string[]} - Mảng các text đã được làm sạch
@@ -115,7 +162,7 @@ export const normalizeAiTextArray = (items) => {
     }
     const simpleLabels = ['Điểm', 'Đề xuất', 'Tích cực', 'Tiêu cực', 'Nhận định', 'Kết luận', 'Tóm tắt'];
 
-    return items
+    const normalized = items
         .map(item => normalizeAiText(item))
         .filter(item => {
             const trimmed = item && item.trim();
@@ -130,6 +177,9 @@ export const normalizeAiTextArray = (items) => {
             });
             return !isOnlyLabel;
         });
+
+    // Merge các items liên tiếp không có label
+    return mergeContinuationItems(normalized);
 };
 
 export default normalizeAiText;
