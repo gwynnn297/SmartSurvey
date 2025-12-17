@@ -46,6 +46,12 @@ dependencies {
     implementation("com.turkraft.springfilter:jpa:3.1.7")
     // Excel export
     implementation("org.apache.poi:poi-ooxml:5.3.0")
+    // PDF export
+    implementation("com.itextpdf:itext7-core:7.2.5")
+    implementation("com.itextpdf:layout:7.2.5")
+    implementation("com.itextpdf:font-asian:7.2.5") // Hỗ trợ font châu Á (bao gồm tiếng Việt)
+    // Chart generation for PDF
+    implementation("org.jfree:jfreechart:1.5.4")
 
     // Flyway chạy lúc ứng dụng start
     implementation("org.flywaydb:flyway-core:11.7.2")

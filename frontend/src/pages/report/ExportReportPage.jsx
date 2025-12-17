@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import MainLayout from "../../layouts/MainLayout";
-import { individualResponseService } from "../../services/individualResponseService";
+import { exportReportService } from "../../services/exportReportService";
 import { surveyService } from "../../services/surveyService";
 import { dashboardReportService } from "../../services/dashboardReportService";
 import AIChat, { AIChatButton } from "../../components/AIChat";
@@ -93,7 +93,7 @@ const ExportReportPage = () => {
 
                 // Fallback: Lấy từ listResponses để có total count
                 try {
-                    const responseData = await individualResponseService.listResponses(surveyId, {
+                    const responseData = await exportReportService.listResponses(surveyId, {
                         page: 0,
                         size: 1
                     });
@@ -119,8 +119,16 @@ const ExportReportPage = () => {
         loadPreviewStats();
     }, [surveyId]);
 
-    // Formats được hỗ trợ bởi backend API (chỉ Excel và CSV)
+    // Formats được hỗ trợ bởi backend API
     const formats = [
+        {
+            id: "pdf",
+            title: "PDF",
+            description: "Báo cáo tổng hợp với biểu đồ và thống kê",
+            details: ["Báo cáo chuyên nghiệp", "Kèm biểu đồ trực quan", "Dễ chia sẻ và in ấn"],
+            color: "#fef3c7",
+            icon: <div style={{ fontSize: '48px', color: '#d97706' }}>📄</div>,
+        },
         {
             id: "excel",
             title: "Excel",
@@ -157,6 +165,7 @@ const ExportReportPage = () => {
     // Lấy icon và tên format
     const getFormatDisplay = (format) => {
         const formatMap = {
+            'pdf': { icon: '📄', name: 'Báo cáo PDF' },
             'excel': { icon: '📊', name: 'Dữ liệu Excel' },
             'csv': { icon: '🧾', name: 'Raw Data CSV' }
         };
@@ -174,17 +183,41 @@ const ExportReportPage = () => {
         setError(null);
 
         try {
-            await individualResponseService.exportResponses(surveyId, {
-                format: selectedFormat,
-                includeAnswers: includeAnswers,
-                filter: {
-                    // Có thể thêm filters ở đây nếu cần
-                    sort: 'submittedAt,desc'
-                }
-            });
+            // PDF sử dụng API riêng (exportAndDownloadPDF)
+            if (selectedFormat === 'pdf') {
+                await exportReportService.exportAndDownloadPDF(surveyId);
+            } else {
+                // CSV và Excel sử dụng exportAndDownload với options
+                await exportReportService.exportAndDownload(surveyId, {
+                    format: selectedFormat,
+                    includeAnswers: includeAnswers,
+                    filter: {
+                        // Có thể thêm filters ở đây nếu cần
+                        sort: 'submittedAt,desc'
+                    }
+                });
+            }
 
             // Success - file sẽ tự động download
             console.log('✅ Xuất báo cáo thành công');
+
+            // Tạo tên file
+            const getFileName = () => {
+                if (selectedFormat === 'pdf') {
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const day = String(now.getDate()).padStart(2, '0');
+                    const hours = String(now.getHours()).padStart(2, '0');
+                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                    const seconds = String(now.getSeconds()).padStart(2, '0');
+                    const timestamp = `${year}${month}${day}_${hours}${minutes}${seconds}`;
+                    return `survey_report_${surveyId}_${timestamp}.pdf`;
+                } else {
+                    const extension = selectedFormat === 'excel' ? 'xlsx' : 'csv';
+                    return `survey-${surveyId}-responses-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)}.${extension}`;
+                }
+            };
 
             // Lưu vào lịch sử
             const exportRecord = {
@@ -192,9 +225,9 @@ const ExportReportPage = () => {
                 surveyId: surveyId,
                 surveyTitle: surveyInfo?.title || surveyTitle || 'Khảo sát',
                 format: selectedFormat,
-                includeAnswers: includeAnswers,
+                includeAnswers: selectedFormat === 'pdf' ? undefined : includeAnswers, // PDF không có includeAnswers
                 timestamp: new Date().toISOString(),
-                fileName: `survey-${surveyId}-responses-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)}.${selectedFormat === 'excel' ? 'xlsx' : 'csv'}`
+                fileName: getFileName()
             };
 
             // Lưu vào localStorage
@@ -218,7 +251,16 @@ const ExportReportPage = () => {
             }
         } catch (error) {
             console.error('❌ Lỗi khi xuất báo cáo:', error);
-            setError('Không thể xuất báo cáo: ' + (error.response?.data?.message || error.message));
+
+            // Xử lý lỗi đặc biệt cho PDF (403 permission error)
+            let errorMessage = 'Không thể xuất báo cáo: ';
+            if (error.status === 403) {
+                errorMessage += error.message || 'Bạn không có quyền xuất báo cáo PDF. Chỉ OWNER và ANALYST mới có quyền.';
+            } else {
+                errorMessage += error.response?.data?.message || error.message || 'Đã xảy ra lỗi không xác định';
+            }
+
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -232,13 +274,19 @@ const ExportReportPage = () => {
         setError(null);
 
         try {
-            await individualResponseService.exportResponses(surveyId, {
-                format: historyItem.format,
-                includeAnswers: historyItem.includeAnswers !== undefined ? historyItem.includeAnswers : true,
-                filter: {
-                    sort: 'submittedAt,desc'
-                }
-            });
+            // PDF sử dụng API riêng
+            if (historyItem.format === 'pdf') {
+                await exportReportService.exportAndDownloadPDF(surveyId);
+            } else {
+                // CSV và Excel sử dụng exportAndDownload với options
+                await exportReportService.exportAndDownload(surveyId, {
+                    format: historyItem.format,
+                    includeAnswers: historyItem.includeAnswers !== undefined ? historyItem.includeAnswers : true,
+                    filter: {
+                        sort: 'submittedAt,desc'
+                    }
+                });
+            }
 
             console.log('✅ Tải lại báo cáo thành công');
 
@@ -258,7 +306,16 @@ const ExportReportPage = () => {
             }
         } catch (error) {
             console.error('❌ Lỗi khi tải lại báo cáo:', error);
-            setError('Không thể tải lại báo cáo: ' + (error.response?.data?.message || error.message));
+
+            // Xử lý lỗi đặc biệt cho PDF
+            let errorMessage = 'Không thể tải lại báo cáo: ';
+            if (error.status === 403) {
+                errorMessage += error.message || 'Bạn không có quyền xuất báo cáo PDF. Chỉ OWNER và ANALYST mới có quyền.';
+            } else {
+                errorMessage += error.response?.data?.message || error.message || 'Đã xảy ra lỗi không xác định';
+            }
+
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
@@ -376,14 +433,29 @@ const ExportReportPage = () => {
                                     )}
                                 </div>
                                 <div className="preview-options">
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={includeAnswers}
-                                            onChange={(e) => setIncludeAnswers(e.target.checked)}
-                                        />
-                                        Bao gồm câu trả lời chi tiết
-                                    </label>
+                                    {/* PDF không có option includeAnswers vì nó là báo cáo tổng hợp với biểu đồ */}
+                                    {selectedFormat !== 'pdf' && (
+                                        <label>
+                                            <input
+                                                type="checkbox"
+                                                checked={includeAnswers}
+                                                onChange={(e) => setIncludeAnswers(e.target.checked)}
+                                            />
+                                            Bao gồm câu trả lời chi tiết
+                                        </label>
+                                    )}
+                                    {selectedFormat === 'pdf' && (
+                                        <div style={{
+                                            padding: '8px 12px',
+                                            background: '#fffbeb',
+                                            border: '1px solid #fbbf24',
+                                            borderRadius: '6px',
+                                            fontSize: '13px',
+                                            color: '#92400e'
+                                        }}>
+                                            📄 Báo cáo PDF bao gồm biểu đồ và thống kê tổng hợp
+                                        </div>
+                                    )}
                                 </div>
                                 {!previewStats.loading && (
                                     <div style={{
@@ -396,7 +468,9 @@ const ExportReportPage = () => {
                                         color: '#0369a1'
                                     }}>
                                         📊 Báo cáo sẽ chứa {previewStats.totalResponses} phản hồi
-                                        {includeAnswers && ' với câu trả lời chi tiết'}
+                                        {selectedFormat === 'pdf'
+                                            ? ' với biểu đồ và thống kê tổng hợp'
+                                            : (includeAnswers ? ' với câu trả lời chi tiết' : '')}
                                     </div>
                                 )}
                             </div>
