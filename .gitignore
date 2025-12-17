@@ -8,13 +8,29 @@
 
 #  PYTHON (AI SERVICES)
 
-AI/**/__pycache__/
+# Python cache và compiled files
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+*.py[cod]
+*$py.class
+
+# Virtual environments
 AI/**/.venv/
 AI/**/venv/
-AI/**/*.pyc
 AI/**/env/
+.venv/
+venv/
+ENV/
+
+# Python-specific
 AI/**/checkpoints/
 AI/**/.env
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
 
 #  FRONTEND (React)
 
