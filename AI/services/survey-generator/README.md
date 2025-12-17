@@ -292,11 +292,35 @@ curl http://localhost:8002/health
   - Kiểm tra billing trong [Google Cloud Console](https://console.cloud.google.com/)
   - Kích hoạt thanh toán cho project
 - **Vượt quá giới hạn requests/minute**: 
+  - ✨ **Auto-fallback**: Service tự động chuyển sang model khác khi hết quota
+  - Fallback chain: `gemini-2.5-flash` (5 RPM) → `gemini-2.5-flash-lite` (10 RPM)
+  - Free tier chỉ hỗ trợ 2 models này
   - Đợi 1 phút rồi thử lại
   - Giảm tần suất gọi API
 - **API key hết hạn hoặc không hợp lệ**:
   - Tạo API key mới tại [Google AI Studio](https://makersuite.google.com/app/apikey)
   - Cập nhật API key trong environment variables
+
+### ✨ Auto-Fallback Models (Mới!)
+
+Service hỗ trợ **tự động chuyển đổi model** khi gặp rate limit (429) hoặc server error (503/500):
+
+**Fallback Chain (theo thứ tự ưu tiên):**
+1. **gemini-2.5-flash** - Chất lượng tốt nhất (5 RPM limit)
+2. **gemini-2.5-flash-lite** - Nhanh hơn (10 RPM limit)
+
+> **⚠️ Lưu ý:** Google AI Studio free tier chỉ hỗ trợ models **v2.5** (`gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-2.5-flash-tts`). Các models v1.5 và gemma không khả dụng với free API key.
+
+**Cách hoạt động:**
+- Khi `gemini-2.5-flash` hết quota → tự động thử `gemini-2.5-flash-lite`
+- Nếu vẫn fail → thử tiếp `gemini-1.5-flash`
+- Cứ thế cho đến khi tìm được model khả dụng hoặc hết chain
+
+**Logs ví dụ:**
+```
+⚠️ Model 'gemini-2.5-flash' gặp lỗi 429. Fallback sang 'gemini-2.5-flash-lite'...
+✅ Fallback thành công với model 'gemini-2.5-flash-lite'
+```
 
 ### Debug Mode
 

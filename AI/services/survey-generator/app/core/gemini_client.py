@@ -29,6 +29,18 @@ class GeminiConfig:
     model: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     temperature: float = 0.4
     max_tokens: int = 8192
+    
+    # Fallback chain: thứ tự ưu tiên models khi gặp rate limit
+    fallback_models: List[str] = None
+    
+    def __post_init__(self):
+        if self.fallback_models is None:
+            # Chỉ dùng models có trong Google AI Studio free tier
+            # Dựa vào quota: gemini-2.5-flash (5 RPM), gemini-2.5-flash-lite (10 RPM)
+            self.fallback_models = [
+                "gemini-2.5-flash",
+                "gemini-2.5-flash-lite"
+            ]
 
     # Alias để code cũ gọi self.config.model_name vẫn chạy
     @property
@@ -493,36 +505,41 @@ Tạo CHÍNH XÁC {num_questions} câu hỏi. Dùng multiple_choice, open_ended,
                 time.sleep(backoff + random.uniform(0, 0.3))
                 backoff *= 2
 
-        # Fallback model nếu vẫn fail (đặc biệt 429/503)
-        current_model = self.config.model_name or self.config.model
+        # Fallback model chain nếu vẫn fail (đặc biệt 429/503)
+        # QUAN TRỌNG: Phải dùng model được truyền vào (model_name) hoặc model mặc định
+        current_model = model_name or self.config.model
         
-        # Nếu đang dùng gemini-2.5-flash và gặp lỗi 429 (quota exceeded) → thử gemini-2.5-flash-lite
-        if current_model == "gemini-2.5-flash" and "429" in str(last_err):
-            logger.warning(f"⚠️ Model {current_model} hết quota (429). Fallback sang gemini-2.5-flash-lite...")
+        # Chỉ fallback khi gặp rate limit (429) hoặc server error (503/500)
+        if any(code in str(last_err) for code in ["429", "503", "500"]):
+            # Tìm vị trí model hiện tại trong fallback chain
             try:
-                return self._call_gemini_api(
-                    prompt,
-                    max_output_tokens=max_output_tokens,
-                    candidate_count=candidate_count,
-                    response_schema=response_schema,
-                    model_name="gemini-2.5-flash-lite"
+                current_idx = self.config.fallback_models.index(current_model)
+            except ValueError:
+                # Model hiện tại không có trong chain → bắt đầu từ đầu
+                current_idx = -1
+            
+            # Thử các models còn lại trong chain
+            for next_model in self.config.fallback_models[current_idx + 1:]:
+                logger.warning(
+                    f"⚠️ Model '{current_model}' gặp lỗi {last_err[:100]}. "
+                    f"Fallback sang '{next_model}'..."
                 )
-            except Exception as e:
-                logger.error(f"Fallback gemini-2.5-flash-lite cũng thất bại: {e}")
-        
-        # Nếu đang dùng gemini-2.5-flash-lite và gặp lỗi 503 → thử gemini-2.5-flash (nếu quota còn)
-        elif current_model == "gemini-2.5-flash-lite" and "503" in str(last_err):
-            logger.warning(f"⚠️ Model {current_model} gặp lỗi 503. Thử gemini-2.5-flash...")
-            try:
-                return self._call_gemini_api(
-                    prompt,
-                    max_output_tokens=max_output_tokens,
-                    candidate_count=candidate_count,
-                    response_schema=response_schema,
-                    model_name="gemini-2.5-flash"
-                )
-            except Exception as e:
-                logger.error(f"Fallback gemini-2.5-flash cũng thất bại: {e}")
+                try:
+                    # RECURSIVE CALL với model mới - sẽ không loop vì current_idx tăng dần
+                    result = self._call_gemini_api(
+                        prompt,
+                        max_output_tokens=max_output_tokens,
+                        candidate_count=candidate_count,
+                        response_schema=response_schema,
+                        model_name=next_model  # Truyền model mới xuống
+                    )
+                    logger.info(f"✅ Fallback thành công với model '{next_model}'")
+                    return result
+                except Exception as e:
+                    logger.error(f"❌ Fallback '{next_model}' thất bại: {str(e)[:100]}")
+                    continue
+            
+            logger.error(f"💥 Đã thử hết {len(self.config.fallback_models)} models trong fallback chain")
 
         raise RuntimeError(f"Gemini API unavailable after retries. Last error: {last_err}")
 

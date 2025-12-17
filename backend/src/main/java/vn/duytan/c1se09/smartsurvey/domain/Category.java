@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @Table(name = "categories")
 @Getter
 @Setter
-@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 public class Category {
 
     @Id

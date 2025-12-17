@@ -21,7 +21,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+@JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
 public class AiChatLog {
 
     @Id
@@ -55,11 +55,11 @@ public class AiChatLog {
     // Relationships - Ignore in JSON serialization to prevent lazy loading issues
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "survey_id", insertable = false, updatable = false)
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "user", "responses", "questions"})
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "user", "responses", "questions" })
     private Survey survey;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", insertable = false, updatable = false)
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "surveys", "responses"})
+    @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler", "password", "surveys", "responses" })
     private User user;
 }
