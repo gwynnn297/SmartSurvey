@@ -1422,59 +1422,59 @@ public class ResponseService {
 			org.apache.poi.ss.usermodel.CellStyle completedStyle,
 			org.apache.poi.ss.usermodel.CellStyle partialStyle) {
 		org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Danh sách phản hồi");
-		int rowIdx = 0;
-		
-		// Header row
-		org.apache.poi.ss.usermodel.Row header = sheet.createRow(rowIdx++);
-		int col = 0;
+			int rowIdx = 0;
+			
+			// Header row
+			org.apache.poi.ss.usermodel.Row header = sheet.createRow(rowIdx++);
+			int col = 0;
 		
 		// Header tiếng Việt rõ ràng
 		String[] headerNames = {"STT", "Mã phản hồi", "Ngày gửi", "Thời gian (giây)", "Trạng thái"};
-		for (String headerName : headerNames) {
-			org.apache.poi.ss.usermodel.Cell cell = header.createCell(col++);
-			cell.setCellValue(headerName);
-			cell.setCellStyle(headerStyle);
-		}
-		
-		if (includeAnswers) {
-			for (Question q : questions) {
+			for (String headerName : headerNames) {
 				org.apache.poi.ss.usermodel.Cell cell = header.createCell(col++);
+				cell.setCellValue(headerName);
+				cell.setCellStyle(headerStyle);
+			}
+		
+			if (includeAnswers) {
+				for (Question q : questions) {
+					org.apache.poi.ss.usermodel.Cell cell = header.createCell(col++);
 				String questionText = q.getQuestionText() != null ? q.getQuestionText() : ("Câu hỏi " + q.getQuestionId());
 				// Giới hạn độ dài header
 				if (questionText.length() > 50) {
 					questionText = questionText.substring(0, 47) + "...";
 				}
 				cell.setCellValue(questionText);
-				cell.setCellStyle(headerStyle);
+					cell.setCellStyle(headerStyle);
+				}
 			}
-		}
-		
-		// Freeze panes để header luôn hiển thị
-		sheet.createFreezePane(0, 1);
-		
-		List<Question> required = questions.stream().filter(q -> Boolean.TRUE.equals(q.getIsRequired())).toList();
+			
+			// Freeze panes để header luôn hiển thị
+			sheet.createFreezePane(0, 1);
+			
+			List<Question> required = questions.stream().filter(q -> Boolean.TRUE.equals(q.getIsRequired())).toList();
 
-		// Data rows
+			// Data rows
 		int stt = 1;
-		for (Response r : responses) {
-			org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
-			int c = 0;
-			String status = determineCompletionStatus(r, required);
+			for (Response r : responses) {
+				org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
+				int c = 0;
+				String status = determineCompletionStatus(r, required);
 			String statusVi = status.equals("completed") ? "Hoàn thành" : 
 							  status.equals("partial") ? "Chưa hoàn thành" : "Bỏ dở";
-			
+				
 			// STT
-			org.apache.poi.ss.usermodel.Cell cell0 = row.createCell(c++);
+				org.apache.poi.ss.usermodel.Cell cell0 = row.createCell(c++);
 			cell0.setCellValue(stt++);
-			cell0.setCellStyle(numberStyle);
-			
+				cell0.setCellStyle(numberStyle);
+				
 			// Response ID
-			org.apache.poi.ss.usermodel.Cell cell1 = row.createCell(c++);
+				org.apache.poi.ss.usermodel.Cell cell1 = row.createCell(c++);
 			cell1.setCellValue(r.getResponseId());
-			cell1.setCellStyle(numberStyle);
-			
+				cell1.setCellStyle(numberStyle);
+				
 			// Submitted At (Date format - dd/MM/yyyy HH:mm:ss)
-			org.apache.poi.ss.usermodel.Cell cell2 = row.createCell(c++);
+				org.apache.poi.ss.usermodel.Cell cell2 = row.createCell(c++);
 			if (r.getSubmittedAt() != null) {
 				cell2.setCellValue(r.getSubmittedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")));
 				cell2.setCellStyle(dataStyle);
@@ -1484,38 +1484,38 @@ public class ResponseService {
 			}
 			
 			// Duration Seconds
-			org.apache.poi.ss.usermodel.Cell cell3 = row.createCell(c++);
+				org.apache.poi.ss.usermodel.Cell cell3 = row.createCell(c++);
 			cell3.setCellValue(r.getDurationSeconds() != null ? r.getDurationSeconds() : 0);
 			cell3.setCellStyle(numberStyle);
-			
+				
 			// Completion Status (có màu)
-			org.apache.poi.ss.usermodel.Cell cell4 = row.createCell(c++);
+				org.apache.poi.ss.usermodel.Cell cell4 = row.createCell(c++);
 			cell4.setCellValue(statusVi);
 			if (status.equals("completed")) {
 				cell4.setCellStyle(completedStyle);
-			} else {
+				} else {
 				cell4.setCellStyle(partialStyle);
 			}
-			
-			if (includeAnswers) {
-				List<Answer> answers = answerRepository.findByResponse(r);
-				Map<Long, List<Answer>> byQ = answers.stream().collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
-				for (Question q : questions) {
-					List<Answer> list = byQ.getOrDefault(q.getQuestionId(), List.of());
+				
+				if (includeAnswers) {
+					List<Answer> answers = answerRepository.findByResponse(r);
+					Map<Long, List<Answer>> byQ = answers.stream().collect(Collectors.groupingBy(a -> a.getQuestion().getQuestionId()));
+					for (Question q : questions) {
+						List<Answer> list = byQ.getOrDefault(q.getQuestionId(), List.of());
 					String val = formatAnswerValue(list, q.getQuestionType());
-					org.apache.poi.ss.usermodel.Cell cell = row.createCell(c++);
-					cell.setCellValue(val);
-					cell.setCellStyle(dataStyle);
+						org.apache.poi.ss.usermodel.Cell cell = row.createCell(c++);
+						cell.setCellValue(val);
+						cell.setCellStyle(dataStyle);
+					}
 				}
 			}
-		}
-		
+			
 		// Auto-size columns với giới hạn
-		for (int i = 0; i < col; i++) {
-			sheet.autoSizeColumn(i);
-			int currentWidth = sheet.getColumnWidth(i);
+			for (int i = 0; i < col; i++) {
+				sheet.autoSizeColumn(i);
+				int currentWidth = sheet.getColumnWidth(i);
 			// Thêm padding
-			sheet.setColumnWidth(i, currentWidth + 1000);
+				sheet.setColumnWidth(i, currentWidth + 1000);
 			// Giới hạn độ rộng tối đa
 			if (sheet.getColumnWidth(i) > 15000) {
 				sheet.setColumnWidth(i, 15000);

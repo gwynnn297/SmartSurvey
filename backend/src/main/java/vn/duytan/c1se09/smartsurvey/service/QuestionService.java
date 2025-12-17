@@ -25,6 +25,8 @@ import java.util.stream.Collectors;
 public class QuestionService {
     private final QuestionRepository questionRepository;
     private final SurveyRepository surveyRepository;
+    private final OptionRepository optionRepository;
+    private final AnswerRepository answerRepository;
     private final AuthService authService;
     private final ActivityLogService activityLogService;
     private final SurveyPermissionService surveyPermissionService;
@@ -288,7 +290,21 @@ public class QuestionService {
     public void deleteQuestion(Long questionId) throws IdInvalidException {
         Question question = getQuestionEntityById(questionId);
         validateEditPermission(question);
+        Survey survey = question.getSurvey();
 
+        // Xóa tất cả answers của câu hỏi (nếu có)
+        List<Answer> answers = answerRepository.findByQuestion(question);
+        if (!answers.isEmpty()) {
+            answerRepository.deleteAll(answers);
+        }
+
+        // Xóa tất cả options của câu hỏi (nếu có)
+        List<Option> options = optionRepository.findByQuestion(question);
+        if (!options.isEmpty()) {
+            optionRepository.deleteAll(options);
+        }
+
+        // Xóa câu hỏi
         questionRepository.delete(question);
 
         activityLogService.log(
@@ -296,6 +312,15 @@ public class QuestionService {
                 questionId,
                 "questions",
                 "Xóa câu hỏi: " + question.getQuestionText());
+
+        // Sắp xếp lại displayOrder cho các câu hỏi còn lại trong khảo sát
+        List<Question> remaining = questionRepository.findBySurveyOrderByDisplayOrderAsc(survey);
+        for (int i = 0; i < remaining.size(); i++) {
+            remaining.get(i).setDisplayOrder(i + 1);
+        }
+        if (!remaining.isEmpty()) {
+            questionRepository.saveAll(remaining);
+        }
     }
 
     // Tổng số câu hỏi trong hệ thống

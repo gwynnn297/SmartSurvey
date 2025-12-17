@@ -1053,8 +1053,8 @@ public class StatisticsService {
                 .orElseThrow(() -> new IdInvalidException("Không tìm thấy khảo sát"));
 
         User currentUser = authService.getCurrentUser();
-        if (!survey.getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new IdInvalidException("Bạn không có quyền xem phân tích cảm xúc khảo sát này");
+        if (!surveyPermissionService.canViewResults(survey, currentUser)) {
+            throw new IdInvalidException("Bạn không có quyền xem phân tích cảm xúc khảo sát này. Chỉ chủ sở hữu (OWNER) và phân tích viên (ANALYST) mới có quyền xem báo cáo.");
         }
 
         // Lấy tất cả open-ended questions của survey
