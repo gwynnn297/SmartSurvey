@@ -1153,19 +1153,13 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
                 # craft_answer là local — không cần history
                 answer = craft_answer(q_norm, topk_ctx)
 
-        # (D) Log & trả kết quả như cũ
+        # (D) Trả kết quả - KHÔNG lưu DB ở đây, để Backend Java service lưu
         now = datetime.utcnow()
-        chat = AiChatLog(
-            survey_id=req.survey_id,
-            user_id=req.user_id,
-            question_text=req.question_text,
-            ai_response=answer,
-            context=json.dumps(topk_ctx, ensure_ascii=False),
-        )
-        db.add(chat); db.commit(); db.refresh(chat)
+        
+        # Log activity nhưng không lưu chat log (Backend sẽ lưu)
         db.add(ActivityLog(
             user_id=req.user_id, action_type="ai_query",
-            target_id=chat.chat_id, target_table="ai_chat_logs",
+            target_id=None, target_table="ai_chat_logs",
             description=f"AI chat for survey_id={req.survey_id}",
         ))
         db.commit()

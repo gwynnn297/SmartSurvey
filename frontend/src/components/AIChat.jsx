@@ -66,31 +66,42 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    const loadChatHistory = async () => {
+    const loadChatHistory = async (updateMessages = true) => {
         try {
             const response = await aiChatService.getChatHistory(surveyId, 20);
             if (response && response.chat_history) {
                 console.log('[AIChat] Chat history loaded:', response.chat_history);
-                // Format chat history thành messages
-                const formattedMessages = response.chat_history
-                    .sort((a, b) => new Date(a.createdAt || a.created_at) - new Date(b.createdAt || b.created_at))
-                    .flatMap(item => [
-                        {
-                            id: `q-${item.chatId || item.chat_id}`,
-                            type: 'user',
-                            text: item.questionText || item.question_text || '',
-                            timestamp: item.createdAt || item.created_at
-                        },
-                        {
-                            id: `a-${item.chatId || item.chat_id}`,
-                            type: 'ai',
-                            text: item.aiResponse || item.ai_response || '',
-                            timestamp: item.createdAt || item.created_at
-                        }
-                    ]);
-                console.log('[AIChat] Formatted messages:', formattedMessages);
-                setMessages(formattedMessages);
-                setChatHistory(response.chat_history);
+                
+                // Loại bỏ duplicates dựa trên chat_id
+                const uniqueHistory = response.chat_history.filter((item, index, self) => 
+                    index === self.findIndex(t => (t.chat_id || t.chatId) === (item.chat_id || item.chatId))
+                );
+                console.log('[AIChat] Unique chat history:', uniqueHistory);
+                
+                // Cập nhật chatHistory cho sidebar
+                setChatHistory(uniqueHistory);
+                
+                // Chỉ format và update messages khi cần (lần đầu load hoặc reset)
+                if (updateMessages) {
+                    const formattedMessages = uniqueHistory
+                        .sort((a, b) => new Date(a.createdAt || a.created_at) - new Date(b.createdAt || b.created_at))
+                        .flatMap(item => [
+                            {
+                                id: `q-${item.chatId || item.chat_id}`,
+                                type: 'user',
+                                text: item.questionText || item.question_text || '',
+                                timestamp: item.createdAt || item.created_at
+                            },
+                            {
+                                id: `a-${item.chatId || item.chat_id}`,
+                                type: 'ai',
+                                text: item.aiResponse || item.ai_response || '',
+                                timestamp: item.createdAt || item.created_at
+                            }
+                        ]);
+                    console.log('[AIChat] Formatted messages:', formattedMessages);
+                    setMessages(formattedMessages);
+                }
             }
         } catch (error) {
             console.error('Error loading chat history:', error);
@@ -149,12 +160,9 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
 
             setMessages(prev => [...prev, aiMessage]);
 
-            // Chỉ reload chat history để update sidebar, không reload messages để tránh duplicate
+            // Chỉ reload chat history để update sidebar, KHÔNG update messages để tránh duplicate
             try {
-                const historyResponse = await aiChatService.getChatHistory(surveyId, 20);
-                if (historyResponse && historyResponse.chat_history) {
-                    setChatHistory(historyResponse.chat_history);
-                }
+                await loadChatHistory(false); // false = không update messages
             } catch (historyError) {
                 console.error('Error reloading chat history:', historyError);
                 // Không hiển thị lỗi cho user vì tin nhắn đã được gửi thành công
@@ -227,8 +235,15 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
         const selectedIndex = chatHistory.findIndex(item =>
             (item.chat_id || item.chatId) === chatId
         );
-        const messagesToShow = chatHistory
-            .slice(0, selectedIndex + 1) // Lấy tất cả từ đầu đến chat được chọn
+        
+        // Loại bỏ duplicates dựa trên chat_id trước khi xử lý
+        const uniqueHistory = chatHistory
+            .slice(0, selectedIndex + 1)
+            .filter((item, index, self) => 
+                index === self.findIndex(t => (t.chat_id || t.chatId) === (item.chat_id || item.chatId))
+            );
+        
+        const messagesToShow = uniqueHistory
             .sort((a, b) => new Date(a.created_at || a.createdAt) - new Date(b.created_at || b.createdAt))
             .flatMap(item => [
                 {

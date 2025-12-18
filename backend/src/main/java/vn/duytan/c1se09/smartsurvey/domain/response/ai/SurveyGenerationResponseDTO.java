@@ -37,6 +37,16 @@ public class SurveyGenerationResponseDTO {
         private String title;
         private String description;
         private List<GeneratedQuestionDTO> questions;
+        
+        // ✅ Support both snake_case and camelCase for flexibility
+        @JsonProperty("title")
+        public void setTitleAlt(String title) { this.title = title; }
+        
+        @JsonProperty("description")
+        public void setDescriptionAlt(String description) { this.description = description; }
+        
+        @JsonProperty("questions")
+        public void setQuestionsAlt(List<GeneratedQuestionDTO> questions) { this.questions = questions; }
     }
 
     @Data
