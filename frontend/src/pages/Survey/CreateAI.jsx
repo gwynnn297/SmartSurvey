@@ -711,7 +711,7 @@ export default function CreateAI() {
                     title: form.title,
                     hasDescription: !!form.description
                 });
-                
+
                 setAiGeneratedQuestions(mappedQuestions);
                 setAiPreviewData({
                     success: true,
@@ -725,7 +725,7 @@ export default function CreateAI() {
                     originalPrompt: form.ai_context, // Lưu prompt gốc để gọi API save
                     surveyTitle: form.title // Dùng form.title thay vì form.survey_name
                 });
-                
+
                 // Đợi một chút để user thấy 100% rồi show preview
                 setTimeout(() => {
                     console.log("✨ Opening AI preview modal");
@@ -778,10 +778,10 @@ export default function CreateAI() {
 
     const handleAcceptAIResult = async () => {
         console.log("✅ User accepted AI result, saving to database...");
-        
+
         try {
             setLoading(true);
-            
+
             // Gọi API lưu survey sau khi user accept
             const response = await fetch('http://localhost:8080/ai/save-accepted-survey', {
                 method: 'POST',
@@ -827,13 +827,13 @@ export default function CreateAI() {
 
             const result = await response.json();
             console.log("💾 Survey saved successfully:", result);
-            
+
             // Load questions vào editor
             setQuestions(aiGeneratedQuestions);
             setShowAIPreviewModal(false);
             setShowForm(false);
             showNotification('success', '✅ Đã lưu khảo sát thành công! Bạn có thể chỉnh sửa câu hỏi ngay bây giờ.');
-            
+
         } catch (error) {
             console.error("❌ Error saving accepted survey:", error);
             showNotification('error', '❌ Lỗi khi lưu khảo sát: ' + error.message);
@@ -2379,7 +2379,7 @@ export default function CreateAI() {
                         <p className="refresh-modal-subtitle">
                             Chọn loại câu hỏi bạn muốn AI tạo lại cho câu hỏi này
                         </p>
-                        
+
                         <div className="refresh-type-grid">
                             {QUESTION_TYPE_OPTIONS.map((type) => (
                                 <button
@@ -2470,7 +2470,7 @@ export default function CreateAI() {
                                             {q.question_text}
                                             {q.is_required && <span className="ai-preview-required">*</span>}
                                         </p>
-                                        
+
                                         {/* Hiển thị options nếu có */}
                                         {q.options && q.options.length > 0 && (
                                             <div className="ai-preview-options">

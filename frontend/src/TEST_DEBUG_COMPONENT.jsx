@@ -12,8 +12,8 @@ useEffect(() => {
 }, [form.question_type_priorities]);
 
 // Hoặc thêm debug button vào UI (bên cạnh nút "Tạo gợi ý bằng AI")
-{/* Debug Button - Xóa sau khi fix */}
-<button 
+{/* Debug Button - Xóa sau khi fix */ }
+<button
     type="button"
     style={{
         padding: '10px 20px',

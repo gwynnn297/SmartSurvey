@@ -1451,6 +1451,7 @@ datalist {
         transform: scale(0) rotate(-45deg);
         opacity: 0;
     }
+
     100% {
         transform: scale(1) rotate(0deg);
         opacity: 1;
@@ -1502,7 +1503,7 @@ datalist {
     max-width: 640px;
     max-height: 85vh;
     overflow-y: auto;
-    box-shadow: 
+    box-shadow:
         0 25px 50px -12px rgba(0, 0, 0, 0.25),
         0 0 0 1px rgba(148, 163, 184, 0.1);
     animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -1513,6 +1514,7 @@ datalist {
         opacity: 0;
         transform: translateY(20px) scale(0.95);
     }
+
     to {
         opacity: 1;
         transform: translateY(0) scale(1);
@@ -1583,8 +1585,8 @@ datalist {
     border-radius: 10px;
     padding: 2px;
     background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-    -webkit-mask: 
-        linear-gradient(#fff 0 0) content-box, 
+    -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
         linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
@@ -1618,6 +1620,7 @@ datalist {
         transform: scale(0) rotate(-45deg);
         opacity: 0;
     }
+
     100% {
         transform: scale(1) rotate(0deg);
         opacity: 1;
@@ -1696,7 +1699,7 @@ datalist {
     max-height: 90vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 
+    box-shadow:
         0 25px 50px -12px rgba(0, 0, 0, 0.35),
         0 0 0 1px rgba(148, 163, 184, 0.1);
     animation: slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);

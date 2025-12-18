@@ -97,11 +97,12 @@ public class SurveyGeneratorController {
             @Valid @RequestBody SurveyGenerationRequestDTO request,
             Principal principal) {
         log.info("Saving accepted AI survey for user: {}", principal.getName());
-        
+
         try {
-            SurveyGenerationResponseDTO response = surveyGeneratorService.saveAcceptedAiSurvey(request, principal.getName());
+            SurveyGenerationResponseDTO response = surveyGeneratorService.saveAcceptedAiSurvey(request,
+                    principal.getName());
             return ResponseEntity.ok(response);
-            
+
         } catch (Exception e) {
             log.error("Error saving accepted survey: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

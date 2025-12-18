@@ -94,12 +94,12 @@ public class SurveyService {
         if (currentUser == null) {
             throw new IdInvalidException("Người dùng chưa xác thực");
         }
-        
+
         // Check permission: chỉ OWNER và EDITOR mới được cập nhật survey
         if (!surveyPermissionService.canEdit(survey, currentUser)) {
             throw new IdInvalidException("Bạn không có quyền chỉnh sửa khảo sát này");
         }
-        
+
         return surveyRepository.save(survey);
     }
 
@@ -187,13 +187,13 @@ public class SurveyService {
 
     public SurveyResponseDTO getSurveyById(Long surveyId) throws IdInvalidException {
         Survey survey = getSurveyEntityById(surveyId);
-        
+
         // Kiểm tra quyền xem survey
         User currentUser = authService.getCurrentUser();
         if (!surveyPermissionService.canViewSurvey(survey, currentUser)) {
             throw new IdInvalidException("Bạn không có quyền xem khảo sát này");
         }
-        
+
         return toSurveyResponseDTO(survey);
     }
 
@@ -300,7 +300,7 @@ public class SurveyService {
                 "surveys",
                 "Cập nhật khảo sát: " + saved.getTitle());
         return toSurveyResponseDTO(saved);
-        
+
     }
 
     @Transactional
@@ -433,14 +433,14 @@ public class SurveyService {
             Question question = new Question();
             question.setSurvey(savedSurvey);
             question.setQuestionText(qDto.getQuestionText());
-            
+
             // Log để debug
             System.out.println("🔍 [DEBUG] Mapping question type from AI: " + qDto.getQuestionType());
 
             // Map question type từ AI format sang enum format
             vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum questionType;
             String aiQuestionType = qDto.getQuestionType().toLowerCase().replace("-", "_");
-            
+
             switch (aiQuestionType) {
                 case "single_choice":
                     questionType = vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum.single_choice;
@@ -476,10 +476,10 @@ public class SurveyService {
                     questionType = vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum.open_ended;
                     break;
             }
-            
+
             // Log kết quả mapping
             System.out.println("✅ [DEBUG] Mapped to DB type: " + questionType.name());
-            
+
             question.setQuestionType(questionType);
 
             question.setIsRequired(qDto.isRequired());
@@ -621,7 +621,6 @@ public class SurveyService {
         if (!surveyPermissionService.canManagePermissions(survey, currentUser)) {
             throw new IdInvalidException("Bạn không có quyền quản lý quyền truy cập của khảo sát này");
         }
-       
 
         // Map để lưu thông tin user permissions với restrictedTeamId
         // Key: userId, Value: Pair<permission, restrictedTeamId>
@@ -629,7 +628,8 @@ public class SurveyService {
         Map<Long, User> loadedUsers = new HashMap<>();
         Map<Long, Team> loadedRestrictedTeams = new HashMap<>();
 
-        // Parse teamAccess format: [{"userId": 456, "restrictedTeamId": 1, "permission": "..."}]
+        // Parse teamAccess format: [{"userId": 456, "restrictedTeamId": 1,
+        // "permission": "..."}]
         if (request.getTeamAccess() != null) {
             for (SurveyPermissionUpdateRequestDTO.TeamAccessDTO dto : request.getTeamAccess()) {
                 if (dto.getUserId() == null && dto.getEmail() == null) {
@@ -640,10 +640,12 @@ public class SurveyService {
                 User targetUser;
                 if (dto.getUserId() != null) {
                     targetUser = userRepository.findById(dto.getUserId())
-                            .orElseThrow(() -> new IdInvalidException("Không tìm thấy user với id: " + dto.getUserId()));
+                            .orElseThrow(
+                                    () -> new IdInvalidException("Không tìm thấy user với id: " + dto.getUserId()));
                 } else {
                     targetUser = userRepository.findByEmail(dto.getEmail().trim().toLowerCase())
-                            .orElseThrow(() -> new IdInvalidException("Không tìm thấy user với email: " + dto.getEmail()));
+                            .orElseThrow(
+                                    () -> new IdInvalidException("Không tìm thấy user với email: " + dto.getEmail()));
                 }
 
                 // User access
@@ -662,19 +664,21 @@ public class SurveyService {
                 Team restrictedTeam = null;
                 if (dto.getRestrictedTeamId() != null) {
                     restrictedTeam = teamRepository.findById(dto.getRestrictedTeamId())
-                            .orElseThrow(() -> new IdInvalidException("Không tìm thấy team với id: " + dto.getRestrictedTeamId()));
-                    
+                            .orElseThrow(() -> new IdInvalidException(
+                                    "Không tìm thấy team với id: " + dto.getRestrictedTeamId()));
+
                     // Kiểm tra user có phải member của restricted team không
                     boolean isMember = teamMemberRepository.existsByTeamAndUser(restrictedTeam, targetUser);
                     if (!isMember) {
-                        throw new IdInvalidException("User " + targetUser.getEmail() + " không phải thành viên của team " + restrictedTeam.getName());
+                        throw new IdInvalidException("User " + targetUser.getEmail()
+                                + " không phải thành viên của team " + restrictedTeam.getName());
                     }
-                    
+
                     loadedRestrictedTeams.put(dto.getRestrictedTeamId(), restrictedTeam);
                 }
 
-                requestedUserPermissions.put(targetUser.getUserId(), 
-                    new java.util.AbstractMap.SimpleEntry<>(dto.getPermission(), dto.getRestrictedTeamId()));
+                requestedUserPermissions.put(targetUser.getUserId(),
+                        new java.util.AbstractMap.SimpleEntry<>(dto.getPermission(), dto.getRestrictedTeamId()));
                 loadedUsers.put(targetUser.getUserId(), targetUser);
             }
         }
@@ -682,14 +686,16 @@ public class SurveyService {
         List<SurveyPermission> existingPermissions = surveyPermissionRepository.findBySurvey(survey);
         // Map để track processed permissions: userId -> (permission, restrictedTeamId)
         Map<Long, java.util.AbstractMap.SimpleEntry<SurveyPermissionRole, Long>> processedPermissions = new HashMap<>();
-        // Map để track các user bị xóa permission trong request này: userId -> oldPermission
+        // Map để track các user bị xóa permission trong request này: userId ->
+        // oldPermission
         Map<Long, SurveyPermission> deletedPermissions = new HashMap<>();
 
         for (SurveyPermission permission : existingPermissions) {
             if (permission.getUser() != null) {
                 Long userId = permission.getUser().getUserId();
-                java.util.AbstractMap.SimpleEntry<SurveyPermissionRole, Long> requested = requestedUserPermissions.get(userId);
-                
+                java.util.AbstractMap.SimpleEntry<SurveyPermissionRole, Long> requested = requestedUserPermissions
+                        .get(userId);
+
                 if (requested == null) {
                     // Permission không còn trong request, xóa và lưu lại để track
                     deletedPermissions.put(userId, permission);
@@ -698,14 +704,17 @@ public class SurveyService {
                     // Kiểm tra xem có thay đổi permission hoặc restrictedTeamId không
                     SurveyPermissionRole oldPermission = permission.getPermission();
                     boolean permissionChanged = !oldPermission.equals(requested.getKey());
-                    Long currentRestrictedTeamId = permission.getRestrictedTeam() != null ? permission.getRestrictedTeam().getTeamId() : null;
-                    boolean restrictedTeamChanged = !java.util.Objects.equals(currentRestrictedTeamId, requested.getValue());
-                    
+                    Long currentRestrictedTeamId = permission.getRestrictedTeam() != null
+                            ? permission.getRestrictedTeam().getTeamId()
+                            : null;
+                    boolean restrictedTeamChanged = !java.util.Objects.equals(currentRestrictedTeamId,
+                            requested.getValue());
+
                     if (permissionChanged || restrictedTeamChanged) {
                         // Lưu thông tin team cũ để gửi notification
                         Team oldRestrictedTeam = permission.getRestrictedTeam();
                         String oldTeamName = oldRestrictedTeam != null ? oldRestrictedTeam.getName() : null;
-                        
+
                         permission.setPermission(requested.getKey());
                         if (requested.getValue() != null) {
                             permission.setRestrictedTeam(loadedRestrictedTeams.get(requested.getValue()));
@@ -714,38 +723,45 @@ public class SurveyService {
                         }
                         permission.setGrantedBy(currentUser);
                         surveyPermissionRepository.save(permission);
-                        
+
                         // Quyền đã thay đổi, gửi notification
                         User targetUser = permission.getUser();
                         if (targetUser == null) {
                             targetUser = loadedUsers.get(userId);
                         }
                         String notificationMessage;
-                        
+
                         if (permissionChanged && restrictedTeamChanged) {
                             // Cả permission và team đều thay đổi
-                            String newTeamName = permission.getRestrictedTeam() != null ? permission.getRestrictedTeam().getName() : null;
+                            String newTeamName = permission.getRestrictedTeam() != null
+                                    ? permission.getRestrictedTeam().getName()
+                                    : null;
                             String oldTeamInfo = oldTeamName != null ? " (team " + oldTeamName + ")" : "";
                             String newTeamInfo = newTeamName != null ? " (team " + newTeamName + ")" : "";
-                            notificationMessage = String.format("Quyền của bạn trên survey '%s' đã được %s thay đổi từ %s%s sang %s%s",
+                            notificationMessage = String.format(
+                                    "Quyền của bạn trên survey '%s' đã được %s thay đổi từ %s%s sang %s%s",
                                     survey.getTitle(), currentUser.getFullName(),
                                     oldPermission.name(), oldTeamInfo,
                                     requested.getKey().name(), newTeamInfo);
                         } else if (permissionChanged) {
                             // Chỉ permission thay đổi
-                            notificationMessage = String.format("Quyền của bạn trên survey '%s' đã được %s thay đổi từ %s sang %s",
+                            notificationMessage = String.format(
+                                    "Quyền của bạn trên survey '%s' đã được %s thay đổi từ %s sang %s",
                                     survey.getTitle(), currentUser.getFullName(),
                                     oldPermission.name(), requested.getKey().name());
                         } else {
                             // Chỉ team thay đổi
-                            String newTeamName = permission.getRestrictedTeam() != null ? permission.getRestrictedTeam().getName() : null;
+                            String newTeamName = permission.getRestrictedTeam() != null
+                                    ? permission.getRestrictedTeam().getName()
+                                    : null;
                             String oldTeamInfo = oldTeamName != null ? "team " + oldTeamName : "không giới hạn";
                             String newTeamInfo = newTeamName != null ? "team " + newTeamName : "không giới hạn";
-                            notificationMessage = String.format("Phạm vi quyền %s của bạn trên survey '%s' đã được %s thay đổi từ %s sang %s",
+                            notificationMessage = String.format(
+                                    "Phạm vi quyền %s của bạn trên survey '%s' đã được %s thay đổi từ %s sang %s",
                                     requested.getKey().name(), survey.getTitle(), currentUser.getFullName(),
                                     oldTeamInfo, newTeamInfo);
                         }
-                        
+
                         try {
                             notificationService.createNotification(
                                     targetUser,
@@ -753,8 +769,7 @@ public class SurveyService {
                                     "Quyền truy cập survey đã thay đổi",
                                     notificationMessage,
                                     "survey",
-                                    survey.getSurveyId()
-                            );
+                                    survey.getSurveyId());
                         } catch (Exception e) {
                             // Log lỗi nhưng không throw để không ảnh hưởng đến việc cập nhật permission
                             System.err.println("Lỗi khi gửi notification khi cập nhật permission: " + e.getMessage());
@@ -766,27 +781,29 @@ public class SurveyService {
             }
         }
 
-        for (Map.Entry<Long, java.util.AbstractMap.SimpleEntry<SurveyPermissionRole, Long>> entry : requestedUserPermissions.entrySet()) {
+        for (Map.Entry<Long, java.util.AbstractMap.SimpleEntry<SurveyPermissionRole, Long>> entry : requestedUserPermissions
+                .entrySet()) {
             Long userId = entry.getKey();
             SurveyPermissionRole permission = entry.getValue().getKey();
             Long restrictedTeamId = entry.getValue().getValue();
-            
+
             if (processedPermissions.containsKey(userId)) {
-                // Permission đã tồn tại và được xử lý ở trên (notification đã được gửi nếu có thay đổi)
+                // Permission đã tồn tại và được xử lý ở trên (notification đã được gửi nếu có
+                // thay đổi)
                 continue;
             }
-            
+
             // Kiểm tra xem user này có vừa bị xóa permission trong request này không
             SurveyPermission deletedPermission = deletedPermissions.get(userId);
             User targetUser = loadedUsers.get(userId);
-            
+
             // Đảm bảo targetUser không null
             if (targetUser == null) {
                 // Nếu không có trong loadedUsers, load từ database
                 targetUser = userRepository.findById(userId)
                         .orElseThrow(() -> new IdInvalidException("Không tìm thấy user với id: " + userId));
             }
-            
+
             // Permission mới, tạo
             SurveyPermission newPermission = new SurveyPermission();
             newPermission.setSurvey(survey);
@@ -797,51 +814,57 @@ public class SurveyService {
             }
             newPermission.setGrantedBy(currentUser);
             surveyPermissionRepository.save(newPermission);
-            
+
             // Gửi notification - LUÔN gửi khi thêm permission mới
             if (deletedPermission != null) {
                 // User này vừa bị xóa và được thêm lại - coi như permission thay đổi
                 SurveyPermissionRole oldPermission = deletedPermission.getPermission();
                 Team oldRestrictedTeam = deletedPermission.getRestrictedTeam();
                 String oldTeamName = oldRestrictedTeam != null ? oldRestrictedTeam.getName() : null;
-                
+
                 boolean permissionChanged = !oldPermission.equals(permission);
                 Long oldRestrictedTeamId = oldRestrictedTeam != null ? oldRestrictedTeam.getTeamId() : null;
                 boolean restrictedTeamChanged = !java.util.Objects.equals(oldRestrictedTeamId, restrictedTeamId);
-                
+
                 String notificationMessage;
                 if (permissionChanged && restrictedTeamChanged) {
                     // Cả permission và team đều thay đổi
-                    String newTeamName = restrictedTeamId != null && loadedRestrictedTeams.containsKey(restrictedTeamId) 
-                        ? loadedRestrictedTeams.get(restrictedTeamId).getName() : null;
+                    String newTeamName = restrictedTeamId != null && loadedRestrictedTeams.containsKey(restrictedTeamId)
+                            ? loadedRestrictedTeams.get(restrictedTeamId).getName()
+                            : null;
                     String oldTeamInfo = oldTeamName != null ? " (team " + oldTeamName + ")" : "";
                     String newTeamInfo = newTeamName != null ? " (team " + newTeamName + ")" : "";
-                    notificationMessage = String.format("Quyền của bạn trên survey '%s' đã được %s thay đổi từ %s%s sang %s%s",
+                    notificationMessage = String.format(
+                            "Quyền của bạn trên survey '%s' đã được %s thay đổi từ %s%s sang %s%s",
                             survey.getTitle(), currentUser.getFullName(),
                             oldPermission.name(), oldTeamInfo,
                             permission.name(), newTeamInfo);
                 } else if (permissionChanged) {
                     // Chỉ permission thay đổi
-                    notificationMessage = String.format("Quyền của bạn trên survey '%s' đã được %s thay đổi từ %s sang %s",
+                    notificationMessage = String.format(
+                            "Quyền của bạn trên survey '%s' đã được %s thay đổi từ %s sang %s",
                             survey.getTitle(), currentUser.getFullName(),
                             oldPermission.name(), permission.name());
                 } else if (restrictedTeamChanged) {
                     // Chỉ team thay đổi
-                    String newTeamName = restrictedTeamId != null && loadedRestrictedTeams.containsKey(restrictedTeamId) 
-                        ? loadedRestrictedTeams.get(restrictedTeamId).getName() : null;
+                    String newTeamName = restrictedTeamId != null && loadedRestrictedTeams.containsKey(restrictedTeamId)
+                            ? loadedRestrictedTeams.get(restrictedTeamId).getName()
+                            : null;
                     String oldTeamInfo = oldTeamName != null ? "team " + oldTeamName : "không giới hạn";
                     String newTeamInfo = newTeamName != null ? "team " + newTeamName : "không giới hạn";
-                    notificationMessage = String.format("Phạm vi quyền %s của bạn trên survey '%s' đã được %s thay đổi từ %s sang %s",
+                    notificationMessage = String.format(
+                            "Phạm vi quyền %s của bạn trên survey '%s' đã được %s thay đổi từ %s sang %s",
                             permission.name(), survey.getTitle(), currentUser.getFullName(),
                             oldTeamInfo, newTeamInfo);
                 } else {
                     // Permission và team giống nhau - khôi phục quyền
-                    String teamInfo = restrictedTeamId != null && loadedRestrictedTeams.containsKey(restrictedTeamId) 
-                        ? " (giới hạn cho team " + loadedRestrictedTeams.get(restrictedTeamId).getName() + ")" : "";
+                    String teamInfo = restrictedTeamId != null && loadedRestrictedTeams.containsKey(restrictedTeamId)
+                            ? " (giới hạn cho team " + loadedRestrictedTeams.get(restrictedTeamId).getName() + ")"
+                            : "";
                     notificationMessage = String.format("Quyền %s của bạn trên survey '%s' đã được %s khôi phục%s",
                             permission.name(), survey.getTitle(), currentUser.getFullName(), teamInfo);
                 }
-                
+
                 try {
                     notificationService.createNotification(
                             targetUser,
@@ -849,8 +872,7 @@ public class SurveyService {
                             "Quyền truy cập survey đã thay đổi",
                             notificationMessage,
                             "survey",
-                            survey.getSurveyId()
-                    );
+                            survey.getSurveyId());
                 } catch (Exception e) {
                     // Log lỗi nhưng không throw để không ảnh hưởng đến việc cập nhật permission
                     System.err.println("Lỗi khi gửi notification: " + e.getMessage());
@@ -858,8 +880,9 @@ public class SurveyService {
                 }
             } else {
                 // User mới hoàn toàn, gửi notification SURVEY_SHARED
-                String teamInfo = restrictedTeamId != null && loadedRestrictedTeams.containsKey(restrictedTeamId) 
-                    ? " (giới hạn cho team " + loadedRestrictedTeams.get(restrictedTeamId).getName() + ")" : "";
+                String teamInfo = restrictedTeamId != null && loadedRestrictedTeams.containsKey(restrictedTeamId)
+                        ? " (giới hạn cho team " + loadedRestrictedTeams.get(restrictedTeamId).getName() + ")"
+                        : "";
                 try {
                     notificationService.createNotification(
                             targetUser,
@@ -868,8 +891,7 @@ public class SurveyService {
                             String.format("%s đã chia sẻ survey '%s' với bạn với quyền %s%s",
                                     currentUser.getFullName(), survey.getTitle(), permission.name(), teamInfo),
                             "survey",
-                            survey.getSurveyId()
-                    );
+                            survey.getSurveyId());
                 } catch (Exception e) {
                     // Log lỗi nhưng không throw để không ảnh hưởng đến việc cập nhật permission
                     System.err.println("Lỗi khi gửi notification: " + e.getMessage());
@@ -880,7 +902,7 @@ public class SurveyService {
 
         // Flush để đảm bảo tất cả changes được commit trước khi query lại
         surveyPermissionRepository.flush();
-        
+
         // Reload permissions để đảm bảo trạng thái mới nhất
         List<SurveyPermission> updatedPermissions = surveyPermissionRepository.findBySurvey(survey);
         return buildSurveyPermissionResponse(survey, updatedPermissions);
@@ -891,7 +913,8 @@ public class SurveyService {
         List<SurveyPermissionResponseDTO.SharedUserDTO> userShares = permissions.stream()
                 .filter(p -> p.getUser() != null)
                 .map(p -> {
-                    SurveyPermissionResponseDTO.SharedUserDTO.SharedUserDTOBuilder builder = SurveyPermissionResponseDTO.SharedUserDTO.builder()
+                    SurveyPermissionResponseDTO.SharedUserDTO.SharedUserDTOBuilder builder = SurveyPermissionResponseDTO.SharedUserDTO
+                            .builder()
                             .userId(p.getUser().getUserId())
                             .email(p.getUser().getEmail())
                             .fullName(p.getUser().getFullName())
@@ -900,13 +923,13 @@ public class SurveyService {
                             .grantedByName(
                                     p.getGrantedBy() != null ? p.getGrantedBy().getFullName() : null)
                             .updatedAt(p.getUpdatedAt());
-                    
+
                     // Thêm thông tin restricted team nếu có
                     if (p.getRestrictedTeam() != null) {
                         builder.restrictedTeamId(p.getRestrictedTeam().getTeamId())
-                               .restrictedTeamName(p.getRestrictedTeam().getName());
+                                .restrictedTeamName(p.getRestrictedTeam().getName());
                     }
-                    
+
                     return builder.build();
                 })
                 .toList();

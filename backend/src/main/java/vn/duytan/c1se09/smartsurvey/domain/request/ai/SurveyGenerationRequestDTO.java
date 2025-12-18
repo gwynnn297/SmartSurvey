@@ -41,7 +41,8 @@ public class SurveyGenerationRequestDTO {
     private Integer numberOfQuestions;
 
     /**
-     * Danh sách loại câu hỏi ưu tiên theo thứ tự (rating, single_choice, multiple_choice, ranking, open_ended, boolean_, date_time, file_upload)
+     * Danh sách loại câu hỏi ưu tiên theo thứ tự (rating, single_choice,
+     * multiple_choice, ranking, open_ended, boolean_, date_time, file_upload)
      */
     @JsonProperty("questionTypePriorities")
     private java.util.List<String> questionTypePriorities;

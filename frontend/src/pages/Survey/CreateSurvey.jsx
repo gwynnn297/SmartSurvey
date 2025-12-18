@@ -2216,7 +2216,7 @@ const CreateSurvey = () => {
                         <p className="refresh-modal-subtitle">
                             Chọn loại câu hỏi bạn muốn AI tạo lại cho câu hỏi này
                         </p>
-                        
+
                         <div className="refresh-type-grid">
                             {QUESTION_TYPE_OPTIONS.map((type) => (
                                 <button

@@ -100,7 +100,7 @@ public class SurveyGeneratorService {
         // 3. ✅ KHÔNG GỌI AI NỮA - dùng data từ frontend (aiGeneratedData)
         // Frontend đã generate và user đã accept → chỉ cần save
         SurveyGenerationResponseDTO aiResponse = request.getAiGeneratedData();
-        
+
         if (aiResponse == null) {
             log.warn("⚠️ No AI generated data provided, falling back to regenerate");
             // Fallback: nếu thiếu data thì mới gọi AI (backward compatibility)
@@ -143,13 +143,13 @@ public class SurveyGeneratorService {
         Map<String, Object> refreshRequest = new HashMap<>();
         refreshRequest.put("title", request.getOriginalPrompt() != null ? request.getOriginalPrompt() : "Khảo sát");
         refreshRequest.put("category", request.getCategoryName() != null ? request.getCategoryName() : "general");
-        
+
         // Sử dụng questionTypeHint nếu có, mặc định là "open_ended"
-        String questionType = request.getQuestionTypeHint() != null && !request.getQuestionTypeHint().isEmpty() 
-                ? request.getQuestionTypeHint() 
+        String questionType = request.getQuestionTypeHint() != null && !request.getQuestionTypeHint().isEmpty()
+                ? request.getQuestionTypeHint()
                 : "open_ended";
         refreshRequest.put("question_type", questionType);
-        
+
         if (request.getContextHint() != null && !request.getContextHint().isEmpty()) {
             refreshRequest.put("previous_question", request.getContextHint());
         }
@@ -162,7 +162,7 @@ public class SurveyGeneratorService {
         // 4. Gọi Python AI service /refresh_question endpoint
         String aiServiceUrl = aiServiceBaseUrl + "/refresh_question";
         ResponseEntity<Map> aiResponse;
-        
+
         try {
             aiResponse = restTemplate.postForEntity(aiServiceUrl, refreshRequest, Map.class);
         } catch (Exception e) {
@@ -199,20 +199,19 @@ public class SurveyGeneratorService {
             var optionDTOs = new ArrayList<vn.duytan.c1se09.smartsurvey.domain.response.ai.QuestionRegenerateResponseDTO.GeneratedOptionDTO>();
             for (int i = 0; i < options.size(); i++) {
                 optionDTOs.add(
-                    vn.duytan.c1se09.smartsurvey.domain.response.ai.QuestionRegenerateResponseDTO.GeneratedOptionDTO
-                        .builder()
-                        .optionText(options.get(i))
-                        .displayOrder(i + 1)
-                        .build()
-                );
+                        vn.duytan.c1se09.smartsurvey.domain.response.ai.QuestionRegenerateResponseDTO.GeneratedOptionDTO
+                                .builder()
+                                .optionText(options.get(i))
+                                .displayOrder(i + 1)
+                                .build());
             }
             questionBuilder.options(optionDTOs);
         }
 
         responseBuilder.question(questionBuilder.build());
 
-        log.info("✅ Successfully regenerated question with type {}: {}", returnedType, 
-                 questionText.length() > 50 ? questionText.substring(0, 50) + "..." : questionText);
+        log.info("✅ Successfully regenerated question with type {}: {}", returnedType,
+                questionText.length() > 50 ? questionText.substring(0, 50) + "..." : questionText);
 
         return responseBuilder.build();
     }
@@ -335,7 +334,7 @@ public class SurveyGeneratorService {
             aiRequest.put("ai_prompt", request.getAiPrompt());
             aiRequest.put("target_audience", request.getTargetAudience());
             aiRequest.put("number_of_questions", request.getNumberOfQuestions());
-            
+
             // Thêm question type priorities nếu có
             if (request.getQuestionTypePriorities() != null && !request.getQuestionTypePriorities().isEmpty()) {
                 aiRequest.put("question_type_priorities", request.getQuestionTypePriorities());
