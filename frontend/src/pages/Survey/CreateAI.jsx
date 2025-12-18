@@ -301,7 +301,8 @@ export default function CreateAI() {
         description: '',
         ai_context: '',
         target_audience: '',
-        question_count: ''
+        question_count: '',
+        question_type_priorities: [] // Danh sách loại câu hỏi ưu tiên
     });
 
     const [errors, setErrors] = useState({});
@@ -311,7 +312,13 @@ export default function CreateAI() {
     const [questions, setQuestions] = useState([]);
     const [activeQuestionIndex, setActiveQuestionIndex] = useState(null);
     const [refreshingQuestions, setRefreshingQuestions] = useState(new Set());
+    const [showRefreshModal, setShowRefreshModal] = useState(false);
+    const [refreshingQuestionIndex, setRefreshingQuestionIndex] = useState(null);
+    const [selectedRefreshType, setSelectedRefreshType] = useState('');
     const [showProcessingModal, setShowProcessingModal] = useState(false);
+    const [showAIPreviewModal, setShowAIPreviewModal] = useState(false);
+    const [aiGeneratedQuestions, setAiGeneratedQuestions] = useState([]);
+    const [aiPreviewData, setAiPreviewData] = useState(null);
     const [currentStep, setCurrentStep] = useState(0);
     const [progress, setProgress] = useState(0);
     const [showForm, setShowForm] = useState(true);
@@ -612,10 +619,13 @@ export default function CreateAI() {
                 categoryName: form.category_name,
                 aiPrompt: form.ai_context,
                 targetAudience: form.target_audience || null,
-                numberOfQuestions: requestedQuestions // Sử dụng đúng số lượng người dùng yêu cầu
+                numberOfQuestions: requestedQuestions, // Sử dụng đúng số lượng người dùng yêu cầu
+                questionTypePriorities: form.question_type_priorities.length > 0 ? form.question_type_priorities : null // Gửi priorities nếu có
             };
 
             console.log("🚀 Calling AI backend with:", requestData);
+            console.log("📊 Question Type Priorities:", form.question_type_priorities);
+            console.log("📊 Priorities length:", form.question_type_priorities.length);
 
             const aiResponse = await aiSurveyService.generateSurvey(requestData);
 
@@ -624,9 +634,10 @@ export default function CreateAI() {
             setProgress(100);
             setCurrentStep(4);
 
-            if (aiResponse.success && aiResponse.generated_survey) {
+            if (aiResponse.success && (aiResponse.generated_survey || aiResponse.generatedSurvey)) {
                 // Map response từ backend về format frontend
-                const mappedQuestions = aiResponse.generated_survey.questions.map((q, index) => ({
+                const surveyData = aiResponse.generated_survey || aiResponse.generatedSurvey;
+                const mappedQuestions = surveyData.questions.map((q, index) => ({
                     id: `temp_${Date.now()}_${index}`,
                     question_text: q.question_text || q.questionText,
                     question_type: mapTypeFromBackend(q.question_type || q.questionType),
@@ -640,19 +651,9 @@ export default function CreateAI() {
                 setQuestions(mappedQuestions);
                 console.log("✅ AI generated questions:", mappedQuestions);
 
-                const generatedSurveyId = aiResponse.surveyId ?? aiResponse.survey_id;
-                if (generatedSurveyId !== undefined && generatedSurveyId !== null) {
-                    const numericSurveyId = Number(generatedSurveyId);
-                    if (!Number.isNaN(numericSurveyId)) {
-                        setSavedSurveyId(numericSurveyId);
-                        setIsEditMode(true);
-                        await syncSurveyFromServer(numericSurveyId);
-                    } else {
-                        console.warn('⚠️ Survey ID từ AI không hợp lệ:', generatedSurveyId);
-                    }
-                } else {
-                    console.warn('⚠️ Không tìm thấy survey_id trong phản hồi AI - sẽ tạo mới khi lưu.');
-                }
+                // ✅ NEW FLOW: Preview first, save only when user accepts
+                // Survey ID will be available after user clicks "Accept" in preview modal
+                console.log("📋 Preview mode: Survey not saved yet (waiting for user confirmation)")
 
                 // Kiểm tra xem có cần tạo thêm câu hỏi không
                 const currentQuestions = mappedQuestions.length;
@@ -704,10 +705,32 @@ export default function CreateAI() {
                     console.log(`✅ Đã tạo đủ ${currentQuestions} câu hỏi như yêu cầu`);
                 }
 
-                // Đợi một chút để user thấy 100% rồi mới chuyển
+                // Lưu questions đã generate và preview data
+                console.log("📊 Setting AI preview data:", {
+                    questionCount: mappedQuestions.length,
+                    title: form.title,
+                    hasDescription: !!form.description
+                });
+                
+                setAiGeneratedQuestions(mappedQuestions);
+                setAiPreviewData({
+                    success: true,
+                    message: "Tạo khảo sát thành công",
+                    surveyId: null,
+                    generatedSurvey: {
+                        title: form.title,
+                        description: form.description,
+                        questions: mappedQuestions
+                    },
+                    originalPrompt: form.ai_context, // Lưu prompt gốc để gọi API save
+                    surveyTitle: form.title // Dùng form.title thay vì form.survey_name
+                });
+                
+                // Đợi một chút để user thấy 100% rồi show preview
                 setTimeout(() => {
+                    console.log("✨ Opening AI preview modal");
                     setShowProcessingModal(false);
-                    setShowForm(false);
+                    setShowAIPreviewModal(true);
                 }, 1000);
             } else {
                 throw new Error(aiResponse.message || 'Không thể tạo khảo sát từ AI');
@@ -751,6 +774,81 @@ export default function CreateAI() {
         setShowProcessingModal(false);
         setCurrentStep(0);
         setProgress(0);
+    };
+
+    const handleAcceptAIResult = async () => {
+        console.log("✅ User accepted AI result, saving to database...");
+        
+        try {
+            setLoading(true);
+            
+            // Gọi API lưu survey sau khi user accept
+            const response = await fetch('http://localhost:8080/ai/save-accepted-survey', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    // ✅ Map đúng field names như backend expect
+                    title: aiPreviewData?.surveyTitle || form.survey_name || 'AI Generated Survey',
+                    description: aiPreviewData?.description || form.ai_context || 'Khảo sát được tạo bởi AI',
+                    aiPrompt: aiPreviewData?.originalPrompt || form.ai_context || '',
+                    categoryId: form.category_id,
+                    numberOfQuestions: aiGeneratedQuestions.length,
+                    questionTypePriorities: form.question_type_priorities,
+                    // ✅ Convert camelCase to snake_case for backend DTO
+                    aiGeneratedData: {
+                        success: aiPreviewData.success,
+                        message: aiPreviewData.message,
+                        survey_id: aiPreviewData.surveyId,
+                        generated_survey: aiPreviewData.generatedSurvey ? {
+                            title: aiPreviewData.generatedSurvey.title,
+                            description: aiPreviewData.generatedSurvey.description,
+                            questions: aiPreviewData.generatedSurvey.questions?.map(q => ({
+                                question_text: q.questionText || q.question_text,
+                                question_type: q.questionType || q.question_type,
+                                is_required: q.isRequired !== undefined ? q.isRequired : (q.is_required !== undefined ? q.is_required : true),
+                                display_order: q.displayOrder !== undefined ? q.displayOrder : q.display_order,
+                                options: q.options?.map(opt => ({
+                                    option_text: opt.optionText || opt.option_text,
+                                    display_order: opt.displayOrder !== undefined ? opt.displayOrder : opt.display_order
+                                }))
+                            }))
+                        } : null
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to save survey');
+            }
+
+            const result = await response.json();
+            console.log("💾 Survey saved successfully:", result);
+            
+            // Load questions vào editor
+            setQuestions(aiGeneratedQuestions);
+            setShowAIPreviewModal(false);
+            setShowForm(false);
+            showNotification('success', '✅ Đã lưu khảo sát thành công! Bạn có thể chỉnh sửa câu hỏi ngay bây giờ.');
+            
+        } catch (error) {
+            console.error("❌ Error saving accepted survey:", error);
+            showNotification('error', '❌ Lỗi khi lưu khảo sát: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRejectAIResult = () => {
+        console.log("🔄 User rejected AI result, returning to prompt form");
+        // User không thích kết quả, quay về form prompt
+        setShowAIPreviewModal(false);
+        setAiGeneratedQuestions([]);
+        setAiPreviewData(null);
+        showNotification('info', '💡 Hãy thử điều chỉnh prompt hoặc thay đổi các thiết lập để có kết quả tốt hơn.');
     };
 
     // Question handling functions
@@ -949,7 +1047,7 @@ export default function CreateAI() {
         clearError('questions');
     };
 
-    const handleRefreshQuestion = async (questionIndex) => {
+    const handleRefreshQuestion = async (questionIndex, targetQuestionType = null) => {
         try {
             setRefreshingQuestions(prev => new Set([...prev, questionIndex]));
 
@@ -961,8 +1059,10 @@ export default function CreateAI() {
                 contextHint: currentQuestion.question_text || '',
                 targetAudience: form.target_audience || 'Người tham gia khảo sát',
                 categoryName: form.category_name || 'General',
-                description: `Tạo lại câu hỏi cho khảo sát "${form.title || 'AI Survey'}".`
+                questionTypeHint: targetQuestionType || currentQuestion.question_type // Gửi loại câu hỏi mong muốn
             };
+
+            console.log("🔄 Refreshing question with type:", targetQuestionType || currentQuestion.question_type);
 
             const response = await aiSurveyService.regenerateQuestion(requestData);
 
@@ -1564,6 +1664,49 @@ export default function CreateAI() {
                             {errors.ai_context && <div className="ai-error">{errors.ai_context}</div>}
                         </div>
 
+                        {/* Question Type Priorities Selector */}
+                        <div className="ai-form-row">
+                            <label>Loại câu hỏi ưu tiên <span className="field-hint-inline">(Tùy chọn)</span></label>
+                            <small className="field-hint" style={{ marginBottom: '12px', display: 'block' }}>
+                                Chọn các loại câu hỏi bạn muốn AI ưu tiên sinh ra. Nếu không chọn, AI sẽ tự động cân bằng.
+                            </small>
+                            <div className="question-type-priorities">
+                                {QUESTION_TYPE_OPTIONS.map((type) => {
+                                    const isSelected = form.question_type_priorities.includes(type.value);
+                                    return (
+                                        <button
+                                            key={type.value}
+                                            type="button"
+                                            className={`priority-chip ${isSelected ? 'selected' : ''}`}
+                                            onClick={() => {
+                                                const currentPriorities = [...form.question_type_priorities];
+                                                if (isSelected) {
+                                                    // Remove from priorities
+                                                    const filtered = currentPriorities.filter(t => t !== type.value);
+                                                    handleFormChange('question_type_priorities', filtered);
+                                                } else {
+                                                    // Add to priorities
+                                                    handleFormChange('question_type_priorities', [...currentPriorities, type.value]);
+                                                }
+                                            }}
+                                        >
+                                            {isSelected && <i className="fa-solid fa-check priority-check" aria-hidden="true"></i>}
+                                            <span>{type.label}</span>
+                                            {isSelected && (
+                                                <span className="priority-badge">
+                                                    #{form.question_type_priorities.indexOf(type.value) + 1}
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <small className="field-hint" style={{ marginTop: '8px', display: 'block', color: '#3b82f6' }}>
+                                <i className="fa-solid fa-lightbulb" style={{ marginRight: '4px' }}></i>
+                                <strong>Gợi ý:</strong> Rating, Trắc nghiệm một/nhiều lựa chọn thường được sử dụng nhiều nhất trong khảo sát thực tế.
+                            </small>
+                        </div>
+
                         <div className="ai-actions">
                             <button className="btn-createAI" onClick={handleGenerateQuestions} disabled={loading}>
                                 {loading ? 'Đang tạo gợi ý…' : 'Tạo gợi ý bằng AI'}
@@ -1756,7 +1899,10 @@ export default function CreateAI() {
                                                 <button
                                                     type="button"
                                                     className="question-action-btn"
-                                                    onClick={() => handleRefreshQuestion(activeQuestionIndex)}
+                                                    onClick={() => {
+                                                        setRefreshingQuestionIndex(activeQuestionIndex);
+                                                        setShowRefreshModal(true);
+                                                    }}
                                                     disabled={refreshingQuestions.has(activeQuestionIndex)}
                                                     title="Tạo lại câu hỏi"
                                                 >
@@ -2221,6 +2367,151 @@ export default function CreateAI() {
 
                         <div className="ai-footer-note"></div>
                         <em>Lưu ý: Quá trình này có thể mất vài phút tuỳ thuộc vào độ dài ngữ cảnh và số lượng câu hỏi.</em>
+                    </div>
+                </div>
+            )}
+
+            {/* Refresh Question Type Selection Modal */}
+            {showRefreshModal && (
+                <div className="refresh-modal-overlay" onClick={() => setShowRefreshModal(false)}>
+                    <div className="refresh-modal-content" onClick={(e) => e.stopPropagation()}>
+                        <h3>Chọn loại câu hỏi muốn tạo lại</h3>
+                        <p className="refresh-modal-subtitle">
+                            Chọn loại câu hỏi bạn muốn AI tạo lại cho câu hỏi này
+                        </p>
+                        
+                        <div className="refresh-type-grid">
+                            {QUESTION_TYPE_OPTIONS.map((type) => (
+                                <button
+                                    key={type.value}
+                                    className={`refresh-type-card ${selectedRefreshType === type.value ? 'selected' : ''}`}
+                                    onClick={() => setSelectedRefreshType(type.value)}
+                                >
+                                    <div className="refresh-type-label">{type.label}</div>
+                                    {selectedRefreshType === type.value && (
+                                        <div className="refresh-type-check">✓</div>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="refresh-modal-actions">
+                            <button
+                                className="btn-cancel"
+                                onClick={() => {
+                                    setShowRefreshModal(false);
+                                    setSelectedRefreshType('');
+                                    setRefreshingQuestionIndex(null);
+                                }}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                className="btn-confirm"
+                                onClick={() => {
+                                    if (selectedRefreshType && refreshingQuestionIndex !== null) {
+                                        handleRefreshQuestion(refreshingQuestionIndex, selectedRefreshType);
+                                        setShowRefreshModal(false);
+                                        setSelectedRefreshType('');
+                                        setRefreshingQuestionIndex(null);
+                                    }
+                                }}
+                                disabled={!selectedRefreshType}
+                            >
+                                Xác nhận tạo lại
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* AI Result Preview Modal */}
+            {showAIPreviewModal && aiPreviewData && (
+                <div className="ai-preview-modal-overlay">
+                    <div className="ai-preview-modal-container">
+                        <div className="ai-preview-modal-header">
+                            <div className="ai-preview-header-content">
+                                <div className="ai-preview-icon">✨</div>
+                                <div>
+                                    <h2>Xem trước khảo sát AI đã tạo</h2>
+                                    <p>Kiểm tra các câu hỏi AI đã tạo. Bạn có thể chấp nhận để chỉnh sửa hoặc tạo lại với prompt khác.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="ai-preview-modal-body">
+                            <div className="ai-preview-survey-info">
+                                <h3 className="ai-preview-title">{aiPreviewData.generatedSurvey?.title || aiPreviewData.surveyTitle}</h3>
+                                {(aiPreviewData.generatedSurvey?.description || aiPreviewData.description) && (
+                                    <p className="ai-preview-description">{aiPreviewData.generatedSurvey?.description || aiPreviewData.description}</p>
+                                )}
+                                <div className="ai-preview-stats">
+                                    <span className="ai-preview-stat">
+                                        <i className="fa-solid fa-list-check"></i>
+                                        {(aiPreviewData.generatedSurvey?.questions || aiPreviewData.questions || []).length} câu hỏi
+                                    </span>
+                                    <span className="ai-preview-stat">
+                                        <i className="fa-solid fa-robot"></i>
+                                        Tạo bởi AI
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="ai-preview-questions-list">
+                                {(aiPreviewData.generatedSurvey?.questions || aiPreviewData.questions || []).map((q, idx) => (
+                                    <div key={q.id || idx} className="ai-preview-question-card">
+                                        <div className="ai-preview-question-header">
+                                            <span className="ai-preview-question-number">Câu {idx + 1}</span>
+                                            <span className={`ai-preview-question-type type-${q.question_type}`}>
+                                                {QUESTION_TYPE_OPTIONS.find(t => t.value === q.question_type)?.label || q.question_type}
+                                            </span>
+                                        </div>
+                                        <p className="ai-preview-question-text">
+                                            {q.question_text}
+                                            {q.is_required && <span className="ai-preview-required">*</span>}
+                                        </p>
+                                        
+                                        {/* Hiển thị options nếu có */}
+                                        {q.options && q.options.length > 0 && (
+                                            <div className="ai-preview-options">
+                                                {q.options.map((opt, optIdx) => (
+                                                    <div key={opt.id || optIdx} className="ai-preview-option">
+                                                        <span className="ai-preview-option-bullet">
+                                                            {q.question_type === 'multiple_choice' ? '☐' : '○'}
+                                                        </span>
+                                                        <span>{opt.option_text}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Hiển thị thông tin cho rating */}
+                                        {q.question_type === 'rating' && (
+                                            <div className="ai-preview-rating">
+                                                <span>Thang đánh giá: 1 - 5 ⭐</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="ai-preview-modal-footer">
+                            <button
+                                className="ai-preview-btn ai-preview-btn-reject"
+                                onClick={handleRejectAIResult}
+                            >
+                                <i className="fa-solid fa-arrows-rotate"></i>
+                                Tạo lại với prompt khác
+                            </button>
+                            <button
+                                className="ai-preview-btn ai-preview-btn-accept"
+                                onClick={handleAcceptAIResult}
+                            >
+                                <i className="fa-solid fa-check"></i>
+                                Chấp nhận và chỉnh sửa
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

@@ -34,13 +34,20 @@ SUPPORTED_TYPES = [
 
 class SurveyGenerationRequest(BaseModel):
     """Mô hình request cho tạo khảo sát"""
+    model_config = {"populate_by_name": True}  # Allow both snake_case and camelCase
+    
     title: str = Field(..., max_length=100, description="Tiêu đề khảo sát")
     description: str = Field(..., max_length=500, description="Mô tả khảo sát")
-    category_id: Optional[int] = Field(default=None, description="ID danh mục từ database chính")
-    category_name: Optional[str] = Field(default=None, max_length=100, description="Tên danh mục (text)")
-    ai_prompt: str = Field(..., max_length=1000, description="AI prompt để tạo khảo sát")
-    target_audience: Optional[str] = Field(None, max_length=200, description="Đối tượng mục tiêu")
-    number_of_questions: int = Field(..., ge=1, le=100, description="Số câu cần tạo")
+    category_id: Optional[int] = Field(default=None, alias="categoryId", description="ID danh mục từ database chính")
+    category_name: Optional[str] = Field(default=None, alias="categoryName", max_length=100, description="Tên danh mục (text)")
+    ai_prompt: str = Field(..., alias="aiPrompt", max_length=1000, description="AI prompt để tạo khảo sát")
+    target_audience: Optional[str] = Field(None, alias="targetAudience", max_length=200, description="Đối tượng mục tiêu")
+    number_of_questions: int = Field(..., alias="numberOfQuestions", ge=1, le=100, description="Số câu cần tạo")
+    question_type_priorities: Optional[List[str]] = Field(
+        default=None,
+        alias="questionTypePriorities",
+        description="Danh sách loại câu hỏi ưu tiên theo thứ tự (rating, single_choice, multiple_choice, ranking, open_ended, boolean_, date_time, file_upload)"
+    )
     
     @validator('ai_prompt')
     def validate_prompt(cls, v):
@@ -51,6 +58,17 @@ class SurveyGenerationRequest(BaseModel):
     @validator('category_name')
     def validate_category(cls, v, values):
         # Có thể có hoặc không có category, nếu không có sẽ dùng default
+        return v
+    
+    @validator('question_type_priorities')
+    def validate_question_type_priorities(cls, v):
+        if v is None:
+            return v
+        # Validate các loại câu hỏi hợp lệ
+        valid_types = set(SUPPORTED_TYPES)
+        for qtype in v:
+            if qtype not in valid_types:
+                raise ValueError(f"Loại câu hỏi '{qtype}' không hợp lệ. Các loại hợp lệ: {', '.join(valid_types)}")
         return v
 
 class OptionSchema(BaseModel):

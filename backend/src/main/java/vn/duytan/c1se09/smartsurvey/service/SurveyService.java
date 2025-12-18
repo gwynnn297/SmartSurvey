@@ -433,22 +433,53 @@ public class SurveyService {
             Question question = new Question();
             question.setSurvey(savedSurvey);
             question.setQuestionText(qDto.getQuestionText());
+            
+            // Log để debug
+            System.out.println("🔍 [DEBUG] Mapping question type from AI: " + qDto.getQuestionType());
 
             // Map question type từ AI format sang enum format
             vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum questionType;
-            switch (qDto.getQuestionType().toUpperCase()) {
-                case "SINGLE_CHOICE":
-                case "MULTIPLE_CHOICE":
+            String aiQuestionType = qDto.getQuestionType().toLowerCase().replace("-", "_");
+            
+            switch (aiQuestionType) {
+                case "single_choice":
+                    questionType = vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum.single_choice;
+                    break;
+                case "multiple_choice":
                     questionType = vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum.multiple_choice;
                     break;
-                case "RATING":
+                case "rating":
                     questionType = vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum.rating;
                     break;
-                case "TEXT":
+                case "ranking":
+                    questionType = vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum.ranking;
+                    break;
+                case "boolean":
+                case "boolean_":
+                case "yes_no":
+                    questionType = vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum.boolean_;
+                    break;
+                case "date_time":
+                case "date":
+                case "datetime":
+                    questionType = vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum.date_time;
+                    break;
+                case "file_upload":
+                case "file":
+                case "upload":
+                    questionType = vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum.file_upload;
+                    break;
+                case "open_ended":
+                case "text":
+                case "short_text":
                 default:
                     questionType = vn.duytan.c1se09.smartsurvey.util.constant.QuestionTypeEnum.open_ended;
                     break;
             }
+            
+            // Log kết quả mapping
+            System.out.println("✅ [DEBUG] Mapped to DB type: " + questionType.name());
+            
             question.setQuestionType(questionType);
 
             question.setIsRequired(qDto.isRequired());

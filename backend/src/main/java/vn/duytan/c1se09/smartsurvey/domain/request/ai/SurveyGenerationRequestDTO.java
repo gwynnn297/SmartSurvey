@@ -39,4 +39,17 @@ public class SurveyGenerationRequestDTO {
     @Max(value = 20, message = "Số lượng câu hỏi tối đa là 20")
     @JsonProperty("numberOfQuestions")
     private Integer numberOfQuestions;
+
+    /**
+     * Danh sách loại câu hỏi ưu tiên theo thứ tự (rating, single_choice, multiple_choice, ranking, open_ended, boolean_, date_time, file_upload)
+     */
+    @JsonProperty("questionTypePriorities")
+    private java.util.List<String> questionTypePriorities;
+
+    /**
+     * ✅ Data đã được generate bởi AI ở frontend (sau khi user preview và accept)
+     * Nếu có field này thì backend KHÔNG GỌI AI nữa, chỉ save thẳng vào DB
+     */
+    @JsonProperty("aiGeneratedData")
+    private vn.duytan.c1se09.smartsurvey.domain.response.ai.SurveyGenerationResponseDTO aiGeneratedData;
 }

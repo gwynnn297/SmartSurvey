@@ -711,6 +711,9 @@ const CreateSurvey = () => {
     const [editSurveyId, setEditSurveyId] = useState(null);
     const [activeQuestionIndex, setActiveQuestionIndex] = useState(null);
     const [refreshingQuestions, setRefreshingQuestions] = useState(new Set());
+    const [showRefreshModal, setShowRefreshModal] = useState(false);
+    const [refreshingQuestionIndex, setRefreshingQuestionIndex] = useState(null);
+    const [selectedRefreshType, setSelectedRefreshType] = useState('');
     const [autoSaveStatus, setAutoSaveStatus] = useState('idle'); // idle, saving, saved, error
     const autoSaveTimeoutRef = React.useRef(null);
     const [showMobileView, setShowMobileView] = useState(false);
@@ -822,7 +825,7 @@ const CreateSurvey = () => {
         clearError('questions');
     };
 
-    const handleRefreshQuestion = async (questionIndex) => {
+    const handleRefreshQuestion = async (questionIndex, targetQuestionType = null) => {
         try {
             const hasTitle = surveyData.title?.trim().length > 0;
             const hasDescription = surveyData.description?.trim().length > 0;
@@ -847,10 +850,10 @@ const CreateSurvey = () => {
                 contextHint: currentQuestion.question_text,
                 targetAudience: 'Người tham gia khảo sát',
                 categoryName,
-                description: `Tạo lại câu hỏi cho khảo sát "${surveyTitle}". Mô tả: "${surveyDesc}".`
+                questionTypeHint: targetQuestionType || currentQuestion.question_type
             };
 
-            console.log('🔄 Regenerating question in CreateSurvey:', requestData);
+            console.log('🔄 Regenerating question in CreateSurvey with type:', targetQuestionType || currentQuestion.question_type, requestData);
 
             const response = await aiSurveyService.regenerateQuestion(requestData);
 
@@ -2205,6 +2208,60 @@ const CreateSurvey = () => {
                 onNotification={showNotification}
             />
 
+            {/* Refresh Question Type Selection Modal */}
+            {showRefreshModal && (
+                <div className="refresh-modal-overlay" onClick={() => setShowRefreshModal(false)}>
+                    <div className="refresh-modal-content" onClick={(e) => e.stopPropagation()}>
+                        <h3>Chọn loại câu hỏi muốn tạo lại</h3>
+                        <p className="refresh-modal-subtitle">
+                            Chọn loại câu hỏi bạn muốn AI tạo lại cho câu hỏi này
+                        </p>
+                        
+                        <div className="refresh-type-grid">
+                            {QUESTION_TYPE_OPTIONS.map((type) => (
+                                <button
+                                    key={type.value}
+                                    className={`refresh-type-card ${selectedRefreshType === type.value ? 'selected' : ''}`}
+                                    onClick={() => setSelectedRefreshType(type.value)}
+                                >
+                                    <div className="refresh-type-label">{type.label}</div>
+                                    {selectedRefreshType === type.value && (
+                                        <div className="refresh-type-check">✓</div>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="refresh-modal-actions">
+                            <button
+                                className="btn-cancel"
+                                onClick={() => {
+                                    setShowRefreshModal(false);
+                                    setSelectedRefreshType('');
+                                    setRefreshingQuestionIndex(null);
+                                }}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                className="btn-confirm"
+                                onClick={() => {
+                                    if (selectedRefreshType && refreshingQuestionIndex !== null) {
+                                        handleRefreshQuestion(refreshingQuestionIndex, selectedRefreshType);
+                                        setShowRefreshModal(false);
+                                        setSelectedRefreshType('');
+                                        setRefreshingQuestionIndex(null);
+                                    }
+                                }}
+                                disabled={!selectedRefreshType}
+                            >
+                                Xác nhận tạo lại
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="create-survey-wrapper">
                 <div className="survey-toolbar">
                     <div className="survey-toolbar-left">
@@ -2419,7 +2476,10 @@ const CreateSurvey = () => {
                                             onSelect={() => handleSelectQuestion(idx)}
                                             onDuplicate={(!surveyData.title?.trim() && !surveyData.description?.trim())
                                                 ? null
-                                                : () => handleRefreshQuestion(idx)}
+                                                : () => {
+                                                    setRefreshingQuestionIndex(idx);
+                                                    setShowRefreshModal(true);
+                                                }}
                                             onDelete={() => {
                                                 if (window.confirm('Bạn có chắc muốn xóa câu hỏi này không?')) {
                                                     deleteQuestion(q.id, idx);
@@ -2470,7 +2530,10 @@ const CreateSurvey = () => {
                                             <button
                                                 type="button"
                                                 className="question-action-btn"
-                                                onClick={() => handleRefreshQuestion(activeQuestionIndex)}
+                                                onClick={() => {
+                                                    setRefreshingQuestionIndex(activeQuestionIndex);
+                                                    setShowRefreshModal(true);
+                                                }}
                                                 disabled={refreshingQuestions.has(activeQuestionIndex) ||
                                                     (!surveyData.title?.trim() && !surveyData.description?.trim())}
                                                 title={(!surveyData.title?.trim() && !surveyData.description?.trim())

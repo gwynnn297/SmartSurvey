@@ -43,6 +43,7 @@ public class SurveyGeneratorController {
             Principal principal) {
         log.info("Đã nhận yêu cầu tạo khảo sát cho prompt: {}",
                 request.getAiPrompt().substring(0, Math.min(50, request.getAiPrompt().length())));
+        log.info("📊 Question Type Priorities received from frontend: {}", request.getQuestionTypePriorities());
 
         try {
             // Delegate toàn bộ business logic cho service
@@ -81,6 +82,30 @@ public class SurveyGeneratorController {
                             .success(false)
                             .message("Lỗi khi tạo câu hỏi mới: " + e.getMessage())
                             .build());
+        }
+    }
+
+    /**
+     * Save AI-generated survey after user accepts it
+     * 
+     * @param request   Original survey generation request with AI data
+     * @param principal User principal from JWT
+     * @return Saved survey response
+     */
+    @PostMapping("/save-accepted-survey")
+    public ResponseEntity<SurveyGenerationResponseDTO> saveAcceptedSurvey(
+            @Valid @RequestBody SurveyGenerationRequestDTO request,
+            Principal principal) {
+        log.info("Saving accepted AI survey for user: {}", principal.getName());
+        
+        try {
+            SurveyGenerationResponseDTO response = surveyGeneratorService.saveAcceptedAiSurvey(request, principal.getName());
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error saving accepted survey: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponseDTO("Lỗi khi lưu khảo sát: " + e.getMessage()));
         }
     }
 

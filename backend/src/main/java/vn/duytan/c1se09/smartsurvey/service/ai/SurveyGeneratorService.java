@@ -15,7 +15,9 @@ import vn.duytan.c1se09.smartsurvey.service.CategoryService;
 import vn.duytan.c1se09.smartsurvey.service.SurveyService;
 import vn.duytan.c1se09.smartsurvey.service.UserService;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -67,16 +69,54 @@ public class SurveyGeneratorService {
         // 5. Generate survey từ AI
         SurveyGenerationResponseDTO aiResponse = callAiService(request);
 
-        // 6. Save to database
-        Survey savedSurvey = saveSurveyToDatabase(currentUser, category, request, aiResponse);
+        // ✅ KHÔNG save ngay vào database - chỉ save khi user accept preview
+        // User sẽ xem preview trước, nếu accept mới gọi API save riêng
+        aiResponse.setSurveyId(null); // Chưa có ID vì chưa save
 
-        // 7. Update response với real survey ID
-        aiResponse.setSurveyId(savedSurvey.getSurveyId());
-
-        log.info("Hoàn thành tạo khảo sát AI với ID: {} và {} câu hỏi",
-                savedSurvey.getSurveyId(),
+        log.info("Hoàn thành tạo khảo sát AI với {} câu hỏi (chưa save DB)",
                 aiResponse.getGeneratedSurvey() != null ? aiResponse.getGeneratedSurvey().getQuestions().size() : 0);
 
+        return aiResponse;
+    }
+
+    /**
+     * Save AI survey sau khi user accept preview
+     * 
+     * @param request  Survey generation request (AI sẽ generate lại từ prompt)
+     * @param username Username từ JWT
+     * @return Response DTO với survey đã save
+     * @throws Exception Nếu có lỗi
+     */
+    public SurveyGenerationResponseDTO saveAcceptedAiSurvey(
+            SurveyGenerationRequestDTO request, String username) throws Exception {
+        log.info("💾 Saving accepted AI survey for user: {}", username);
+
+        // 1. Validate user
+        User currentUser = validateUser(username);
+
+        // 2. Validate category
+        Category category = validateOrCreateCategory(request);
+
+        // 3. ✅ KHÔNG GỌI AI NỮA - dùng data từ frontend (aiGeneratedData)
+        // Frontend đã generate và user đã accept → chỉ cần save
+        SurveyGenerationResponseDTO aiResponse = request.getAiGeneratedData();
+        
+        if (aiResponse == null) {
+            log.warn("⚠️ No AI generated data provided, falling back to regenerate");
+            // Fallback: nếu thiếu data thì mới gọi AI (backward compatibility)
+            aiResponse = callAiService(request);
+            if (!aiResponse.isSuccess()) {
+                throw new RuntimeException("AI generation failed: " + aiResponse.getMessage());
+            }
+        }
+
+        // 4. Save to database
+        Survey savedSurvey = saveSurveyToDatabase(currentUser, category, request, aiResponse);
+
+        log.info("✅ Saved accepted AI survey with ID: {}", savedSurvey.getSurveyId());
+
+        // 5. Trả về response
+        aiResponse.setSurveyId(savedSurvey.getSurveyId());
         return aiResponse;
     }
 
@@ -87,7 +127,8 @@ public class SurveyGeneratorService {
             vn.duytan.c1se09.smartsurvey.domain.request.ai.QuestionRegenerateRequestDTO request, String username)
             throws Exception {
 
-        log.info("Regenerating question for user: {} with context: {}", username,
+        log.info("Regenerating question for user: {} with type: {}, context: {}", username,
+                request.getQuestionTypeHint() != null ? request.getQuestionTypeHint() : "auto",
                 request.getContextHint() != null
                         ? request.getContextHint().substring(0, Math.min(50, request.getContextHint().length()))
                         : "none");
@@ -98,28 +139,49 @@ public class SurveyGeneratorService {
         // 2. Kiểm tra AI service health
         validateAiServiceHealth();
 
-        // 3. Tạo request đơn giản để generate 1 câu hỏi
-        vn.duytan.c1se09.smartsurvey.domain.request.ai.SurveyGenerationRequestDTO singleQuestionRequest = new vn.duytan.c1se09.smartsurvey.domain.request.ai.SurveyGenerationRequestDTO();
-
-        singleQuestionRequest.setTitle("Câu hỏi mới");
-        singleQuestionRequest.setDescription("Tạo câu hỏi mới");
-        singleQuestionRequest.setAiPrompt(request.getOriginalPrompt());
-        singleQuestionRequest.setTargetAudience(request.getTargetAudience());
-        singleQuestionRequest.setCategoryName(request.getCategoryName());
-        singleQuestionRequest.setNumberOfQuestions(1); // Chỉ tạo 1 câu hỏi
-
-        // 4. Gọi AI service
-        vn.duytan.c1se09.smartsurvey.domain.response.ai.SurveyGenerationResponseDTO aiResponse = callAiService(
-                singleQuestionRequest);
-
-        if (aiResponse == null || !aiResponse.isSuccess() ||
-                aiResponse.getGeneratedSurvey() == null ||
-                aiResponse.getGeneratedSurvey().getQuestions().isEmpty()) {
-            throw new Exception("Không thể tạo câu hỏi từ AI");
+        // 3. Tạo request cho Python AI /refresh_question endpoint
+        Map<String, Object> refreshRequest = new HashMap<>();
+        refreshRequest.put("title", request.getOriginalPrompt() != null ? request.getOriginalPrompt() : "Khảo sát");
+        refreshRequest.put("category", request.getCategoryName() != null ? request.getCategoryName() : "general");
+        
+        // Sử dụng questionTypeHint nếu có, mặc định là "open_ended"
+        String questionType = request.getQuestionTypeHint() != null && !request.getQuestionTypeHint().isEmpty() 
+                ? request.getQuestionTypeHint() 
+                : "open_ended";
+        refreshRequest.put("question_type", questionType);
+        
+        if (request.getContextHint() != null && !request.getContextHint().isEmpty()) {
+            refreshRequest.put("previous_question", request.getContextHint());
+        }
+        if (request.getOriginalPrompt() != null && !request.getOriginalPrompt().isEmpty()) {
+            refreshRequest.put("ai_prompt", request.getOriginalPrompt());
         }
 
-        // 5. Lấy câu hỏi đầu tiên
-        var generatedQuestion = aiResponse.getGeneratedSurvey().getQuestions().get(0);
+        log.info("🔄 Calling Python AI /refresh_question with type: {}", questionType);
+
+        // 4. Gọi Python AI service /refresh_question endpoint
+        String aiServiceUrl = aiServiceBaseUrl + "/refresh_question";
+        ResponseEntity<Map> aiResponse;
+        
+        try {
+            aiResponse = restTemplate.postForEntity(aiServiceUrl, refreshRequest, Map.class);
+        } catch (Exception e) {
+            log.error("❌ Error calling AI service /refresh_question: {}", e.getMessage());
+            throw new Exception("Không thể kết nối đến AI service: " + e.getMessage());
+        }
+
+        Map<String, Object> responseBody = aiResponse.getBody();
+        if (responseBody == null || !(Boolean) responseBody.getOrDefault("success", false)) {
+            String errorMsg = (String) responseBody.getOrDefault("message", "AI không thể tạo câu hỏi");
+            log.warn("⚠️ AI service returned error: {}", errorMsg);
+            throw new Exception(errorMsg);
+        }
+
+        // 5. Parse response từ Python AI
+        String questionText = (String) responseBody.get("question_text");
+        String returnedType = (String) responseBody.get("question_type");
+        @SuppressWarnings("unchecked")
+        List<String> options = (List<String>) responseBody.get("options");
 
         // 6. Map sang DTO response
         var responseBuilder = vn.duytan.c1se09.smartsurvey.domain.response.ai.QuestionRegenerateResponseDTO.builder()
@@ -128,25 +190,29 @@ public class SurveyGeneratorService {
 
         var questionBuilder = vn.duytan.c1se09.smartsurvey.domain.response.ai.QuestionRegenerateResponseDTO.GeneratedQuestionDTO
                 .builder()
-                .questionText(generatedQuestion.getQuestionText())
-                .questionType(generatedQuestion.getQuestionType())
-                .isRequired(generatedQuestion.isRequired());
+                .questionText(questionText)
+                .questionType(returnedType)
+                .isRequired(true); // Default to required
 
         // 7. Map options nếu có
-        if (generatedQuestion.getOptions() != null && !generatedQuestion.getOptions().isEmpty()) {
-            var optionDTOs = generatedQuestion.getOptions().stream()
-                    .map(opt -> vn.duytan.c1se09.smartsurvey.domain.response.ai.QuestionRegenerateResponseDTO.GeneratedOptionDTO
-                            .builder()
-                            .optionText(opt.getOptionText())
-                            .displayOrder(opt.getDisplayOrder())
-                            .build())
-                    .toList();
+        if (options != null && !options.isEmpty()) {
+            var optionDTOs = new ArrayList<vn.duytan.c1se09.smartsurvey.domain.response.ai.QuestionRegenerateResponseDTO.GeneratedOptionDTO>();
+            for (int i = 0; i < options.size(); i++) {
+                optionDTOs.add(
+                    vn.duytan.c1se09.smartsurvey.domain.response.ai.QuestionRegenerateResponseDTO.GeneratedOptionDTO
+                        .builder()
+                        .optionText(options.get(i))
+                        .displayOrder(i + 1)
+                        .build()
+                );
+            }
             questionBuilder.options(optionDTOs);
         }
 
         responseBuilder.question(questionBuilder.build());
 
-        log.info("Successfully regenerated question: {}", generatedQuestion.getQuestionText());
+        log.info("✅ Successfully regenerated question with type {}: {}", returnedType, 
+                 questionText.length() > 50 ? questionText.substring(0, 50) + "..." : questionText);
 
         return responseBuilder.build();
     }
@@ -269,6 +335,12 @@ public class SurveyGeneratorService {
             aiRequest.put("ai_prompt", request.getAiPrompt());
             aiRequest.put("target_audience", request.getTargetAudience());
             aiRequest.put("number_of_questions", request.getNumberOfQuestions());
+            
+            // Thêm question type priorities nếu có
+            if (request.getQuestionTypePriorities() != null && !request.getQuestionTypePriorities().isEmpty()) {
+                aiRequest.put("question_type_priorities", request.getQuestionTypePriorities());
+                log.info("Sending question type priorities: {}", request.getQuestionTypePriorities());
+            }
 
             // Thiết lập headers
             HttpHeaders headers = new HttpHeaders();

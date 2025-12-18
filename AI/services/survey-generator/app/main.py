@@ -13,8 +13,9 @@ from dotenv import load_dotenv
 from datetime import datetime
 from pydantic import BaseModel
 from app.core.gemini_client import GeminiOverloadedError
-import re, math
+import re, math, random
 from pathlib import Path
+from collections import Counter
 
 # Load .env từ thư mục gốc của project
 env_path = Path(__file__).parent.parent / '.env'
@@ -58,52 +59,113 @@ MIN_SCORE        = int(os.getenv("SURVEY_AI_MIN_SCORE", "55"))
 
 def _gen_one_safe(client: GeminiClient, req: SurveyGenerationRequest, qtype: Optional[str]):
     try:
-        # Dùng prompt 1-câu đúng chuẩn
-        single_req = RefreshQuestionRequest(
+        # Gọi generate_one_question với đúng signature
+        result = client.generate_one_question(
             title=req.title,
             category=req.category_name or "general",
             question_type=qtype or "open_ended",
             ai_prompt=req.ai_prompt or "",
             previous_question=""
         )
-        one_prompt = build_single_question_prompt(single_req)
-        return client.generate_one_question(prompt=one_prompt, context=req.description or "")
-    except Exception:
+        if not result or not result.get("question_text"):
+            logger.warning(f"⚠️ Empty result from generate_one_question for type={qtype}")
+        return result
+    except Exception as e:
+        logger.error(f"❌ Exception in _gen_one_safe for type={qtype}: {e}", exc_info=True)
         return {}
 
 
 def parallel_generate_exact_n(client: GeminiClient, req: SurveyGenerationRequest) -> list[dict]:
     """Sinh đúng N câu bằng cách bắn nhiều request 1-câu song song theo 'waves' cho tới khi đủ."""
     N = int(req.number_of_questions)
-    target_types = choose_target_types(N)
+    priorities = getattr(req, "question_type_priorities", None)
+    logger.info(f"🎯 Priority selection: N={N}, priorities={priorities}")
+    target_types = choose_target_types(N, priorities)
+    logger.info(f"📊 Target types generated: {target_types}")
 
     results: list[dict] = []
     seen = set()
+    
+    # 🔥 SAFETY LIMITS
+    MIN_ACCEPTABLE = max(3, int(N * 0.6))  # Tối thiểu 60% số câu hoặc 3 câu
+    MAX_RETRIES_PER_QUESTION = 1  # Chỉ retry 1 lần/câu
+    QUOTA_ERRORS = 0  # Track số lần gặp 429
+    MAX_QUOTA_ERRORS = 3  # Dừng sau 3 lần 429
 
     wave = 0
-    while len(results) < N and wave < 10:  # tối đa 10 đợt (thường 1–3 là đủ)
+    while len(results) < N and wave < 5:  # ✅ Giảm từ 10 → 5 waves
         wave += 1
 
         # Lập danh sách loại cần sinh ở đợt này (còn thiếu loại nào thì đẩy trước)
         missing = N - len(results)
         types_needed = target_types[len(results): len(results) + missing]
         # tăng thêm một chút để có dư mà lọc
-        extra = choose_target_types(max(0, missing//2))
+        extra = choose_target_types(max(0, missing//2), priorities)
         wanted_types = types_needed + extra
 
+        # ✅ FIX: Giữ đúng thứ tự bằng cách dùng list index thay vì as_completed
         with ThreadPoolExecutor(max_workers=PARALLEL_WORKERS) as ex:
-            futs = [ex.submit(_gen_one_safe, client, req, t) for t in wanted_types]
-            for fut in as_completed(futs, timeout=SINGLE_TIMEOUT * len(futs)):
-                one = fut.result() or {}
+            # Submit với index và type để track
+            indexed_futs = [(i, t, ex.submit(_gen_one_safe, client, req, t)) for i, t in enumerate(wanted_types)]
+            
+            # Đợi tất cả futures hoàn thành và sort theo index gốc
+            completed = []
+            for idx, expected_type, fut in indexed_futs:
+                try:
+                    one = fut.result(timeout=SINGLE_TIMEOUT) or {}
+                    completed.append((idx, expected_type, one))
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to generate question at index {idx} (type={expected_type}): {e}")
+                    continue
+            
+            # Sort theo index để giữ đúng thứ tự priorities
+            completed.sort(key=lambda x: x[0])
+            
+            for idx, expected_type, one in completed:
                 q_text = (one.get("question_text") or "").strip()
                 if not q_text:
-                    continue
+                    logger.warning(f"⚠️ Question at index {idx} has no text (expected={expected_type})")
+                    
+                    # 🔥 CHECK: Dừng retry nếu đã vượt quota error limit
+                    if QUOTA_ERRORS >= MAX_QUOTA_ERRORS:
+                        logger.error(f"🛑 STOP: Đã gặp {QUOTA_ERRORS} quota errors. Dừng retry để tránh spam API!")
+                        break
+                    
+                    # 🔥 CHECK: Dừng retry nếu đã đủ minimum acceptable
+                    if len(results) >= MIN_ACCEPTABLE:
+                        logger.info(f"✅ Đã đủ {len(results)}/{N} câu (minimum: {MIN_ACCEPTABLE}). Skip retry.")
+                        continue
+                    
+                    # ✨ RETRY: Chỉ retry 1 lần/câu với priority
+                    if priorities and expected_type and wave <= 2:  # Chỉ retry trong 2 waves đầu
+                        logger.info(f"🔄 Retrying generation for type={expected_type} at index {idx}")
+                        try:
+                            retry_result = _gen_one_safe(client, req, expected_type)
+                            if retry_result and retry_result.get("question_text"):
+                                one = retry_result
+                                q_text = one.get("question_text", "").strip()
+                                logger.info(f"✅ Retry successful for {expected_type}")
+                            else:
+                                logger.warning(f"❌ Retry failed for {expected_type}, skipping")
+                                QUOTA_ERRORS += 1  # Increment on empty result
+                                continue
+                        except Exception as e:
+                            error_msg = str(e).lower()
+                            if "429" in error_msg or "quota" in error_msg:
+                                QUOTA_ERRORS += 1
+                                logger.error(f"🚫 Quota exceeded during retry ({QUOTA_ERRORS}/{MAX_QUOTA_ERRORS})")
+                            continue
+                    else:
+                        continue
 
                 key = q_text.lower()
                 if key in seen:
+                    logger.debug(f"🔄 Duplicate question skipped at index {idx}")
                     continue
 
                 q_type = _normalize_type(one.get("question_type") or "open_ended")
+                logger.info(f"📝 Question {idx}: expected={expected_type}, got={q_type}, text='{q_text[:50]}...'")
+                
                 options = one.get("options")
 
                 if q_type in ("multiple_choice", "single_choice", "ranking"):
@@ -118,23 +180,60 @@ def parallel_generate_exact_n(client: GeminiClient, req: SurveyGenerationRequest
                 issues = validate_question_text(q_text)
                 score  = score_question(q_text)
 
-                # lọc placeholder/điểm thấp:
-                if issues or score < MIN_SCORE:
-                    continue
-
-                results.append({
-                    "question_text": q_text,
-                    "type": q_type,
-                    "options": options,
-                    "score": score,
-                    "issues": issues
-                })
-                seen.add(key)
+                # ⚠️ CRITICAL: Với priorities, BẮT BUỘC type phải match
+                if priorities and len(results) < N:
+                    # Kiểm tra type có match với expected không
+                    if q_type != expected_type:
+                        logger.warning(f"❌ Type mismatch at {idx}: expected={expected_type}, got={q_type}. SKIPPING.")
+                        continue
+                    
+                    # Với priorities, ưu tiên đủ số lượng hơn quality
+                    if not issues:  # Chỉ bỏ nếu có issues nghiêm trọng
+                        logger.info(f"✅ Accepted question {idx} with type={q_type} (priority mode)")
+                        results.append({
+                            "question_text": q_text,
+                            "type": q_type,
+                            "options": options,
+                            "score": score,
+                            "issues": issues
+                        })
+                        seen.add(key)
+                    else:
+                        logger.warning(f"⚠️ Question {idx} has issues: {issues}")
+                else:
+                    # Không có priorities, giữ logic cũ (filter theo score)
+                    if not issues and score >= MIN_SCORE:
+                        results.append({
+                            "question_text": q_text,
+                            "type": q_type,
+                            "options": options,
+                            "score": score,
+                            "issues": issues
+                        })
+                        seen.add(key)
 
                 if len(results) >= N:
+                    logger.info(f"✅ Đã đủ {N} câu hỏi, stop generating.")
                     break
+            
+            # 🔥 BREAK: Dừng wave loop nếu gặp quá nhiều quota errors
+            if QUOTA_ERRORS >= MAX_QUOTA_ERRORS:
+                logger.error(f"🛑 STOP WAVES: Đã gặp {QUOTA_ERRORS} quota errors. Dừng tất cả generation!")
+                break
+            
+            # 🔥 EARLY EXIT: Nếu đã đủ minimum và đang gặp vấn đề API
+            if len(results) >= MIN_ACCEPTABLE and QUOTA_ERRORS > 0:
+                logger.warning(f"⚠️ EARLY EXIT: Đã có {len(results)}/{N} câu (đủ minimum {MIN_ACCEPTABLE}). Dừng để tiết kiệm API.")
+                break
 
-    # Nếu vẫn thiếu một ít, bạn có thể gọi thêm 1 wave nữa hoặc fallback cứng (tuỳ bạn).
+    # Log final results
+    logger.info(f"🎯 Final result: generated {len(results)}/{N} questions")
+    if len(results) < N:
+        if len(results) >= MIN_ACCEPTABLE:
+            logger.warning(f"⚠️ Thiếu {N - len(results)} câu nhưng đã đạt minimum acceptable ({len(results)}/{MIN_ACCEPTABLE})")
+        else:
+            logger.error(f"❌ Chỉ tạo được {len(results)}/{N} câu (minimum: {MIN_ACCEPTABLE})")
+    
     return results[:N]
 
 # Cấu hình logging
@@ -196,14 +295,57 @@ Trả về JSON theo schema.""",
 }
 SUPPORTED_TYPES = ["multiple_choice","single_choice","ranking","rating","open_ended","boolean_","date_time","file_upload"]
 
-def choose_target_types(n: int) -> list[str]:
-    wheel = ["single_choice","multiple_choice","rating","ranking","boolean_","open_ended","date_time","file_upload"]
-    out = []
-    i = 0
-    while len(out) < max(1, n):
-        out.append(wheel[i % len(wheel)])
-        i += 1
-    return out[:n]
+def choose_target_types(n: int, priorities: list[str] | None = None) -> list[str]:
+    """
+    Chọn danh sách loại câu hỏi theo mức độ ưu tiên.
+    
+    Args:
+        n: Số lượng câu hỏi cần tạo
+        priorities: Danh sách loại câu hỏi ưu tiên theo thứ tự (nếu None sẽ dùng mặc định)
+    
+    Returns:
+        Danh sách loại câu hỏi theo thứ tự ưu tiên
+    """
+    # Nếu không có priorities, dùng mặc định với rating, single_choice, multiple_choice ưu tiên cao hơn
+    if not priorities or len(priorities) == 0:
+        # Mặc định: ưu tiên rating, single_choice, multiple_choice (xuất hiện nhiều hơn)
+        wheel = [
+            "rating", "single_choice", "multiple_choice",  # Ưu tiên cao - lặp lại 2 lần
+            "rating", "single_choice", "multiple_choice",
+            "ranking", "boolean_", "open_ended",  # Ưu tiên trung bình
+            "date_time", "file_upload"  # Ưu tiên thấp
+        ]
+    else:
+        # ✅ GUARANTEED DISTRIBUTION: Mỗi priority type PHẢI xuất hiện ít nhất 1 lần
+        priority_count = len(priorities)
+        
+        # BƯỚC 1: Đảm bảo mỗi priority có ít nhất 1 câu
+        result = list(priorities)  # Copy để không ảnh hưởng tham số gốc
+        remaining_slots = n - priority_count
+        
+        if remaining_slots <= 0:
+            # Nếu số câu <= số priorities → chỉ lấy n đầu tiên
+            return result[:n]
+        
+        # BƯỚC 2: Phân phối các slot còn lại theo weighted priority
+        # Tạo weighted wheel: priority càng cao (index càng thấp) → xuất hiện càng nhiều
+        wheel = []
+        for idx, qtype in enumerate(priorities):
+            # Weight = priority_count - idx (càng đầu càng nặng)
+            # VD: 4 priorities -> weights = [4, 3, 2, 1]
+            weight = priority_count - idx
+            wheel.extend([qtype] * weight)
+        
+        # BƯỚC 3: Random sample từ wheel để fill các slot còn lại
+        import random
+        additional = random.choices(wheel, k=remaining_slots)
+        result.extend(additional)
+        
+        # Shuffle để tránh pattern quá rõ ràng (nhưng vẫn giữ distribution)
+        random.shuffle(result)
+        
+        logger.info(f"📊 Distribution: {dict(Counter(result))}")
+        return result[:n]
 
 def _ensure_min_options(qtype: str, options: list | None) -> list[dict]:
     # Chuẩn hoá về list[dict(option_text, display_order)] nhưng KHÔNG set cứng A/B/C/D cho MCQ/Single
@@ -399,7 +541,12 @@ def build_prompt(req: SurveyGenerationRequest) -> str:
         types=types_text
     ) + context
 
-    target_types = choose_target_types(N_over)
+    # Sử dụng priorities từ request nếu có
+    priorities = getattr(req, "question_type_priorities", None)
+    target_types = choose_target_types(N_over, priorities)
+    
+    if priorities:
+        final_prompt += f"\nƯU TIÊN các loại câu hỏi theo thứ tự: {', '.join(priorities[:5])}."
     final_prompt += f"\nPhân bổ loại câu hỏi THEO THỨ TỰ: {target_types}."
     final_prompt += "\nCHỈ trả JSON hợp lệ (không markdown, không chú thích)."
     final_prompt += "\nMỗi câu hỏi phải cụ thể, KHÔNG dùng placeholder như 'Câu hỏi 1'."
@@ -559,12 +706,25 @@ def list_templates():
 @app.post("/generate", response_model=SurveyGenerationResponse)
 def generate_survey(request: SurveyGenerationRequest):
     try:
+        logger.info(f"📥 Received generation request: N={request.number_of_questions}, priorities={request.question_type_priorities}")
+        logger.info(f"🔍 Request details: title={request.title}, category={request.category_name}")
+        logger.info(f"🔍 Full request dict: {request.model_dump()}")
+        
         client: GeminiClient = get_gemini_client()
         N = int(request.number_of_questions)
 
-        # 1) Gọi AI với BIG PROMPT
-        prompt = build_prompt(request)
-        gem_res = client.generate_survey(prompt=prompt, context=request.description or "")
+        # ✅ CRITICAL FIX: Nếu có priorities, BỎ QUA BIG PROMPT, chỉ dùng parallel
+        priorities = request.question_type_priorities
+        if priorities and len(priorities) > 0:
+            logger.info(f"🎯 Priority mode enabled! Bypassing BIG PROMPT, using parallel generation only.")
+            # Tạo trực tiếp với parallel để đảm bảo đúng type
+            parsed = parallel_generate_exact_n(client, request)
+            gem_res = None  # Không dùng BIG PROMPT
+        else:
+            # 1) Gọi AI với BIG PROMPT (chỉ khi không có priorities)
+            logger.info("📝 No priorities, using BIG PROMPT mode")
+            prompt = build_prompt(request)
+            gem_res = client.generate_survey(prompt=prompt, context=request.description or "")
 
         # ---- Helpers nội bộ ----
         def _score_and_normalize(q_obj, idx: int) -> dict:
@@ -616,43 +776,45 @@ def generate_survey(request: SurveyGenerationRequest):
                     out.append(it)
             return out
 
-        # 2) Parse -> chấm điểm -> build 'parsed'
-        parsed: list[dict] = []
-        if gem_res and getattr(gem_res, "questions", None):
-            for i, q in enumerate(gem_res.questions, start=1):
-                parsed.append(_score_and_normalize(q, i))
+        # 2) Parse -> chấm điểm -> build 'parsed' (chỉ khi dùng BIG PROMPT)
+        if not priorities:
+            # BIG PROMPT mode: parse kết quả
+            if gem_res and getattr(gem_res, "questions", None):
+                for i, q in enumerate(gem_res.questions, start=1):
+                    parsed.append(_score_and_normalize(q, i))
 
-        # 2b) Loại MCQ/Single thiếu options (tránh fallback A/B/C)
-        cleaned = []
-        for it in parsed:
-            qtype = it.get("type")
-            opts = it.get("options") or []
-            if qtype in ("multiple_choice", "single_choice"):
-                if len([o for o in opts if (o or "").strip()]) < 2:
-                    continue
-            cleaned.append(it)
-        parsed = cleaned
+            # 2b) Loại MCQ/Single thiếu options (tránh fallback A/B/C)
+            cleaned = []
+            for it in parsed:
+                qtype = it.get("type")
+                opts = it.get("options") or []
+                if qtype in ("multiple_choice", "single_choice"):
+                    if len([o for o in opts if (o or "").strip()]) < 2:
+                        continue
+                cleaned.append(it)
+            parsed = cleaned
 
-        # 3) Nếu thiếu hoặc >50% kém → sinh song song để BÙ ĐỦ N (đợt 1)
-        need_more = N - sum(1 for x in parsed if (x["score"] >= MIN_SCORE and not x["issues"]))
-        too_many_bad = sum(1 for x in parsed if (x["score"] < MIN_SCORE or x["issues"])) > max(2, len(parsed) // 2)
-        if need_more > 0 or too_many_bad:
-            exact = parallel_generate_exact_n(client, request)
-            parsed = _dedup_merge(parsed, exact)
+            # 3) Nếu thiếu hoặc >50% kém → sinh song song để BÙ ĐỦ N (đợt 1)
+            need_more = N - sum(1 for x in parsed if (x["score"] >= MIN_SCORE and not x["issues"]))
+            too_many_bad = sum(1 for x in parsed if (x["score"] < MIN_SCORE or x["issues"])) > max(2, len(parsed) // 2)
+            if need_more > 0 or too_many_bad:
+                exact = parallel_generate_exact_n(client, request)
+                parsed = _dedup_merge(parsed, exact)
 
-        # 3b) LOOP fill cho đến đủ N (tối đa 3 lần)
-        attempts = 0
-        while attempts < 3:
-            valid_now = _pick_valid(parsed, N)
-            remaining = N - len(valid_now)
-            if remaining <= 0:
-                break
+            # 3b) LOOP fill cho đến đủ N (tối đa 3 lần) - chỉ khi không có priorities
+            attempts = 0
+            while attempts < 3:
+                valid_now = _pick_valid(parsed, N)
+                remaining = N - len(valid_now)
+                if remaining <= 0:
+                    break
 
-            # Gọi bù đúng số còn thiếu
-            req_rem = SurveyGenerationRequest(**{**request.dict(), "number_of_questions": remaining})
-            extra = parallel_generate_exact_n(client, req_rem)
-            parsed = _dedup_merge(parsed, extra)
-            attempts += 1
+                # Gọi bù đúng số còn thiếu
+                req_rem = SurveyGenerationRequest(**{**request.dict(), "number_of_questions": remaining})
+                extra = parallel_generate_exact_n(client, req_rem)
+                parsed = _dedup_merge(parsed, extra)
+                attempts += 1
+        # else: priorities mode đã có parsed từ parallel_generate_exact_n()
 
         # 4) Chọn Top-N theo score & không placeholder
         topN = _pick_valid(parsed, N)

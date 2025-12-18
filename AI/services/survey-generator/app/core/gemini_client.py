@@ -320,6 +320,13 @@ class GeminiClient:
                 "Với open_ended/rating/boolean_/date_time/file_upload: options = [].",
                 "Với single_choice/multiple_choice/ranking: sinh 3–5 lựa chọn thực tế."
             ]
+            
+            # ✨ PROMPT ĐẶC BIỆT CHO RANKING: Yêu cầu tối thiểu 5 options
+            if req_type == "ranking":
+                guide.append("⚠️ QUAN TRỌNG: Loại 'ranking' BẮT BUỘC phải có TỐI THIỂU 5 options (không được dưới 5).")
+                guide.append("Ví dụ ranking options: ['Rất quan trọng', 'Quan trọng', 'Bình thường', 'Ít quan trọng', 'Không quan trọng']")
+                guide.append("Hoặc ranking theo thứ tự ưu tiên: ['Ưu tiên cao nhất', 'Ưu tiên cao', 'Ưu tiên trung bình', 'Ưu tiên thấp', 'Ưu tiên thấp nhất']")
+            
             if previous_question:
                 guide.append(f"Không lặp lại/diễn đạt giống câu trước: \"{previous_question}\"")
             if ai_prompt:
