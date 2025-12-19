@@ -1398,15 +1398,24 @@ def _gemini_prompt_batch(items: list[str]) -> str:
     )
 
 def gemini_classify_batch(texts: List[str], variant: str | None = None) -> List[str]:
-    """Trả list nhãn ('POS'|'NEU'|'NEG'). Lỗi ⇒ 'NEU'."""
-    if not texts: return []
-    labels = ["NEU"] * len(texts)
+    """
+    Trả list nhãn ('POS'|'NEU'|'NEG') cho từng câu trong `texts`.
+    Nội bộ dùng lại call_external_sentiment (hiện đang gọi model ngoài – OpenAI/Gemini).
+    - Có dùng cache (CLASSIFY_CACHE) như logic cũ.
+    - Lỗi ⇒ nhãn 'NEU'.
+    """
+    if not texts:
+        return []
 
-    # 1) A/B variant
+    # Mặc định nhãn trung tính
+    labels: List[str] = ["NEU"] * len(texts)
+
+    # 1) Chọn variant A/B (giữ cho đúng logic A/B cũ, dù giờ không dùng trong prompt)
     variant = variant or assign_bucket_by_hash(texts[0] if texts else "batch")
 
-    # 2) Cache hit trước
-    miss_idx, miss_texts = [], []
+    # 2) Kiểm tra cache trước
+    miss_idx: List[int] = []
+    miss_texts: List[str] = []
     for i, t in enumerate(texts):
         ck = _label_cache_key(t, variant)
         val = CLASSIFY_CACHE.get(ck)
@@ -1414,63 +1423,46 @@ def gemini_classify_batch(texts: List[str], variant: str | None = None) -> List[
             labels[i] = val
             _METRICS["classify_cache_hit"] += 1
         else:
-            miss_idx.append(i); miss_texts.append(t)
+            miss_idx.append(i)
+            miss_texts.append(t)
 
+    # Nếu tất cả đều đã có trong cache thì trả luôn
     if not miss_texts:
         return labels
 
-    # 3) De-dup trong batch miss
-    uniq_list, uniq_map = [], {}
+    # 3) Gom các text miss theo hash để tránh gọi model lặp lại
+    uniq_texts: List[str] = []
+    uniq_map: Dict[str, List[int]] = {}  # hash_text -> list index trong `texts`
     for i, t in zip(miss_idx, miss_texts):
         h = _hash_text_for_cache(t)
         if h not in uniq_map:
             uniq_map[h] = []
-            uniq_list.append(t)
+            uniq_texts.append(t)
         uniq_map[h].append(i)
 
-    # 4) Tạo prompt theo variant
-    def _prompt_A(items: list[str]) -> str:
-        return (
-            "Bạn là bộ phân loại cảm xúc TIẾNG VIỆT.\n"
-            "Trả về JSON Array: [{\"i\":<index>,\"label\":\"POS|NEU|NEG\"}] cho các câu sau:\n" +
-            "\n".join([f"{i}. {items[i]}" for i in range(len(items))])
-        )
-    def _prompt_B(items: list[str]) -> str:
-        return (
-            "Classify Vietnamese sentiments. Output *only* JSON array [{\"i\":int,\"label\":\"POS|NEU|NEG\"}].\n" +
-            "\n".join([f"{i}. {items[i]}" for i in range(len(items))])
-        )
-    prompt = _prompt_B(uniq_list) if variant == "B" else _prompt_A(uniq_list)
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    id2label = {0: "NEG", 1: "NEU", 2: "POS"}
 
-    # 5) Gọi Gemni qua wrapper (retry + jitter + circuit breaker)
-    _METRICS["classify_calls"] += 1
-    t0 = _time.perf_counter()
-    try:
-        data = call_gemini_json(EXT_URL, EXT_KEY, payload, timeout=float(EXT_TIMEOUT), max_retry=int(EXT_RETRY))
-        text_out = ((data.get("candidates") or [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")).strip()
-        # cắt ra JSON array
-        first, last = text_out.find('['), text_out.rfind(']')
-        if first != -1 and last != -1 and last > first:
-            text_out = text_out[first:last+1]
-        arr = json.loads(text_out)
-        # 6) phản ánh kết quả
-        labels_uniq = ["NEU"] * len(uniq_list)
-        for obj in arr:
-            i = obj.get("i"); lab = (obj.get("label") or "").strip().upper()
-            if isinstance(i, int) and 0 <= i < len(labels_uniq) and lab in {"POS","NEU","NEG"}:
-                labels_uniq[i] = lab
-        # gán về labels và set cache
-        for text_u, lab in zip(uniq_list, labels_uniq):
-            for idx in uniq_map[_hash_text_for_cache(text_u)]:
-                labels[idx] = lab
-            CLASSIFY_CACHE.set(_label_cache_key(text_u, variant), lab)
-        _METRICS["classify_success"] += 1
-    except Exception:
-        # giữ nguyên 'NEU' cho phần miss khi lỗi
-        pass
-    finally:
-        _rec_latency("classify_latency_ms", 1000.0*(_time.perf_counter()-t0))
+    # 4) Gọi external sentiment cho từng text unique
+    for text_u in uniq_texts:
+        h = _hash_text_for_cache(text_u)
+        _METRICS["classify_calls"] += 1
+        t0 = _time.perf_counter()
+        try:
+            lid, conf, meta = call_external_sentiment(text_u)
+            lab = id2label.get(int(lid), "NEU")
+            _METRICS["classify_success"] += 1
+        except Exception:
+            # lỗi ⇒ giữ NEU
+            lab = "NEU"
+        finally:
+            _rec_latency("classify_latency_ms", 1000.0 * (_time.perf_counter() - t0))
+
+        # Gán nhãn cho tất cả index trùng text_u
+        for idx in uniq_map.get(h, []):
+            labels[idx] = lab
+
+        # Lưu cache cho text_u
+        CLASSIFY_CACHE.set(_label_cache_key(text_u, variant), lab)
 
     return labels
 
