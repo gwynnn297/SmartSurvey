@@ -20,7 +20,6 @@ from urllib.parse import urlparse, unquote
 load_dotenv()
 
 # === ChromaDB (vector store) — LAZY LOAD ===
-# Không import chromadb ở global scope để tránh crash khi server chưa cài.
 CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_db")
 CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "survey_answers")
 _CHROMA_CLIENT = None  # lazy singleton
@@ -158,7 +157,7 @@ def call_gemini_json(url: str, key: str, payload: dict, timeout: float, max_retr
             back = min(3.0, (0.2 * (2**attempt))) + random.uniform(0, 0.2)
             _t.sleep(back)
 
-# --- OpenAI (CHỈ dùng cho CHAT trả lời theo RAG; các phần khác vẫn giữ Gemini) ---
+# --- OpenAI ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 OPENAI_MAX_OUTPUT_TOKENS = int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", "450"))
@@ -204,6 +203,52 @@ def call_openai_text(prompt: str, timeout: float, max_retry: int = 4, temperatur
                 r.raise_for_status()
                 data = r.json()
                 return _extract_openai_output_text(data)
+        except Exception:
+            if attempt >= max_retry:
+                raise
+            back = min(3.0, (0.2 * (2 ** attempt))) + random.uniform(0, 0.2)
+            _t.sleep(back)
+
+OPENAI_SENTI_MODEL = os.getenv("OPENAI_SENTI_MODEL", OPENAI_CHAT_MODEL)
+OPENAI_SENTI_MAX_OUTPUT_TOKENS = int(os.getenv("OPENAI_SENTI_MAX_OUTPUT_TOKENS", "80"))
+
+def call_openai_json_schema(prompt: str, schema: dict, timeout: float, max_retry: int = 4, temperature: float = 0.0) -> dict:
+    """
+    Gọi OpenAI Responses API và ép output theo JSON Schema (Structured Outputs).
+    Trả về raw JSON response (dict).
+    """
+    if not OPENAI_API_KEY:
+        raise RuntimeError("Missing OPENAI_API_KEY")
+
+    url = "https://api.openai.com/v1/responses"
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "model": OPENAI_SENTI_MODEL,
+        "input": prompt,
+        "temperature": float(temperature),
+        "max_output_tokens": int(OPENAI_SENTI_MAX_OUTPUT_TOKENS),
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "sentiment_schema_v1",
+                "schema": schema,
+                "strict": True,
+            }
+        },
+    }
+
+    for attempt in range(max_retry + 1):
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                r = client.post(url, headers=headers, json=payload)
+                if r.status_code in (429, 500, 502, 503, 504):
+                    raise RuntimeError(f"OpenAIHTTP{r.status_code}")
+                r.raise_for_status()
+                return r.json()
         except Exception:
             if attempt >= max_retry:
                 raise
@@ -307,9 +352,6 @@ def ai_metrics():
         }
     }
 # ================= END AI OPTIMIZATION PRIMITIVES ===============
-
-# ====== dự án sẵn có (KHÔNG dùng model train nội bộ) ======
-# bạn giữ nguyên các module settings/db/model như dự án của bạn
 from db import init_db, SessionLocal, AiSentiment, Answer, Response, AiChatLog, ActivityLog
 
 EXT_URL = os.getenv("EXT_SENTI_URL")
@@ -327,7 +369,6 @@ _CB_OPEN_UNTIL: float | None = None
 _CB_TRIP_THRESHOLD = 6
 _CB_COOLDOWN_SEC   = 30.0
 
-
 def _cb_is_open(now: float | None = None) -> bool:
     import time
     ts = now or time.time()
@@ -338,7 +379,6 @@ def _cb_is_open(now: float | None = None) -> bool:
         _CB_OPEN_UNTIL = None
         return False
     return True
-
 
 def _cb_record(success: bool):
     import time
@@ -351,17 +391,15 @@ def _cb_record(success: bool):
     if _CB_FAILS >= _CB_TRIP_THRESHOLD:
         _CB_OPEN_UNTIL = time.time() + _CB_COOLDOWN_SEC
 
-
-# ============================================================
+# ======================================
 # Chuẩn hoá văn bản (phục vụ hash/cache)
-# ============================================================
+# ======================================
 _ABBR = {
     "ko": "không", "k": "không", "k0": "không", "kh": "không",
     "dc": "được", "đc": "được", "ok": "ổn",
     "bt": "bình thường", "bthg": "bình thường", "bth": "bình thường",
 }
 _EMO = {":))": "vui", ":)": "vui", ":D": "vui", ":(": "buồn", ":((": "buồn"}
-
 
 def norm_text(t: str) -> str:
     import unicodedata
@@ -380,17 +418,15 @@ def norm_text(t: str) -> str:
     t = re.sub(r"\s{2,}", " ", t).strip()
     return t
 
-
 def sha256(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
-# ============================================================
+# ====================
 # DB helpers (PyMySQL)
-# ============================================================
+# ====================
 
 def _conn():
     return pymysql.connect(**_get_db_connect_args())
-
 
 def sql_one(q: str, args=None):
     with _conn() as con:
@@ -398,13 +434,11 @@ def sql_one(q: str, args=None):
             cur.execute(q, args or ())
             return cur.fetchone()
 
-
 def sql_all(q: str, args=None):
     with _conn() as con:
         with con.cursor() as cur:
             cur.execute(q, args or ())
             return cur.fetchall()
-
 
 def sql_exec(q: str, args=None):
     with _conn() as con:
@@ -476,9 +510,9 @@ def _get_db_connect_args() -> dict:
     })
     return params
 
-# ============================================================
-# Gọi GEMINI (Structured Output JSON)
-# ============================================================
+# =======================
+# Structured Output JSON
+# ======================
 
 def call_external_sentiment(text: str, retries: int | None = None) -> Tuple[int, float, Dict[str, Any]]:
     """
@@ -486,48 +520,46 @@ def call_external_sentiment(text: str, retries: int | None = None) -> Tuple[int,
       returns (label_id: 0/1/2, confidence: float, extra: dict)
       0=negative, 1=neutral, 2=positive
     """
-    if not EXT_URL or not EXT_KEY:
-        return 1, 0.0, {"error": "Missing EXT_SUMM_URL/EXT_SENTI_KEY"}
-
-    body = {
-        "contents": [{
-            "parts": [{"text": (
-                "Bạn là bộ phân tích cảm xúc tiếng Việt.\n"
-                "Hãy trả về JSON đúng schema {label, confidence}.\n"
-                "label ∈ [negative, neutral, positive]; confidence ∈ [0,1].\n"
-                f"Văn bản: {text}"
-            )}]
-        }],
-        "generationConfig": {
-            "temperature": 0, "topP": 1, "topK": 1, "candidateCount": 1,
-            "responseMimeType": "application/json",
-            "responseSchema": {
-                "type": "object",
-                "properties": {
-                    "label": {"type": "string", "enum": ["negative","neutral","positive"]},
-                    "confidence": {"type": "number"}
-                },
-                "required": ["label","confidence"]
-            }
-        }
-    }
+    if not OPENAI_API_KEY:
+        return 1, 0.0, {"error": "Missing OPENAI_API_KEY"}
 
     use_retries = EXT_MAX_RETRY if retries is None else retries
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "label": {"type": "string", "enum": ["negative", "neutral", "positive"]},
+            "confidence": {"type": "number"},
+        },
+        "required": ["label", "confidence"],
+        "additionalProperties": False,
+    }
+
+    prompt = (
+        "Bạn là bộ phân tích cảm xúc tiếng Việt.\n"
+        "Hãy trả về JSON đúng schema {label, confidence}.\n"
+        "label ∈ [negative, neutral, positive]; confidence ∈ [0,1].\n"
+        f"Văn bản: {text}"
+    )
+
     try:
-        # dùng wrapper httpx (có retry/backoff/circuit-breaker)
-        j = call_gemini_json(
-            EXT_URL, EXT_KEY, body,
-            timeout=EXT_TIMEOUT, max_retry=int(use_retries)
+        j = call_openai_json_schema(
+            prompt,
+            schema=schema,
+            timeout=float(EXT_TIMEOUT),
+            max_retry=int(use_retries),
+            temperature=0.0,
         )
-        txt = j["candidates"][0]["content"]["parts"][0]["text"]
+        txt = _extract_openai_output_text(j)
         parsed = json.loads(txt)
+
         label = str(parsed.get("label", "neutral")).lower()
-        conf  = float(parsed.get("confidence", 0.0))
-        label_id = {"negative":0, "neutral":1, "positive":2}.get(label, 1)
-        return label_id, conf, {"api": j, "parsed": parsed}
+        conf = float(parsed.get("confidence", 0.0))
+        label_id = {"negative": 0, "neutral": 1, "positive": 2}.get(label, 1)
+
+        return label_id, conf, {"api": j, "parsed": parsed, "provider": "openai"}
     except Exception as e:
-        # giữ kiểu trả về để backward-compatible
-        return 1, 0.0, {"error": f"external_call_failed: {e}"}
+        return 1, 0.0, {"error": f"external_call_failed: {e}", "provider": "openai"}
 
 # ============== Embedding (Gemini text-embedding-004) ==============
 EXT_EMB_URL   = os.getenv("EXT_EMB_URL")
@@ -562,9 +594,9 @@ def _embed_vi(text: str) -> list[float]:
     except Exception:
         return []
 
-# ============================================================
+# ============
 # FastAPI app
-# ============================================================
+# ============
 def get_db():
     db = SessionLocal()
     try:
@@ -580,7 +612,8 @@ def on_startup():
     else:
         # Không có URL hợp nhất -> rơi về bộ biến rời rạc
         print("[startup] DB Connected (via DB_* / MYSQL_*)")
-    print("[startup] External sentiment only (Gemini)")
+    print("[startup] External sentiment only (OpenAI)")
+
 
     # Tự động migrate Chroma nếu bật cờ MIGRATE_ON_BOOT=1
     try:
@@ -588,7 +621,6 @@ def on_startup():
         if migrate_flag == "1":
             print("[startup] MIGRATE_ON_BOOT=1 → spawning migrate thread...")
 
-            # import hàm main từ migrate_chroma.py ngay tại đây
             try:
                 from migrate_chroma import main as migrate_main
             except Exception as e:
@@ -624,9 +656,9 @@ def health_check():
     except Exception as e:
         return {"status": "unhealthy", "service": "ai-sentiment", "error": str(e)}
 
-# ============================================================
+# =================
 # Business helpers
-# ============================================================
+# ================
 
 def fetch_answer_rows(db: Session, survey_id: int, question_id: Optional[int] = None):
     q = (
@@ -681,7 +713,6 @@ def log_inference(
         ),
     )
 
-
 def aggregate_percent(labels: List[int]) -> Dict[str, Any]:
     total = len(labels)
     c = {0: 0, 1: 0, 2: 0}
@@ -696,7 +727,6 @@ def aggregate_percent(labels: List[int]) -> Dict[str, Any]:
         "counts": {"POS": c[2], "NEU": c[1], "NEG": c[0]},
         "sample_size": total,
     }
-
 
 # ====== ONLY external: luôn gọi Gemini (vẫn cho phép cache hit theo text_hash) ======
 
@@ -738,11 +768,9 @@ def _embed_rows_by_survey(survey_id: int) -> list[dict]:
         (survey_id,)
     )
 
-
-# ============================================================
+# ==========================
 # Rule-based Stats Chat (VI)
-# ============================================================
-
+# ==========================
 import statistics as _stats
 from collections import Counter as _Counter
 
@@ -934,9 +962,9 @@ def _answer_stat_query(db: Session, survey_id: int, q: str) -> Optional[str]:
     return ans
 
 
-# ============================================================
+# ===================
 # Endpoints sentiment
-# ============================================================
+# ===================
 
 @app.post("/ai/sentiment/{survey_id}")
 def run_sentiment_now(survey_id: int, question_id: Optional[int] = None, db: Session = Depends(get_db)):
@@ -966,12 +994,11 @@ def run_sentiment_now(survey_id: int, question_id: Optional[int] = None, db: Ses
     db.add(ActivityLog(
         user_id=None, action_type="ai_generate",
         target_id=rec.sentiment_id, target_table="ai_sentiment",
-        description="Recomputed with external API only (Gemini)"
+        description="Recomputed with external API only (OpenAI)"
     ))
     db.commit()
     db.refresh(rec)
 
-    # Giữ payload đầy đủ để FE cũ không gãy
     return {
         "survey_id": survey_id,
         "sentiment_id": rec.sentiment_id,
@@ -1023,18 +1050,14 @@ def get_latest_sentiment(
         "updated_at": str(rec.updated_at) if rec.updated_at else None,
     }
 
-
-
-# ============================================================
-# Chat (RAG nội bộ đơn giản; không phụ thuộc sentiment model)
-# ============================================================
-
+# =======
+# Chat
+# =======
 class ChatRequest(BaseModel):
     survey_id: int
     question_text: str
     user_id: Optional[int] = None
     top_k: int = 5
-
 
 class ChatResponse(BaseModel):
     survey_id: int
@@ -1043,7 +1066,6 @@ class ChatResponse(BaseModel):
     context: List[str]
     top_k: int
     created_at: datetime
-
 
 def retrieve_topk(texts: List[str], query: str, top_k: int = 5) -> List[str]:
     from sklearn.feature_extraction.text import TfidfVectorizer
@@ -1058,13 +1080,11 @@ def retrieve_topk(texts: List[str], query: str, top_k: int = 5) -> List[str]:
     idx = sims.argsort()[::-1][:top_k]
     return [texts[i] for i in idx]
 
-
 def craft_answer(question: str, context: List[str]) -> str:
     if not context:
         return "Hiện chưa có phản hồi phù hợp để trả lời câu hỏi này."
     bullets = "\n".join([f"- {c}" for c in context[:3]])
     return f"Dựa trên các phản hồi cho câu hỏi: “{question}”:\n{bullets}\nTóm lại, xu hướng chung có thể rút ra từ các phản hồi trên."
-
 
 def answer_count_query(db: Session, survey_id: int, question_text: str) -> Optional[str]:
     q = (question_text or "").lower()
@@ -1092,7 +1112,6 @@ def answer_count_query(db: Session, survey_id: int, question_text: str) -> Optio
             """), {"sid": survey_id, "kw": f"%{kw}%"}).scalar()
             return f"Có {count} câu trả lời chứa \"{kw}\" trong survey {survey_id}."
     return None
-
 
 @app.post("/ai/chat", response_model=ChatResponse, tags=["Chat AI/RAG"])
 def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
@@ -1181,10 +1200,7 @@ def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
 
 print("[startup] EXT_SENTI_URL =", os.getenv("EXT_SENTI_URL"))
 print("[startup] EXT_SENTI_KEY set? ", bool(os.getenv("EXT_SENTI_KEY")))
-
-
 # ============================ Conversational Memory ============================
-
 def get_chat_history(db: Session, user_id: Optional[int], survey_id: int, limit: int = 12) -> str:
     """
     Lấy 'limit' bản ghi chat gần nhất của user trong survey, theo thời gian tăng dần
@@ -1220,7 +1236,6 @@ def get_chat_history(db: Session, user_id: Optional[int], survey_id: int, limit:
         if a:
             parts.append(f"AI: {a}")
     return "\n".join(parts).strip()
-
 
 # ================== RAG INGEST (đã tối ưu hoá đa luồng) ==================
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1302,13 +1317,12 @@ def rag_ingest(survey_id: int, db: Session = Depends(get_db)):
     _flush()
     return {"ok": True, "ingested": added, "survey_id": survey_id}
 
-# ===================== SPRINT 4 ADDITIONS ====================
+# =====================ADDITIONS====================
 # 1) Keywords (TF-IDF)
 # 2) Basic Sentiment (rule-based, tiếng Việt)
 # 3) Summary (Gemini)
 # 4) Themes (TF-IDF -> SVD -> KMeans)
 # 5) Get latest analysis by kind
-
 
 EXT_URL   = os.getenv("EXT_SENTI_URL") or os.getenv("EXT_SUMM_URL")
 EXT_KEY   = os.getenv("EXT_SENTI_KEY")
@@ -1371,9 +1385,6 @@ def ai_keywords(survey_id: int):
     return {"ok": True, "count": len(texts), "keywords": kws}
 
 # ---------- 2) Basic sentiment (Gemini-only batch) ----------
-# Dùng các biến ENV đã có ở đầu file:
-#   EXT_URL, EXT_KEY, EXT_TIMEOUT, EXT_MAX_RETRY, FORCE_EXTERNAL, BATCH_SIZE, BACKOFF_K
-
 def _gemini_prompt_batch(items: list[str]) -> str:
     return (
         "Bạn là bộ phân loại cảm xúc TIẾNG VIỆT.\n"
@@ -1508,7 +1519,6 @@ def ai_basic_senti(survey_id: int):
     _save_analysis(survey_id, payload, "BASIC_SENTI")
     _rec_latency("classify_latency_ms", 1000.0*(_time.perf_counter()-start))
     return {"ok": True, **payload}
-
 
 # ---------- 3) Summarization (Gemini) ----------
 GEMINI_URL = os.getenv("EXT_SUMM_URL")
@@ -1682,10 +1692,7 @@ def get_latest_analysis(survey_id: int, kind: str):
             continue
     return {"ok": False, "message": f"No analysis with kind={kind}"}
 
-
-#################################################################################
 # ================== Insights Engine (routes minimal) ==================
-#################################################################################
 from fastapi import Query, HTTPException
 import os, json, re
 import pandas as _pd
@@ -1716,9 +1723,6 @@ def _load_rules_from_file(config_path: str) -> dict:
     data.setdefault("anomaly", {})
     return data
 
-# Loader KHỚP schema bạn đã đưa:
-# answers(answer_id, response_id, question_id, option_id, answer_text, created_at, updated_at)
-# responses(response_id, survey_id, user_id, request_token, submitted_at)
 def _load_responses_df_v2(survey_id: int) -> _pd.DataFrame:
     rows = sql_all("""
         SELECT
@@ -1896,10 +1900,7 @@ def ai_insights_latest(survey_id: int):
         except Exception:
             continue
     raise HTTPException(status_code=404, detail="No INSIGHTS found")
-# =====================================================================
 
-
-# === SRP integration routes (dùng core tách riêng) ===
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from srp_core import SRPItem, SRPBatchRequest, SRPResult, srp_process_one, sha256
@@ -1927,4 +1928,3 @@ def ai_srp_process_survey(survey_id: int, rules_yaml: str = "rules.yml", db: Ses
         known[sha256(res.text_clean)] = res.text_clean
     _save_analysis(survey_id, {"kind":"SRP","items":results,"count":len(results)}, "SRP")
     return {"ok": True, "survey_id": survey_id, "count": len(results), "results": results}
-
