@@ -17,7 +17,6 @@ import vn.duytan.c1se09.smartsurvey.util.constant.SurveyStatusEnum;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -47,7 +46,6 @@ public class AdminService {
     private final AiChatLogRepository aiChatLogRepository;
     private final ActivityLogService activityLogService;
     private final AuthService authService;
-    private final NotificationService notificationService;
     private final PasswordEncoder passwordEncoder;
 
     /**
@@ -160,14 +158,14 @@ public class AdminService {
         
         Pageable pageable = PageRequest.of(page, size);
         RoleEnum roleEnum = null;
-        if (role != null && !role.isEmpty()) {
-            try {
+            if (role != null && !role.isEmpty()) {
+                try {
                 roleEnum = RoleEnum.valueOf(role.toLowerCase());
-            } catch (IllegalArgumentException e) {
+                } catch (IllegalArgumentException e) {
                 // Invalid role, ignore
+                }
             }
-        }
-        
+            
         Page<User> userPage = userRepository.findUsersWithFilters(search, roleEnum, isActive, pageable);
         
         List<AdminUserPageDTO.UserDTO> userDTOs = userPage.getContent().stream()
@@ -344,7 +342,6 @@ public class AdminService {
         
         User currentAdmin = authService.getCurrentUser();
         String oldRole = user.getRole().name();
-        String oldFullName = user.getFullName();
         
         // Cập nhật fullName
         if (fullName != null && !fullName.trim().isEmpty()) {
@@ -883,5 +880,6 @@ public class AdminService {
                 .build();
     }
 }
+
 
 

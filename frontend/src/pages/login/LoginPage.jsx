@@ -35,7 +35,7 @@ const Login = () => {
                 if (data.role === 'admin') {
                     navigate('/admin');
                 } else {
-                    navigate('/dashboard');
+                navigate('/dashboard');
                 }
             } else {
                 console.warn('No token field in response. Raw data:', data);

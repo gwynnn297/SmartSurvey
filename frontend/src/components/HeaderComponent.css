@@ -2,7 +2,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 20px;
+    padding: 16px 24px;
     background: white;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     border-bottom: 1px solid #e1e5e9;
@@ -11,9 +11,7 @@
     left: 0;
     right: 0;
     z-index: 1000;
-    gap: 20px;
-    min-height: 56px;
-    height: 56px;
+    gap: 24px;
 }
 
 .header-left {
@@ -24,7 +22,7 @@
 .header-center {
     display: flex;
     align-items: center;
-    gap: 24px;
+    gap: 30px;
     flex: 1;
     justify-content: center;
 }
@@ -34,7 +32,7 @@
     text-decoration: none;
     color: #333;
     font-weight: 500;
-    font-size: 15px;
+    font-size: 16px;
     transition: color 0.3s;
     padding: 4px 8px;
 }
@@ -63,7 +61,7 @@
     /* nếu muốn căn giữa ngang trong khung logo */
     cursor: pointer;
     transition: opacity 0.2s;
-    height: 36px;
+    height: 40px;
     /* đồng bộ chiều cao với avatar để canh giữa */
 }
 
@@ -72,7 +70,7 @@
 }
 
 .logo-smart-survey {
-    height: 36px;
+    height: 40px;
     /* desktop */
     width: auto;
     object-fit: contain;
@@ -90,7 +88,6 @@
         /* mobile nhỏ hơn */
     }
 }
-
 
 .logo-icon {
     width: 40px;
@@ -118,13 +115,13 @@
 .user-info {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     position: relative;
 }
 
 .user-avatar {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     border-radius: 50%;
     display: flex;
@@ -132,7 +129,7 @@
     justify-content: center;
     color: white;
     font-weight: 600;
-    font-size: 16px;
+    font-size: 18px;
     flex-shrink: 0;
     border: 2px solid white;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -146,7 +143,7 @@
 } */
 
 .username {
-    font-size: 14px;
+    font-size: 16px;
     color: #6c757d;
     font-weight: 500;
     margin-right: 4px;
@@ -274,3 +271,4 @@
         font-size: 13px;
     }
 }
+

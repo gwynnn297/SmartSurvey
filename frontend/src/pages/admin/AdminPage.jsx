@@ -5,8 +5,7 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import './AdminPage.css';
-import logoSmartSurvey from '../../assets/logoSmartSurvey.png';
-import { logout } from '../../services/authService';
+import HeaderComponent from '../../components/HeaderComponent';
 
 // Component Pagination riêng cho Admin
 const AdminPagination = ({ currentPage, totalPages, totalElements, pageSize, onPageChange }) => {
@@ -63,7 +62,7 @@ const AdminPagination = ({ currentPage, totalPages, totalElements, pageSize, onP
   if (totalPages <= 1) {
     return (
       <div className="admin-pagination">
-        <div className="pagination-info-text">
+        <div className="admin-pagination-info-text">
           Hiển thị {startRecord} - {endRecord} trong tổng số {totalElements} bản ghi
         </div>
       </div>
@@ -72,15 +71,15 @@ const AdminPagination = ({ currentPage, totalPages, totalElements, pageSize, onP
 
   return (
     <div className="admin-pagination">
-      <div className="pagination-left">
-        <div className="pagination-info-text">
+      <div className="admin-pagination-left">
+        <div className="admin-pagination-info-text">
           Hiển thị <strong>{startRecord}</strong> - <strong>{endRecord}</strong> trong tổng số <strong>{totalElements}</strong> bản ghi
         </div>
       </div>
 
-      <div className="pagination-center">
+      <div className="admin-pagination-center">
         <button
-          className="pagination-btn pagination-btn-icon"
+          className="admin-pagination-btn admin-pagination-btn-icon"
           onClick={() => onPageChange(0)}
           disabled={currentPage === 0}
           title="Trang đầu"
@@ -89,7 +88,7 @@ const AdminPagination = ({ currentPage, totalPages, totalElements, pageSize, onP
         </button>
 
         <button
-          className="pagination-btn pagination-btn-icon"
+          className="admin-pagination-btn admin-pagination-btn-icon"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 0}
           title="Trang trước"
@@ -100,7 +99,7 @@ const AdminPagination = ({ currentPage, totalPages, totalElements, pageSize, onP
         {getPageNumbers().map((pageNum, index) => {
           if (pageNum === '...') {
             return (
-              <span key={`ellipsis-${index}`} className="pagination-ellipsis">
+              <span key={`ellipsis-${index}`} className="admin-pagination-ellipsis">
                 ...
               </span>
             );
@@ -109,7 +108,7 @@ const AdminPagination = ({ currentPage, totalPages, totalElements, pageSize, onP
           return (
             <button
               key={pageNum}
-              className={`pagination-btn pagination-btn-number ${currentPage === pageNum ? 'active' : ''}`}
+              className={`admin-pagination-btn admin-pagination-btn-number ${currentPage === pageNum ? 'active' : ''}`}
               onClick={() => onPageChange(pageNum)}
             >
               {pageNum + 1}
@@ -118,7 +117,7 @@ const AdminPagination = ({ currentPage, totalPages, totalElements, pageSize, onP
         })}
 
         <button
-          className="pagination-btn pagination-btn-icon"
+          className="admin-pagination-btn admin-pagination-btn-icon"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage >= totalPages - 1}
           title="Trang sau"
@@ -127,7 +126,7 @@ const AdminPagination = ({ currentPage, totalPages, totalElements, pageSize, onP
         </button>
 
         <button
-          className="pagination-btn pagination-btn-icon"
+          className="admin-pagination-btn admin-pagination-btn-icon"
           onClick={() => onPageChange(totalPages - 1)}
           disabled={currentPage >= totalPages - 1}
           title="Trang cuối"
@@ -136,8 +135,8 @@ const AdminPagination = ({ currentPage, totalPages, totalElements, pageSize, onP
         </button>
       </div>
 
-      <div className="pagination-right">
-        <div className="pagination-jump">
+      <div className="admin-pagination-right">
+        <div className="admin-pagination-jump">
           <span>Đi đến trang:</span>
           <input
             type="number"
@@ -147,10 +146,10 @@ const AdminPagination = ({ currentPage, totalPages, totalElements, pageSize, onP
             onChange={(e) => setJumpToPage(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleJumpToPage()}
             placeholder={currentPage + 1}
-            className="pagination-jump-input"
+            className="admin-pagination-jump-input"
           />
           <button
-            className="pagination-jump-btn"
+            className="admin-pagination-jump-btn"
             onClick={handleJumpToPage}
             disabled={!jumpToPage || jumpToPage < 1 || jumpToPage > totalPages}
           >
@@ -165,6 +164,29 @@ const AdminPagination = ({ currentPage, totalPages, totalElements, pageSize, onP
 const AdminPage = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // Helper: Lấy ngày hôm nay dạng YYYY-MM-DD
+  const getTodayDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
+  // Helper: Convert date string to ISO string với time đúng
+  const dateToISOString = (dateString, isEndDate = false) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    if (isEndDate) {
+      // Đặt time là 23:59:59.999 cho ngày kết thúc
+      date.setHours(23, 59, 59, 999);
+    } else {
+      // Đặt time là 00:00:00 cho ngày bắt đầu
+      date.setHours(0, 0, 0, 0);
+    }
+    return date.toISOString();
+  };
   
   // Dashboard state
   const [dashboard, setDashboard] = useState(null);
@@ -303,8 +325,20 @@ const AdminPage = () => {
     try {
       setLoadingSurveys(true);
       setError(null);
-      const dateFrom = surveyDateFrom ? new Date(surveyDateFrom).toISOString() : null;
-      const dateTo = surveyDateTo ? new Date(surveyDateTo).toISOString() : null;
+      // Validate và convert dates đúng cách
+      let dateFrom = null;
+      let dateTo = null;
+      if (surveyDateFrom) {
+        dateFrom = dateToISOString(surveyDateFrom, false);
+      }
+      if (surveyDateTo) {
+        dateTo = dateToISOString(surveyDateTo, true);
+      }
+      // Validate: dateFrom không được lớn hơn dateTo
+      if (dateFrom && dateTo && dateFrom > dateTo) {
+        setError('Ngày bắt đầu không được lớn hơn ngày kết thúc');
+        return;
+      }
       const data = await adminService.getSurveys(
         surveyPage,
         surveyPageSize,
@@ -332,8 +366,20 @@ const AdminPage = () => {
     try {
       setLoadingActivityLogs(true);
       setError(null);
-      const dateFrom = activityLogDateFrom ? new Date(activityLogDateFrom).toISOString() : null;
-      const dateTo = activityLogDateTo ? new Date(activityLogDateTo).toISOString() : null;
+      // Validate và convert dates đúng cách
+      let dateFrom = null;
+      let dateTo = null;
+      if (activityLogDateFrom) {
+        dateFrom = dateToISOString(activityLogDateFrom, false);
+      }
+      if (activityLogDateTo) {
+        dateTo = dateToISOString(activityLogDateTo, true);
+      }
+      // Validate: dateFrom không được lớn hơn dateTo
+      if (dateFrom && dateTo && dateFrom > dateTo) {
+        setError('Ngày bắt đầu không được lớn hơn ngày kết thúc');
+        return;
+      }
       const data = await adminService.getActivityLogs(
         activityLogPage,
         activityLogPageSize,
@@ -581,26 +627,6 @@ const AdminPage = () => {
   };
 
 
-  // Get user info for header
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const userDropdownRef = useRef(null);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target)) {
-        setShowUserDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
 
   // Calculate 24H activity count (from recent admin activities)
   const activity24HCount = dashboard?.recentAdminActivities 
@@ -623,12 +649,11 @@ const AdminPage = () => {
 
   return (
     <div className="admin-layout">
+      {/* Header Component */}
+      <HeaderComponent showUserInfo={true} />
+
       {/* Sidebar */}
       <aside className="admin-sidebar">
-        <div className="admin-sidebar-header">
-          <img src={logoSmartSurvey} alt="SmartSurvey" className="admin-logo" />
-          <span className="admin-panel-badge">Admin Panel</span>
-        </div>
         <nav className="admin-sidebar-nav">
           <button
             className={`admin-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
@@ -683,41 +708,9 @@ const AdminPage = () => {
 
       {/* Main Content */}
       <div className="admin-main-content">
-        {/* Top Header */}
-        <header className="admin-top-header">
-          <div className="admin-top-header-left">
-            {/* Logo area is in sidebar */}
-          </div>
-          <div className="admin-top-header-right">
-            <div className="admin-user-info" ref={userDropdownRef}>
-              <button 
-                className="admin-user-button"
-                onClick={() => setShowUserDropdown(!showUserDropdown)}
-              >
-                <div className="admin-user-avatar">
-                  {user.name ? user.name.charAt(0).toUpperCase() : 'A'}
-                </div>
-                <div className="admin-user-details">
-                  <span className="admin-user-name">{user.name || 'Admin'}</span>
-                  <span className="admin-user-role">Administrator</span>
-                </div>
-                <i className={`fa-solid fa-chevron-${showUserDropdown ? 'up' : 'down'}`}></i>
-              </button>
-              {showUserDropdown && (
-                <div className="admin-user-dropdown">
-                  <button onClick={handleLogout}>
-                    <i className="fa-solid fa-sign-out-alt"></i>
-                    Đăng xuất
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
-
         {/* Notification */}
         {notification && (
-          <div className={`notification ${notification.type}`}>
+          <div className={`admin-notification ${notification.type}`}>
             <i className={`fa-solid ${notification.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}`}></i>
             {notification.message}
           </div>
@@ -730,12 +723,12 @@ const AdminPage = () => {
         {activeTab === 'dashboard' && (
           <div className="admin-content">
             {loadingDashboard ? (
-              <div className="loading-container">
+              <div className="admin-loading-container">
                 <i className="fa-solid fa-spinner fa-spin"></i>
                 <p>Đang tải dashboard...</p>
               </div>
             ) : error ? (
-              <div className="error-container">
+              <div className="admin-error-container">
                 <i className="fa-solid fa-exclamation-triangle"></i>
                 <p>{error}</p>
               </div>
@@ -828,7 +821,7 @@ const AdminPage = () => {
                         </PieChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="chart-empty">
+                      <div className="admin-chart-empty">
                         <i className="fa-solid fa-inbox"></i>
                         <p>Không có dữ liệu</p>
                     </div>
@@ -873,7 +866,7 @@ const AdminPage = () => {
                         </PieChart>
                       </ResponsiveContainer>
                     ) : (
-                      <div className="chart-empty">
+                      <div className="admin-chart-empty">
                         <i className="fa-solid fa-inbox"></i>
                         <p>Không có dữ liệu</p>
                       </div>
@@ -882,22 +875,22 @@ const AdminPage = () => {
                 </div>
 
                 {/* Recent Activities */}
-                  <div className="activities-section">
+                  <div className="admin-activities-section">
                   <h2>
                     <i className="fa-solid fa-clock-rotate-left"></i>
                     Hoạt động Admin gần đây
                   </h2>
                   {dashboard.recentAdminActivities && dashboard.recentAdminActivities.length > 0 ? (
-                    <div className="activities-list">
+                    <div className="admin-activities-list">
                       {dashboard.recentAdminActivities.map((activity) => (
-                        <div key={activity.notificationId} className="activity-item">
-                          <div className="activity-icon">
+                        <div key={activity.notificationId} className="admin-activity-item">
+                          <div className="admin-activity-icon">
                             <i className="fa-solid fa-bell"></i>
                           </div>
-                          <div className="activity-content">
-                            <div className="activity-title">{activity.title}</div>
-                            <div className="activity-message">{activity.message}</div>
-                            <div className="activity-meta">
+                          <div className="admin-activity-content">
+                            <div className="admin-activity-title">{activity.title}</div>
+                            <div className="admin-activity-message">{activity.message}</div>
+                            <div className="admin-activity-meta">
                               <span>User: {activity.userName} ({activity.userEmail})</span>
                               <span>{new Date(activity.createdAt).toLocaleString('vi-VN')}</span>
                             </div>
@@ -906,7 +899,7 @@ const AdminPage = () => {
                       ))}
                     </div>
                   ) : (
-                    <div className="no-data">
+                    <div className="admin-no-data">
                       <i className="fa-solid fa-inbox"></i>
                       <p>Chưa có hoạt động nào</p>
                   </div>
@@ -914,7 +907,7 @@ const AdminPage = () => {
                 </div>
               </>
             ) : (
-              <div className="no-data">
+              <div className="admin-no-data">
                 <i className="fa-solid fa-inbox"></i>
                 <p>Không có dữ liệu</p>
               </div>
@@ -925,13 +918,13 @@ const AdminPage = () => {
         {/* Users Tab */}
         {activeTab === 'users' && (
           <div className="admin-content">
-            <div className="users-header">
+            <div className="admin-users-header">
               <h2>
                 <i className="fa-solid fa-users"></i>
                 Quản lý Users
               </h2>
               <div style={{ display: 'flex', gap: '12px' }}>
-                <button className="btn-primary" onClick={() => setShowCreateUserModal(true)}>
+                <button className="admin-btn-primary" onClick={() => setShowCreateUserModal(true)}>
                   <i className="fa-solid fa-plus"></i>
                   Tạo User Mới
                 </button>
@@ -939,16 +932,16 @@ const AdminPage = () => {
             </div>
               
               {/* Filters */}
-            <div className="filters-section">
+            <div className="admin-filters-section">
                 <input
                   type="text"
-                className="search-input"
+                className="admin-search-input"
                   placeholder="Tìm kiếm theo tên hoặc email..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
                 <select
-                  className="filter-select"
+                  className="admin-filter-select"
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
                 >
@@ -958,7 +951,7 @@ const AdminPage = () => {
                   <option value="respondent">Respondent</option>
                 </select>
                 <select
-                className="filter-select"
+                className="admin-filter-select"
                   value={activeFilter === null ? '' : activeFilter.toString()}
                 onChange={(e) => setActiveFilter(e.target.value === '' ? null : e.target.value === 'true')}
               >
@@ -967,7 +960,7 @@ const AdminPage = () => {
                 <option value="false">Vô hiệu hóa</option>
               </select>
               <select
-                className="filter-select"
+                className="admin-filter-select"
                 value={pageSize}
                   onChange={(e) => {
                   setPageSize(Number(e.target.value));
@@ -984,16 +977,16 @@ const AdminPage = () => {
 
               {/* Users Table */}
               {loadingUsers ? (
-              <div className="loading-container">
+              <div className="admin-loading-container">
                 <i className="fa-solid fa-spinner fa-spin"></i>
                 <p>Đang tải danh sách users...</p>
               </div>
               ) : (
                 <>
-                <div className="user-info">
+                <div className="admin-user-count-info">
                   <strong>Tổng số users: {totalElements}</strong>
                   </div>
-                <div className="table-wrapper">
+                <div className="admin-table-wrapper">
                   <table className="admin-table">
                     <thead>
                       <tr>
@@ -1014,58 +1007,42 @@ const AdminPage = () => {
                             <td>{user.fullName}</td>
                             <td>{user.email}</td>
                             <td>
-                              {user.role === 'admin' ? (
-                                <span className="role-badge admin">Admin</span>
-                              ) : (
-                              <select
-                                className="role-select"
-                                  value={user.role}
-                                  onChange={(e) => {
-                                    adminService.updateUser(user.userId, null, e.target.value)
-                                      .then(() => {
-                                        showNotification('success', 'Đã cập nhật role');
-                                        loadUsers();
-                                      })
-                                      .catch(err => showNotification('error', err.response?.data?.message || 'Không thể cập nhật role'));
-                                  }}
-                                >
-                                <option value="creator">Creator</option>
-                                <option value="respondent">Respondent</option>
-                              </select>
-                              )}
+                              <span className={`admin-role-badge ${user.role === 'admin' ? 'admin' : user.role === 'creator' ? 'creator' : 'respondent'}`}>
+                                {getRoleLabel(user.role)}
+                              </span>
                             </td>
                             <td>
-                              <span className={`status-badge ${user.isActive ? 'active' : 'inactive'}`}>
+                              <span className={`admin-status-badge ${user.isActive ? 'active' : 'inactive'}`}>
                                 <i className={`fa-solid ${user.isActive ? 'fa-check-circle' : 'fa-times-circle'}`}></i>
                                 {user.isActive ? 'Hoạt động' : 'Vô hiệu hóa'}
                               </span>
                             </td>
                             <td>{new Date(user.createdAt).toLocaleDateString('vi-VN')}</td>
                             <td>
-                              <div className="action-buttons">
+                              <div className="admin-action-buttons">
                                 <button
-                                  className="btn-view"
+                                  className="admin-btn-view"
                                   onClick={() => handleViewUserDetail(user.userId)}
                                   title="Xem chi tiết"
                                 >
                                   <i className="fa-solid fa-eye"></i>
                                 </button>
                                   <button
-                                  className="btn-edit"
+                                  className="admin-btn-edit"
                                   onClick={() => handleEditUser(user)}
                                   title="Chỉnh sửa"
                                 >
                                   <i className="fa-solid fa-edit"></i>
                                 </button>
                                 <button
-                                  className={`btn-status ${user.isActive ? 'deactivate' : 'activate'}`}
+                                  className={`admin-btn-status ${user.isActive ? 'deactivate' : 'activate'}`}
                                   onClick={() => handleToggleUserStatus(user)}
                                   title={user.isActive ? 'Vô hiệu hóa' : 'Kích hoạt'}
                                 >
                                   <i className={`fa-solid ${user.isActive ? 'fa-ban' : 'fa-check'}`}></i>
                                 </button>
                                 <button
-                                    className="btn-delete"
+                                    className="admin-btn-delete"
                                   onClick={() => handleDeleteUser(user)}
                                   title="Xóa"
                                   disabled={user.role === 'admin'}
@@ -1078,7 +1055,7 @@ const AdminPage = () => {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="7" className="no-data">
+                          <td colSpan="7" className="admin-no-data">
                             <i className="fa-solid fa-inbox"></i>
                             <p>Không có dữ liệu</p>
                           </td>
@@ -1112,16 +1089,16 @@ const AdminPage = () => {
             </h2>
 
             {/* Filters */}
-            <div className="filters-section">
+            <div className="admin-filters-section">
               <input
                 type="text"
-                className="search-input"
+                className="admin-search-input"
                 placeholder="Tìm kiếm theo tiêu đề..."
                 value={surveySearch}
                 onChange={(e) => setSurveySearch(e.target.value)}
               />
               <select
-                className="filter-select"
+                className="admin-filter-select"
                 value={surveyStatusFilter}
                 onChange={(e) => setSurveyStatusFilter(e.target.value)}
               >
@@ -1132,27 +1109,44 @@ const AdminPage = () => {
               </select>
               <input
                 type="text"
-                className="filter-input"
+                className="admin-filter-input"
                 placeholder="User ID (tùy chọn)"
                 value={surveyUserIdFilter}
                 onChange={(e) => setSurveyUserIdFilter(e.target.value)}
               />
               <input
                 type="date"
-                className="filter-input"
+                className="admin-filter-input"
                 placeholder="Từ ngày"
+                max={getTodayDate()}
                 value={surveyDateFrom}
-                onChange={(e) => setSurveyDateFrom(e.target.value)}
+                onChange={(e) => {
+                  const newDateFrom = e.target.value;
+                  setSurveyDateFrom(newDateFrom);
+                  // Nếu dateFrom > dateTo, reset dateTo
+                  if (newDateFrom && surveyDateTo && newDateFrom > surveyDateTo) {
+                    setSurveyDateTo('');
+                  }
+                }}
               />
               <input
                 type="date"
-                className="filter-input"
+                className="admin-filter-input"
                 placeholder="Đến ngày"
+                max={getTodayDate()}
+                min={surveyDateFrom || undefined}
                 value={surveyDateTo}
-                onChange={(e) => setSurveyDateTo(e.target.value)}
+                onChange={(e) => {
+                  const newDateTo = e.target.value;
+                  setSurveyDateTo(newDateTo);
+                  // Nếu dateTo < dateFrom, reset dateFrom
+                  if (newDateTo && surveyDateFrom && newDateTo < surveyDateFrom) {
+                    setSurveyDateFrom('');
+                  }
+                }}
               />
               <select
-                className="filter-select"
+                className="admin-filter-select"
                 value={surveyPageSize}
                 onChange={(e) => {
                   setSurveyPageSize(Number(e.target.value));
@@ -1169,13 +1163,13 @@ const AdminPage = () => {
 
             {/* Surveys Table */}
             {loadingSurveys ? (
-              <div className="loading-container">
+              <div className="admin-loading-container">
                 <i className="fa-solid fa-spinner fa-spin"></i>
                 <p>Đang tải danh sách surveys...</p>
               </div>
             ) : (
               <>
-                <div className="table-wrapper">
+                <div className="admin-table-wrapper">
                   <table className="admin-table">
                     <thead>
                       <tr>
@@ -1196,7 +1190,7 @@ const AdminPage = () => {
                             <td>{survey.surveyId}</td>
                             <td>{survey.title}</td>
                             <td>
-                              <span className={`status-badge ${survey.status === 'published' ? 'published' : survey.status === 'archived' ? 'archived' : 'draft'}`}>
+                              <span className={`admin-status-badge ${survey.status === 'published' ? 'published' : survey.status === 'archived' ? 'archived' : 'draft'}`}>
                                 {getStatusLabel(survey.status)}
                               </span>
                             </td>
@@ -1205,9 +1199,9 @@ const AdminPage = () => {
                             <td>{survey.responseCount || 0}</td>
                             <td>{new Date(survey.createdAt).toLocaleDateString('vi-VN')}</td>
                             <td>
-                              <div className="action-buttons">
+                              <div className="admin-action-buttons">
                       <button
-                                  className="btn-view"
+                                  className="admin-btn-view"
                                   onClick={() => handleViewSurveyDetail(survey.surveyId)}
                                   title="Xem chi tiết"
                                 >
@@ -1216,7 +1210,7 @@ const AdminPage = () => {
                                 {editingStatusSurveyId === survey.surveyId ? (
                                   <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
                                     <select
-                                      className="status-select"
+                                      className="admin-status-select"
                                       style={{ fontSize: '12px', padding: '4px 8px', minWidth: '120px' }}
                                       defaultValue={survey.status}
                                       onChange={(e) => {
@@ -1233,7 +1227,7 @@ const AdminPage = () => {
                                       <option value="archived">Đã lưu trữ</option>
                                     </select>
                       <button
-                                      className="btn-secondary"
+                                      className="admin-btn-secondary"
                                       style={{ padding: '4px 8px', fontSize: '12px' }}
                                       onClick={() => setEditingStatusSurveyId(null)}
                                       title="Hủy"
@@ -1243,7 +1237,7 @@ const AdminPage = () => {
                     </div>
                                 ) : (
                                   <button
-                                    className="btn-edit"
+                                    className="admin-btn-edit"
                                     onClick={() => setEditingStatusSurveyId(survey.surveyId)}
                                     title="Chỉnh sửa trạng thái"
                                   >
@@ -1251,7 +1245,7 @@ const AdminPage = () => {
                                   </button>
                                 )}
                                 <button
-                                  className="btn-delete"
+                                  className="admin-btn-delete"
                                   onClick={() => handleDeleteSurvey(survey)}
                                   title="Xóa"
                                 >
@@ -1263,7 +1257,7 @@ const AdminPage = () => {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="8" className="no-data">
+                          <td colSpan="8" className="admin-no-data">
                             <i className="fa-solid fa-inbox"></i>
                             <p>Không có dữ liệu</p>
                           </td>
@@ -1297,16 +1291,16 @@ const AdminPage = () => {
             </h2>
 
             {/* Filters */}
-            <div className="filters-section">
+            <div className="admin-filters-section">
               <input
                 type="text"
-                className="filter-input"
+                className="admin-filter-input"
                 placeholder="User ID (tùy chọn)"
                 value={activityLogUserIdFilter}
                 onChange={(e) => setActivityLogUserIdFilter(e.target.value)}
               />
               <select
-                className="filter-select"
+                className="admin-filter-select"
                 value={activityLogActionTypeFilter}
                 onChange={(e) => setActivityLogActionTypeFilter(e.target.value)}
               >
@@ -1338,20 +1332,37 @@ const AdminPage = () => {
               </select>
               <input
                 type="date"
-                className="filter-input"
+                className="admin-filter-input"
                 placeholder="Từ ngày"
+                max={getTodayDate()}
                 value={activityLogDateFrom}
-                onChange={(e) => setActivityLogDateFrom(e.target.value)}
+                onChange={(e) => {
+                  const newDateFrom = e.target.value;
+                  setActivityLogDateFrom(newDateFrom);
+                  // Nếu dateFrom > dateTo, reset dateTo
+                  if (newDateFrom && activityLogDateTo && newDateFrom > activityLogDateTo) {
+                    setActivityLogDateTo('');
+                  }
+                }}
               />
               <input
                 type="date"
-                className="filter-input"
+                className="admin-filter-input"
                 placeholder="Đến ngày"
+                max={getTodayDate()}
+                min={activityLogDateFrom || undefined}
                 value={activityLogDateTo}
-                onChange={(e) => setActivityLogDateTo(e.target.value)}
+                onChange={(e) => {
+                  const newDateTo = e.target.value;
+                  setActivityLogDateTo(newDateTo);
+                  // Nếu dateTo < dateFrom, reset dateFrom
+                  if (newDateTo && activityLogDateFrom && newDateTo < activityLogDateFrom) {
+                    setActivityLogDateFrom('');
+                  }
+                }}
               />
               <select
-                className="filter-select"
+                className="admin-filter-select"
                 value={activityLogPageSize}
                 onChange={(e) => {
                   setActivityLogPageSize(Number(e.target.value));
@@ -1368,13 +1379,13 @@ const AdminPage = () => {
 
             {/* Activity Logs Table */}
             {loadingActivityLogs ? (
-              <div className="loading-container">
+              <div className="admin-loading-container">
                 <i className="fa-solid fa-spinner fa-spin"></i>
                 <p>Đang tải danh sách activity logs...</p>
               </div>
             ) : (
               <>
-                <div className="table-wrapper">
+                <div className="admin-table-wrapper">
                   <table className="admin-table">
                     <thead>
                       <tr>
@@ -1397,7 +1408,7 @@ const AdminPage = () => {
                               {log.userEmail && ` (${log.userEmail})`}
                             </td>
                             <td>
-                              <span className="action-type-badge">
+                              <span className="admin-action-type-badge">
                                 {log.actionType}
                               </span>
                             </td>
@@ -1409,7 +1420,7 @@ const AdminPage = () => {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="7" className="no-data">
+                          <td colSpan="7" className="admin-no-data">
                             <i className="fa-solid fa-inbox"></i>
                             <p>Không có dữ liệu</p>
                           </td>
@@ -1436,41 +1447,41 @@ const AdminPage = () => {
 
         {/* User Detail Modal */}
         {showUserDetailModal && selectedUser && (
-          <div className="modal-overlay" onClick={() => setShowUserDetailModal(false)}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
+          <div className="admin-modal-overlay" onClick={() => setShowUserDetailModal(false)}>
+            <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="admin-modal-header">
                 <h2>Chi tiết User</h2>
-                <button className="modal-close" onClick={() => setShowUserDetailModal(false)}>
+                <button className="admin-modal-close" onClick={() => setShowUserDetailModal(false)}>
                   <i className="fa-solid fa-times"></i>
                 </button>
               </div>
-              <div className="modal-body">
-                <div className="detail-section">
+              <div className="admin-modal-body">
+                <div className="admin-detail-section">
                   <h3>Thông tin cơ bản</h3>
-                  <div className="detail-grid">
-                    <div className="detail-item">
+                  <div className="admin-detail-grid">
+                    <div className="admin-detail-item">
                       <label>ID:</label>
                       <span>{selectedUser.userId}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Tên:</label>
                       <span>{selectedUser.fullName}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Email:</label>
                       <span>{selectedUser.email}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Role:</label>
                       <span>{getRoleLabel(selectedUser.role)}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Trạng thái:</label>
                       <span className={selectedUser.isActive ? 'active' : 'inactive'}>
                         {selectedUser.isActive ? 'Hoạt động' : 'Vô hiệu hóa'}
                       </span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Ngày tạo:</label>
                       <span>{new Date(selectedUser.createdAt).toLocaleString('vi-VN')}</span>
                     </div>
@@ -1478,18 +1489,18 @@ const AdminPage = () => {
                 </div>
 
                 {selectedUser.profile && (
-                  <div className="detail-section">
+                  <div className="admin-detail-section">
                     <h3>Profile</h3>
-                    <div className="detail-grid">
-                      <div className="detail-item">
+                    <div className="admin-detail-grid">
+                      <div className="admin-detail-item">
                         <label>Giới tính:</label>
                         <span>{selectedUser.profile.gender || 'N/A'}</span>
                       </div>
-                      <div className="detail-item">
+                      <div className="admin-detail-item">
                         <label>Độ tuổi:</label>
                         <span>{selectedUser.profile.ageBand || 'N/A'}</span>
                       </div>
-                      <div className="detail-item">
+                      <div className="admin-detail-item">
                         <label>Khu vực:</label>
                         <span>{selectedUser.profile.region || 'N/A'}</span>
                       </div>
@@ -1497,18 +1508,18 @@ const AdminPage = () => {
                   </div>
                 )}
 
-                <div className="detail-section">
+                <div className="admin-detail-section">
                   <h3>Thống kê</h3>
-                  <div className="detail-grid">
-                    <div className="detail-item">
+                  <div className="admin-detail-grid">
+                    <div className="admin-detail-item">
                       <label>Số surveys đã tạo:</label>
                       <span>{selectedUser.surveysCount || 0}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Số responses đã tham gia:</label>
                       <span>{selectedUser.responsesCount || 0}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Lần đăng nhập cuối:</label>
                       <span>{selectedUser.lastLogin ? new Date(selectedUser.lastLogin).toLocaleString('vi-VN') : 'Chưa có'}</span>
                     </div>
@@ -1516,15 +1527,15 @@ const AdminPage = () => {
                 </div>
 
                 {selectedUser.recentAdminActivities && selectedUser.recentAdminActivities.length > 0 && (
-                  <div className="detail-section">
+                  <div className="admin-detail-section">
                     <h3>Lịch sử thay đổi bởi Admin</h3>
-                    <div className="activities-list">
+                    <div className="admin-activities-list">
                       {selectedUser.recentAdminActivities.map((activity) => (
-                        <div key={activity.notificationId} className="activity-item">
-                          <div className="activity-content">
-                            <div className="activity-title">{activity.title}</div>
-                            <div className="activity-message">{activity.message}</div>
-                            <div className="activity-meta">
+                        <div key={activity.notificationId} className="admin-activity-item">
+                          <div className="admin-activity-content">
+                            <div className="admin-activity-title">{activity.title}</div>
+                            <div className="admin-activity-message">{activity.message}</div>
+                            <div className="admin-activity-meta">
                               {new Date(activity.createdAt).toLocaleString('vi-VN')}
                             </div>
                           </div>
@@ -1535,15 +1546,15 @@ const AdminPage = () => {
                 )}
 
                 {selectedUser.recentUserActivities && selectedUser.recentUserActivities.length > 0 && (
-                  <div className="detail-section">
+                  <div className="admin-detail-section">
                     <h3>Hoạt động gần đây</h3>
-                    <div className="activities-list">
+                    <div className="admin-activities-list">
                       {selectedUser.recentUserActivities.map((activity) => (
-                        <div key={activity.logId} className="activity-item">
-                          <div className="activity-content">
-                            <div className="activity-title">{activity.actionType}</div>
-                            <div className="activity-message">{activity.description}</div>
-                            <div className="activity-meta">
+                        <div key={activity.logId} className="admin-activity-item">
+                          <div className="admin-activity-content">
+                            <div className="admin-activity-title">{activity.actionType}</div>
+                            <div className="admin-activity-message">{activity.description}</div>
+                            <div className="admin-activity-meta">
                               {new Date(activity.createdAt).toLocaleString('vi-VN')}
                             </div>
                           </div>
@@ -1553,8 +1564,8 @@ const AdminPage = () => {
                   </div>
                 )}
               </div>
-              <div className="modal-footer">
-                <button className="btn-secondary" onClick={() => setShowUserDetailModal(false)}>
+              <div className="admin-modal-footer">
+                <button className="admin-btn-secondary" onClick={() => setShowUserDetailModal(false)}>
                   Đóng
                 </button>
               </div>
@@ -1564,16 +1575,16 @@ const AdminPage = () => {
 
         {/* Edit User Modal */}
         {showEditUserModal && selectedUser && (
-          <div className="modal-overlay" onClick={() => setShowEditUserModal(false)}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
+          <div className="admin-modal-overlay" onClick={() => setShowEditUserModal(false)}>
+            <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="admin-modal-header">
                 <h2>Chỉnh sửa User</h2>
-                <button className="modal-close" onClick={() => setShowEditUserModal(false)}>
+                <button className="admin-modal-close" onClick={() => setShowEditUserModal(false)}>
                   <i className="fa-solid fa-times"></i>
                 </button>
               </div>
-              <div className="modal-body">
-                <div className="form-group">
+              <div className="admin-modal-body">
+                <div className="admin-form-group">
                   <label>Tên:</label>
                   <input
                     type="text"
@@ -1581,7 +1592,7 @@ const AdminPage = () => {
                     onChange={(e) => setEditUserForm({ ...editUserForm, fullName: e.target.value })}
                   />
                 </div>
-                <div className="form-group">
+                <div className="admin-form-group">
                   <label>Role:</label>
                   {selectedUser && selectedUser.role === 'admin' ? (
                     <input
@@ -1601,11 +1612,11 @@ const AdminPage = () => {
                   )}
                 </div>
               </div>
-              <div className="modal-footer">
-                <button className="btn-secondary" onClick={() => setShowEditUserModal(false)}>
+              <div className="admin-modal-footer">
+                <button className="admin-btn-secondary" onClick={() => setShowEditUserModal(false)}>
                   Hủy
                 </button>
-                <button className="btn-primary" onClick={handleUpdateUser}>
+                <button className="admin-btn-primary" onClick={handleUpdateUser}>
                   Lưu
                 </button>
               </div>
@@ -1615,16 +1626,16 @@ const AdminPage = () => {
 
         {/* Create User Modal */}
         {showCreateUserModal && (
-          <div className="modal-overlay" onClick={() => setShowCreateUserModal(false)}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
+          <div className="admin-modal-overlay" onClick={() => setShowCreateUserModal(false)}>
+            <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="admin-modal-header">
                 <h2>Tạo User Mới</h2>
-                <button className="modal-close" onClick={() => setShowCreateUserModal(false)}>
+                <button className="admin-modal-close" onClick={() => setShowCreateUserModal(false)}>
                   <i className="fa-solid fa-times"></i>
                 </button>
               </div>
-              <div className="modal-body">
-                <div className="form-group">
+              <div className="admin-modal-body">
+                <div className="admin-form-group">
                   <label>Họ tên: <span style={{ color: 'red' }}>*</span></label>
                   <input
                     type="text"
@@ -1633,7 +1644,7 @@ const AdminPage = () => {
                     placeholder="Nhập họ tên"
                   />
                 </div>
-                <div className="form-group">
+                <div className="admin-form-group">
                   <label>Email: <span style={{ color: 'red' }}>*</span></label>
                   <input
                     type="email"
@@ -1642,7 +1653,7 @@ const AdminPage = () => {
                     placeholder="Nhập email"
                   />
                 </div>
-                <div className="form-group">
+                <div className="admin-form-group">
                   <label>Mật khẩu: <span style={{ color: 'red' }}>*</span></label>
                   <input
                     type="password"
@@ -1651,7 +1662,7 @@ const AdminPage = () => {
                     placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)"
                   />
                 </div>
-                <div className="form-group">
+                <div className="admin-form-group">
                   <label>Role: <span style={{ color: 'red' }}>*</span></label>
                   <select
                     value={createUserForm.role}
@@ -1662,14 +1673,14 @@ const AdminPage = () => {
                   </select>
                 </div>
               </div>
-              <div className="modal-footer">
-                <button className="btn-secondary" onClick={() => {
+              <div className="admin-modal-footer">
+                <button className="admin-btn-secondary" onClick={() => {
                   setShowCreateUserModal(false);
                   setCreateUserForm({ fullName: '', email: '', password: '', role: 'creator' });
                 }}>
                   Hủy
                 </button>
-                <button className="btn-primary" onClick={handleCreateUser}>
+                <button className="admin-btn-primary" onClick={handleCreateUser}>
                   Tạo User
                 </button>
               </div>
@@ -1679,34 +1690,34 @@ const AdminPage = () => {
 
         {/* Toggle User Status Confirmation Modal */}
         {showToggleStatusConfirm && userToToggleStatus && (
-          <div className="modal-overlay" onClick={() => setShowToggleStatusConfirm(false)}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
+          <div className="admin-modal-overlay" onClick={() => setShowToggleStatusConfirm(false)}>
+            <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="admin-modal-header">
                 <h2>Xác nhận {userToToggleStatus.isActive ? 'vô hiệu hóa' : 'kích hoạt'} tài khoản</h2>
-                <button className="modal-close" onClick={() => setShowToggleStatusConfirm(false)}>
+                <button className="admin-modal-close" onClick={() => setShowToggleStatusConfirm(false)}>
                   <i className="fa-solid fa-times"></i>
                 </button>
               </div>
-              <div className="modal-body">
+              <div className="admin-modal-body">
                 <p>
                   Bạn có chắc chắn muốn {userToToggleStatus.isActive ? 'vô hiệu hóa' : 'kích hoạt'} tài khoản của user 
                   <strong> {userToToggleStatus.fullName}</strong> ({userToToggleStatus.email})?
                 </p>
                 {userToToggleStatus.isActive && (
-                  <p className="warning-text">
+                  <p className="admin-warning-text">
                     Tài khoản này sẽ không thể đăng nhập sau khi bị vô hiệu hóa!
                   </p>
                 )}
               </div>
-              <div className="modal-footer">
-                <button className="btn-secondary" onClick={() => {
+              <div className="admin-modal-footer">
+                <button className="admin-btn-secondary" onClick={() => {
                   setShowToggleStatusConfirm(false);
                   setUserToToggleStatus(null);
                 }}>
                   Hủy
                 </button>
                 <button 
-                  className={userToToggleStatus.isActive ? 'btn-danger' : 'btn-primary'} 
+                  className={userToToggleStatus.isActive ? 'admin-btn-danger' : 'admin-btn-primary'} 
                   onClick={confirmToggleUserStatus}
                 >
                   {userToToggleStatus.isActive ? 'Vô hiệu hóa' : 'Kích hoạt'}
@@ -1718,23 +1729,23 @@ const AdminPage = () => {
 
         {/* Delete User Confirmation Modal */}
         {showDeleteUserConfirm && userToDelete && (
-          <div className="modal-overlay" onClick={() => setShowDeleteUserConfirm(false)}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
+          <div className="admin-modal-overlay" onClick={() => setShowDeleteUserConfirm(false)}>
+            <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="admin-modal-header">
                 <h2>Xác nhận xóa User</h2>
-                <button className="modal-close" onClick={() => setShowDeleteUserConfirm(false)}>
+                <button className="admin-modal-close" onClick={() => setShowDeleteUserConfirm(false)}>
                   <i className="fa-solid fa-times"></i>
                 </button>
               </div>
-              <div className="modal-body">
+              <div className="admin-modal-body">
                 <p>Bạn có chắc chắn muốn xóa user <strong>{userToDelete.fullName}</strong> ({userToDelete.email})?</p>
-                <p className="warning-text">Hành động này không thể hoàn tác!</p>
+                <p className="admin-warning-text">Hành động này không thể hoàn tác!</p>
               </div>
-              <div className="modal-footer">
-                <button className="btn-secondary" onClick={() => setShowDeleteUserConfirm(false)}>
+              <div className="admin-modal-footer">
+                <button className="admin-btn-secondary" onClick={() => setShowDeleteUserConfirm(false)}>
                   Hủy
                 </button>
-                <button className="btn-danger" onClick={confirmDeleteUser}>
+                <button className="admin-btn-danger" onClick={confirmDeleteUser}>
                   Xóa
                 </button>
               </div>
@@ -1744,83 +1755,83 @@ const AdminPage = () => {
 
         {/* Survey Detail Modal */}
         {showSurveyDetailModal && selectedSurvey && (
-          <div className="modal-overlay" onClick={() => setShowSurveyDetailModal(false)}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
+          <div className="admin-modal-overlay" onClick={() => setShowSurveyDetailModal(false)}>
+            <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="admin-modal-header">
                 <h2>Chi tiết Survey</h2>
-                <button className="modal-close" onClick={() => setShowSurveyDetailModal(false)}>
+                <button className="admin-modal-close" onClick={() => setShowSurveyDetailModal(false)}>
                   <i className="fa-solid fa-times"></i>
                 </button>
               </div>
-              <div className="modal-body">
-                <div className="detail-section">
+              <div className="admin-modal-body">
+                <div className="admin-detail-section">
                   <h3>Thông tin cơ bản</h3>
-                  <div className="detail-grid">
-                    <div className="detail-item">
+                  <div className="admin-detail-grid">
+                    <div className="admin-detail-item">
                       <label>ID:</label>
                       <span>{selectedSurvey.surveyId}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Tiêu đề:</label>
                       <span>{selectedSurvey.title}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Mô tả:</label>
                       <span>{selectedSurvey.description || 'N/A'}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Trạng thái:</label>
                       <span>{getStatusLabel(selectedSurvey.status)}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Category:</label>
                       <span>{selectedSurvey.categoryName || 'N/A'}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="detail-section">
+                <div className="admin-detail-section">
                   <h3>Người tạo</h3>
-                  <div className="detail-grid">
-                    <div className="detail-item">
+                  <div className="admin-detail-grid">
+                    <div className="admin-detail-item">
                       <label>Tên:</label>
                       <span>{selectedSurvey.creatorName}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Email:</label>
                       <span>{selectedSurvey.creatorEmail}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="detail-section">
+                <div className="admin-detail-section">
                   <h3>Thống kê</h3>
-                  <div className="detail-grid">
-                    <div className="detail-item">
+                  <div className="admin-detail-grid">
+                    <div className="admin-detail-item">
                       <label>Số câu hỏi:</label>
                       <span>{selectedSurvey.questionCount || 0}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Số responses:</label>
                       <span>{selectedSurvey.responseCount || 0}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Số lượt xem:</label>
                       <span>{selectedSurvey.viewCount || 0}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Ngày tạo:</label>
                       <span>{new Date(selectedSurvey.createdAt).toLocaleString('vi-VN')}</span>
                     </div>
-                    <div className="detail-item">
+                    <div className="admin-detail-item">
                       <label>Ngày cập nhật:</label>
                       <span>{new Date(selectedSurvey.updatedAt).toLocaleString('vi-VN')}</span>
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="modal-footer">
-                <button className="btn-secondary" onClick={() => setShowSurveyDetailModal(false)}>
+              <div className="admin-modal-footer">
+                <button className="admin-btn-secondary" onClick={() => setShowSurveyDetailModal(false)}>
                   Đóng
                 </button>
               </div>
@@ -1830,23 +1841,23 @@ const AdminPage = () => {
 
         {/* Delete Survey Confirmation Modal */}
         {showDeleteSurveyConfirm && surveyToDelete && (
-          <div className="modal-overlay" onClick={() => setShowDeleteSurveyConfirm(false)}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
+          <div className="admin-modal-overlay" onClick={() => setShowDeleteSurveyConfirm(false)}>
+            <div className="admin-modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="admin-modal-header">
                 <h2>Xác nhận xóa Survey</h2>
-                <button className="modal-close" onClick={() => setShowDeleteSurveyConfirm(false)}>
+                <button className="admin-modal-close" onClick={() => setShowDeleteSurveyConfirm(false)}>
                   <i className="fa-solid fa-times"></i>
                 </button>
               </div>
-              <div className="modal-body">
+              <div className="admin-modal-body">
                 <p>Bạn có chắc chắn muốn xóa survey <strong>{surveyToDelete.title}</strong>?</p>
-                <p className="warning-text">Hành động này không thể hoàn tác! Tất cả dữ liệu liên quan sẽ bị xóa.</p>
+                <p className="admin-warning-text">Hành động này không thể hoàn tác! Tất cả dữ liệu liên quan sẽ bị xóa.</p>
               </div>
-              <div className="modal-footer">
-                <button className="btn-secondary" onClick={() => setShowDeleteSurveyConfirm(false)}>
+              <div className="admin-modal-footer">
+                <button className="admin-btn-secondary" onClick={() => setShowDeleteSurveyConfirm(false)}>
                   Hủy
                 </button>
-                <button className="btn-danger" onClick={confirmDeleteSurvey}>
+                <button className="admin-btn-danger" onClick={confirmDeleteSurvey}>
                   Xóa
                 </button>
               </div>
@@ -1860,5 +1871,6 @@ const AdminPage = () => {
 };
 
 export default AdminPage;
+
 
 

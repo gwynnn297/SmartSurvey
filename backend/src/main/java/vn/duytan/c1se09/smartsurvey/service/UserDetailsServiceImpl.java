@@ -32,13 +32,13 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         System.out.println("=== UserDetailsServiceImpl.loadUserByUsername ===");
         System.out.println("Email: " + email);
         
-        // Tìm user theo email và trạng thái active
+        // Tìm user theo email (không filter theo isActive để có thể check sau trong AuthService)
         // Lưu ý: RoleEnum (role hệ thống - bảng users): admin, creator, respondent
         // SurveyPermissionRole (role trên survey - bảng team_members/survey_permissions): OWNER, EDITOR, ANALYST, VIEWER
         // Chỉ load role từ bảng users (RoleEnum), không liên quan đến team_members
         User user = null;
         try {
-            user = userRepository.findByEmailAndIsActive(email, true)
+            user = userRepository.findByEmail(email)
                     .orElseThrow(() -> new UsernameNotFoundException("User Not Found with email: " + email));
             
             System.out.println("User found: " + user.getEmail());

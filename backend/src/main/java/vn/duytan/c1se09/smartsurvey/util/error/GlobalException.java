@@ -3,6 +3,7 @@ package vn.duytan.c1se09.smartsurvey.util.error;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
@@ -17,13 +18,16 @@ import java.util.stream.Collectors;
 
 import jakarta.servlet.http.HttpServletRequest;
 import vn.duytan.c1se09.smartsurvey.domain.response.common.ErrorDTO;
+import vn.duytan.c1se09.smartsurvey.util.error.BusinessException;
 
 @RestControllerAdvice
 public class GlobalException {
     @ExceptionHandler(value = {
             UsernameNotFoundException.class,
             BadCredentialsException.class,
-            IdInvalidException.class
+            IdInvalidException.class,
+            DisabledException.class,
+            BusinessException.class
     })
     public ResponseEntity<ErrorDTO> handleException(Exception exception, HttpServletRequest request) {
         ErrorDTO body = ErrorDTO.builder()

@@ -1,6 +1,8 @@
 package vn.duytan.c1se09.smartsurvey.service;
 
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -17,6 +19,7 @@ import vn.duytan.c1se09.smartsurvey.util.constant.RoleEnum;
 import vn.duytan.c1se09.smartsurvey.domain.request.auth.LoginRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.auth.RegisterRequestDTO;
 import vn.duytan.c1se09.smartsurvey.domain.request.auth.ChangePasswordRequestDTO;
+import vn.duytan.c1se09.smartsurvey.util.error.BusinessException;
 
 /**
  * Service xử lý logic authentication
@@ -34,12 +37,12 @@ public class AuthService {
     public AuthResponseDTO registerUser(RegisterRequestDTO registerRequest) {
         // Kiểm tra email tồn tại
         if (userRepository.existsByEmail(registerRequest.getEmail())) {
-            throw new RuntimeException("Email đã được sử dụng: " + registerRequest.getEmail());
+            throw new BusinessException("Email đã được sử dụng: " + registerRequest.getEmail());
         }
 
         // Validate password
         if (!registerRequest.getPassword().equals(registerRequest.getConfirmPassword())) {
-            throw new RuntimeException("Mật khẩu xác nhận không khớp");
+            throw new BusinessException("Mật khẩu xác nhận không khớp");
         }
 
         // Tạo user mới
@@ -73,30 +76,43 @@ public class AuthService {
     }
 
     public AuthResponseDTO authenticateUser(LoginRequestDTO loginRequest) {
-        // Authentication
-        Authentication authentication = authenticationManager.authenticate(
+        // Tìm user theo email trước
+        User user = userRepository.findByEmail(loginRequest.getEmail())
+                .orElseThrow(() -> new BusinessException("Email hoặc mật khẩu không chính xác"));
+
+        // Kiểm tra isActive TRƯỚC khi authenticate để có thể throw exception rõ ràng
+        if (!user.getIsActive()) {
+            throw new BusinessException("Tài khoản của bạn đã bị vô hiệu hóa");
+        }
+
+        // Kiểm tra password thủ công trước để đảm bảo có thể throw exception rõ ràng
+        if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPasswordHash())) {
+            throw new BusinessException("Email hoặc mật khẩu không chính xác");
+        }
+
+        // Authentication (sau khi đã check isActive và password)
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         loginRequest.getEmail(),
                         loginRequest.getPassword()));
+        } catch (DisabledException e) {
+            // Nếu vẫn bị DisabledException (trường hợp hiếm), throw lại với message rõ ràng
+            throw new BusinessException("Tài khoản của bạn đã bị vô hiệu hóa");
+        } catch (BadCredentialsException e) {
+            throw new BusinessException("Email hoặc mật khẩu không chính xác");
+        }
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         // Lấy user details
         var userDetails = authentication.getPrincipal();
         if (!(userDetails instanceof org.springframework.security.core.userdetails.User)) {
-            throw new RuntimeException("Invalid user details");
+            throw new BusinessException("Invalid user details");
         }
 
         var springUser = (org.springframework.security.core.userdetails.User) userDetails;
-
-        // Tìm user trong database
-        User user = userRepository.findByEmail(springUser.getUsername())
-                .orElseThrow(() -> new RuntimeException("User không tồn tại"));
-
-        // Kiểm tra isActive
-        if (!user.getIsActive()) {
-            throw new RuntimeException("Tài khoản của bạn đã bị vô hiệu hóa");
-        }
 
         // Tạo JWT token với role
         String jwt = jwtUtils.generateJwtToken(authentication, user.getRole().name());
@@ -142,22 +158,22 @@ public class AuthService {
         User currentUser = getCurrentUser();
         System.out.println("Current user: " + (currentUser != null ? currentUser.getEmail() : "null"));
         if (currentUser == null) {
-            throw new RuntimeException("Không tìm thấy thông tin user");
+            throw new BusinessException("Không tìm thấy thông tin user");
         }
 
         // Kiểm tra mật khẩu hiện tại
         if (!passwordEncoder.matches(changePasswordRequest.getCurrentPassword(), currentUser.getPasswordHash())) {
-            throw new RuntimeException("Mật khẩu hiện tại không đúng");
+            throw new BusinessException("Mật khẩu hiện tại không đúng");
         }
 
         // Kiểm tra mật khẩu mới và xác nhận
         if (!changePasswordRequest.getNewPassword().equals(changePasswordRequest.getConfirmPassword())) {
-            throw new RuntimeException("Mật khẩu mới và xác nhận mật khẩu không khớp");
+            throw new BusinessException("Mật khẩu mới và xác nhận mật khẩu không khớp");
         }
 
         // Kiểm tra mật khẩu mới khác mật khẩu hiện tại
         if (passwordEncoder.matches(changePasswordRequest.getNewPassword(), currentUser.getPasswordHash())) {
-            throw new RuntimeException("Mật khẩu mới phải khác mật khẩu hiện tại");
+            throw new BusinessException("Mật khẩu mới phải khác mật khẩu hiện tại");
         }
 
         // Cập nhật mật khẩu mới
