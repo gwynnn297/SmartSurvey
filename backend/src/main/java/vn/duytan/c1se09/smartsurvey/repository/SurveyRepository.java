@@ -46,4 +46,23 @@ public interface SurveyRepository extends JpaRepository<Survey, Long> {
         ORDER BY s.createdAt DESC
         """)
     Page<Survey> findAccessibleSurveysByUser(@Param("user") User user, Pageable pageable);
+    
+    // NEW: Query methods cho admin với filtering và pagination
+    @Query("""
+        SELECT s FROM Survey s
+        WHERE (:search IS NULL OR LOWER(s.title) LIKE LOWER(CONCAT('%', :search, '%')))
+        AND (:status IS NULL OR s.status = :status)
+        AND (:userId IS NULL OR s.user.userId = :userId)
+        AND (:categoryId IS NULL OR s.category.categoryId = :categoryId)
+        AND (:dateFrom IS NULL OR s.createdAt >= :dateFrom)
+        AND (:dateTo IS NULL OR s.createdAt <= :dateTo)
+        ORDER BY s.createdAt DESC
+        """)
+    Page<Survey> findSurveysWithFilters(@Param("search") String search,
+                                        @Param("status") SurveyStatusEnum status,
+                                        @Param("userId") Long userId,
+                                        @Param("categoryId") Long categoryId,
+                                        @Param("dateFrom") java.time.LocalDateTime dateFrom,
+                                        @Param("dateTo") java.time.LocalDateTime dateTo,
+                                        Pageable pageable);
 }

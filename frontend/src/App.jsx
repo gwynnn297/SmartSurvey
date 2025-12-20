@@ -20,6 +20,7 @@ import ShareSurveyPage from "./pages/Survey/ShareSurveyPage";
 import ViewLinkSharePage from "./pages/Response/ViewLinkSharePage";
 import IndividualResponsesPage from "./pages/report/IndividualResponsesPage";
 import TeamManagementPage from "./pages/TeamManagement/TeamManagementPage";
+import AdminPage from "./pages/admin/AdminPage";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -160,6 +161,14 @@ function App() {
           element={
             <PrivateRoute>
               <TeamManagementPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <PrivateRoute>
+              <AdminPage />
             </PrivateRoute>
           }
         />

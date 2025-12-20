@@ -65,6 +65,10 @@ apiClient.interceptors.response.use(
         // Không xóa token cho các endpoint khác (có thể chưa implement)
       }
     }
+    
+    // Không xử lý 403 ở đây - để component tự xử lý
+    // 403 Forbidden nghĩa là user đã authenticated nhưng không có quyền
+    
     return Promise.reject(error);
   }
 );

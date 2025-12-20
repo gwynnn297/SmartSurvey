@@ -67,7 +67,13 @@ public class Notification {
         SURVEY_SHARED,            // Survey được share với bạn
         SURVEY_PERMISSION_CHANGED, // Quyền của bạn trên survey đã thay đổi
         NEW_RESPONSE,             // Có response mới cho survey của bạn
-        SURVEY_PUBLISHED          // Survey đã được publish
+        SURVEY_PUBLISHED,         // Survey đã được publish
+        // Admin notifications
+        ADMIN_UPDATE_USER_ROLE,   // Admin đã chỉnh sửa role của bạn
+        ADMIN_DELETE_USER,        // Admin đã xóa tài khoản của bạn
+        ADMIN_CREATE_USER,        // Admin đã tạo tài khoản cho bạn
+        ADMIN_DEACTIVATE_USER,    // Admin đã vô hiệu hóa tài khoản của bạn
+        ADMIN_ACTIVATE_USER       // Admin đã kích hoạt tài khoản của bạn
     }
 }
 

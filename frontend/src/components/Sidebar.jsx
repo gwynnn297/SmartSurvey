@@ -8,6 +8,10 @@ const Sidebar = () => {
     const location = useLocation();
     const [expandedSections, setExpandedSections] = useState({});
     const [showCreateModal, setShowCreateModal] = useState(false);
+    
+    // Check if user is admin
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const isAdmin = user.role === 'admin';
 
     const toggleSection = (section) => {
         setExpandedSections(prev => ({
@@ -87,6 +91,24 @@ const Sidebar = () => {
                         </div>
                     </div>
                 </div>
+
+                {isAdmin && (
+                    <div className="nav-item">
+                        <div
+                            className={`nav-link ${isActive('/admin') ? 'active' : ''}`}
+                            onClick={() => navigate('/admin')}
+                        >
+                            <div className="nav-icon">
+                                <i className="fa-solid fa-shield-halved" title="Quản Trị"></i>
+                            </div>
+                            <div className="nav-content">
+                                <div className="nav-title">
+                                    Quản Trị
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* <div className="nav-item">
                     <div

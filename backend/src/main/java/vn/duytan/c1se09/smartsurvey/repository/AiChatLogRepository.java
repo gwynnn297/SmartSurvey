@@ -47,4 +47,10 @@ public interface AiChatLogRepository extends JpaRepository<AiChatLog, Long> {
      */
     @Query("SELECT c FROM AiChatLog c WHERE c.surveyId = :surveyId ORDER BY c.createdAt DESC LIMIT :limit")
     List<AiChatLog> findLatestBySurveyId(@Param("surveyId") Long surveyId, @Param("limit") int limit);
+    
+    /**
+     * Find chat logs by user ID
+     */
+    @Query("SELECT c FROM AiChatLog c WHERE c.userId = :userId")
+    List<AiChatLog> findByUserId(@Param("userId") Long userId);
 }

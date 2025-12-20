@@ -31,7 +31,12 @@ const Login = () => {
                 localStorage.setItem('user', JSON.stringify(userInfo));
 
                 console.log('Login successful, token saved:', token);
-                navigate('/dashboard');
+                // Redirect admin to admin page, others to dashboard
+                if (data.role === 'admin') {
+                    navigate('/admin');
+                } else {
+                    navigate('/dashboard');
+                }
             } else {
                 console.warn('No token field in response. Raw data:', data);
                 setError('Đăng nhập thất bại: Không nhận được token từ server!');
@@ -44,13 +49,21 @@ const Login = () => {
                 err.response?.data?.error ||
                 err.message || '';
 
+            // Kiểm tra nếu là lỗi tài khoản bị vô hiệu hóa
+            const isAccountDeactivated = errorMessage.toLowerCase().includes('vô hiệu hóa') ||
+                errorMessage.toLowerCase().includes('bị vô hiệu hóa') ||
+                errorMessage.toLowerCase().includes('deactivated') ||
+                errorMessage.toLowerCase().includes('tài khoản của bạn đã bị vô hiệu hóa');
+
             // Kiểm tra nếu là lỗi sai tài khoản/mật khẩu
             const isBadCredentials = errorMessage.toLowerCase().includes('bad credentials') ||
                 errorMessage.toLowerCase().includes('sai thông tin đăng nhập') ||
                 errorMessage.toLowerCase().includes('tài khoản hoặc mật khẩu') ||
-                err.response?.status === 401;
+                (err.response?.status === 401 && !isAccountDeactivated);
 
-            if (isBadCredentials) {
+            if (isAccountDeactivated) {
+                setError('Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên để được hỗ trợ.');
+            } else if (isBadCredentials) {
                 setError('Email hoặc mật khẩu không chính xác!');
             } else if (err.response?.data?.message) {
                 setError(`Đăng nhập thất bại: ${err.response.data.message}`);

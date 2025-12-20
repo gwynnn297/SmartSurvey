@@ -94,10 +94,11 @@ public class ResponseController {
 	@GetMapping("/api/surveys/{surveyId}/responses/export")
 	@ApiMessage("Export responses CSV/Excel")
 	public ResponseEntity<byte[]> exportResponses(
-			@PathVariable Long surveyId,
+			@PathVariable ("surveyId") Long surveyId,
 			@RequestParam(name = "format", defaultValue = "csv") String format,
 			@RequestParam(name = "includeAnswers", defaultValue = "true") boolean includeAnswers,
-			ResponseFilterRequestDTO filter) throws IdInvalidException {
+			@ModelAttribute ResponseFilterRequestDTO filter
+		) throws IdInvalidException {
 		return responseService.exportResponses(surveyId, filter, format, includeAnswers);
 	}
 

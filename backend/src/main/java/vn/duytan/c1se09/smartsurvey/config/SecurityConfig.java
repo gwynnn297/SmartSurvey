@@ -90,6 +90,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/public/**").permitAll() // This should be before specific /api rules
                         .requestMatchers("/actuator/**").permitAll()
                         
+                        // Admin endpoints - CHỈ ADMIN MỚI TRUY CẬP ĐƯỢC
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        
                         // Authenticated endpoints
                         .requestMatchers("/auth/change-password", "/auth/me", "/auth/test-token").authenticated()
                         .requestMatchers("/api/users/**").authenticated()

@@ -13,7 +13,6 @@ import vn.duytan.c1se09.smartsurvey.service.StatisticsService;
 import vn.duytan.c1se09.smartsurvey.domain.response.statistics.SurveyQuestionCountsDTO;
 import vn.duytan.c1se09.smartsurvey.util.annotation.ApiMessage;
 import vn.duytan.c1se09.smartsurvey.util.error.IdInvalidException;
-
 import java.util.HashMap;
 import java.util.Map;
 

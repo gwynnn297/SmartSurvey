@@ -93,6 +93,11 @@ public class AuthService {
         User user = userRepository.findByEmail(springUser.getUsername())
                 .orElseThrow(() -> new RuntimeException("User không tồn tại"));
 
+        // Kiểm tra isActive
+        if (!user.getIsActive()) {
+            throw new RuntimeException("Tài khoản của bạn đã bị vô hiệu hóa");
+        }
+
         // Tạo JWT token với role
         String jwt = jwtUtils.generateJwtToken(authentication, user.getRole().name());
 

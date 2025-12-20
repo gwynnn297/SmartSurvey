@@ -55,13 +55,14 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         List<GrantedAuthority> authorities = new ArrayList<>();
         if (user.getRole() != null) {
             // Role từ bảng users (RoleEnum): admin, creator, respondent
-            String authority = "ROLE_" + user.getRole().name().toLowerCase();
+            // Spring Security yêu cầu uppercase: ROLE_ADMIN, ROLE_CREATOR, ROLE_RESPONDENT
+            String authority = "ROLE_" + user.getRole().name().toUpperCase();
             authorities.add(new SimpleGrantedAuthority(authority));
             System.out.println("Authority created: " + authority);
         } else {
             // Nếu không có role, thêm role mặc định
-            authorities.add(new SimpleGrantedAuthority("ROLE_creator"));
-            System.out.println("Authority created: ROLE_creator (default)");
+            authorities.add(new SimpleGrantedAuthority("ROLE_CREATOR"));
+            System.out.println("Authority created: ROLE_CREATOR (default)");
         }
 
         // Trả về UserDetails

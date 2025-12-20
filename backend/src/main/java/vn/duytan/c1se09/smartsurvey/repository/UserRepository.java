@@ -1,5 +1,7 @@
 package vn.duytan.c1se09.smartsurvey.repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -35,4 +37,18 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u WHERE u.createdAt BETWEEN :startDate AND :endDate")
     List<User> findUsersCreatedBetween(@Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate);
+    
+    // NEW: Query methods cho admin với filtering và pagination
+    @Query("""
+        SELECT u FROM User u 
+        WHERE (:search IS NULL OR LOWER(u.fullName) LIKE LOWER(CONCAT('%', :search, '%')) 
+               OR LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')))
+        AND (:role IS NULL OR u.role = :role)
+        AND (:isActive IS NULL OR u.isActive = :isActive)
+        ORDER BY u.createdAt DESC
+        """)
+    Page<User> findUsersWithFilters(@Param("search") String search,
+                                    @Param("role") RoleEnum role,
+                                    @Param("isActive") Boolean isActive,
+                                    Pageable pageable);
 }
