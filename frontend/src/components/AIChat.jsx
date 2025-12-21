@@ -19,6 +19,108 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
     const menuRef = useRef(null);
     const ingestionDoneRef = useRef(false);
 
+    // Hàm làm sạch response text để loại bỏ phần lặp lại và thừa
+    const cleanResponseText = (text) => {
+        if (!text || typeof text !== 'string') return text;
+
+        let cleaned = text.trim();
+
+        // Loại bỏ các đoạn text không cần thiết
+        cleaned = cleaned.replace(/hãy sửa bỏ những phần thừa khi trả lời chatbot/gi, '').trim();
+
+        // Pattern để nhận diện phần kết thúc
+        const endingPattern = /Tóm lại.*?phản hồi.*?trên\.?/gi;
+
+        // Bước 1: Loại bỏ các ending pattern bị lặp lại (chỉ giữ lại lần đầu tiên)
+        const endingMatches = [...cleaned.matchAll(new RegExp(endingPattern.source, 'gi'))];
+        if (endingMatches.length > 1) {
+            // Xóa tất cả các ending pattern trừ lần đầu tiên
+            let lastIndex = 0;
+            for (let i = 1; i < endingMatches.length; i++) {
+                const match = endingMatches[i];
+                cleaned = cleaned.substring(0, match.index) + cleaned.substring(match.index + match[0].length);
+                // Cập nhật lại indices cho các matches sau
+                for (let j = i + 1; j < endingMatches.length; j++) {
+                    endingMatches[j].index -= match[0].length;
+                }
+            }
+        }
+
+        // Bước 2: Loại bỏ các bullet points bị duplicate trong cùng một section
+        const lines = cleaned.split('\n');
+        const result = [];
+        const seenBullets = new Set();
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) {
+                // Khi gặp dòng trống, reset seenBullets để bắt đầu section mới
+                if (result.length > 0 && result[result.length - 1] !== '') {
+                    seenBullets.clear();
+                    result.push('');
+                }
+                continue;
+            }
+
+            const isBullet = /^[-•*]\s+/.test(line);
+            const isEnding = endingPattern.test(line);
+
+            if (isBullet) {
+                const bulletContent = line.replace(/^[-•*]\s+/, '').trim().toLowerCase();
+                if (!seenBullets.has(bulletContent)) {
+                    seenBullets.add(bulletContent);
+                    result.push(line);
+                }
+            } else if (isEnding) {
+                // Khi gặp ending pattern, reset và thêm ending (đã được xử lý ở bước 1 nên chỉ có 1 lần)
+                seenBullets.clear();
+                result.push(line);
+            } else {
+                // Dòng text thường - reset seenBullets khi có text không phải bullet
+                seenBullets.clear();
+                result.push(line);
+            }
+        }
+
+        cleaned = result.filter((line, idx) => {
+            // Loại bỏ các dòng trống liên tiếp
+            if (!line && idx > 0 && result[idx - 1] === '') return false;
+            return true;
+        }).join('\n').trim();
+
+        // Bước 3: Loại bỏ các đoạn text bị lặp lại hoàn toàn (tìm và xóa duplicate sections)
+        // Tìm các đoạn text từ 30 ký tự trở lên bị lặp lại
+        const minDupLength = 30;
+        let foundDuplicate = true;
+
+        while (foundDuplicate) {
+            foundDuplicate = false;
+            for (let len = Math.min(cleaned.length / 2, 200); len >= minDupLength && !foundDuplicate; len -= 5) {
+                for (let start = 0; start <= cleaned.length - len * 2 && !foundDuplicate; start += 5) {
+                    const section = cleaned.substring(start, start + len);
+                    const normalizedSection = section.toLowerCase().replace(/\s+/g, ' ').trim();
+
+                    if (normalizedSection.length < minDupLength) continue;
+
+                    // Tìm lần xuất hiện tiếp theo của section này
+                    const nextIndex = cleaned.toLowerCase().indexOf(normalizedSection, start + len);
+                    if (nextIndex !== -1 && nextIndex > start + len) {
+                        // Tìm thấy duplicate, loại bỏ lần xuất hiện thứ 2
+                        const actualSection = cleaned.substring(nextIndex, nextIndex + section.length);
+                        cleaned = cleaned.substring(0, nextIndex) + cleaned.substring(nextIndex + actualSection.length);
+                        foundDuplicate = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Loại bỏ khoảng trắng và dòng trống thừa
+        cleaned = cleaned.replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim();
+
+        return cleaned;
+    };
+
     // Ingest survey data vào RAG khi mở chat lần đầu
     const ingestSurveyData = async () => {
         if (!surveyId || ingestionDoneRef.current) return;
@@ -95,7 +197,7 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
                             {
                                 id: `a-${item.chatId || item.chat_id}`,
                                 type: 'ai',
-                                text: item.aiResponse || item.ai_response || '',
+                                text: cleanResponseText(item.aiResponse || item.ai_response || ''),
                                 timestamp: item.createdAt || item.created_at
                             }
                         ]);
@@ -151,10 +253,14 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
                 topK: 5
             });
 
+            // Làm sạch response text để loại bỏ phần lặp lại và thừa
+            const rawAnswerText = response.answer_text || 'Xin lỗi, không thể tạo phản hồi.';
+            const cleanedAnswerText = cleanResponseText(rawAnswerText);
+
             const aiMessage = {
                 id: `ai-${Date.now()}`,
                 type: 'ai',
-                text: response.answer_text || 'Xin lỗi, không thể tạo phản hồi.',
+                text: cleanedAnswerText,
                 timestamp: response.created_at || new Date().toISOString()
             };
 
@@ -255,7 +361,7 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
                 {
                     id: `a-${item.chat_id || item.chatId}`,
                     type: 'ai',
-                    text: item.ai_response || item.aiResponse || '',
+                    text: cleanResponseText(item.ai_response || item.aiResponse || ''),
                     timestamp: item.created_at || item.createdAt
                 }
             ]);

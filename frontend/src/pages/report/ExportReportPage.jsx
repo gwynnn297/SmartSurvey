@@ -91,7 +91,20 @@ const ExportReportPage = () => {
             } catch (error) {
                 console.error('Error loading preview stats:', error);
 
-                // Fallback: Lấy từ listResponses để có total count
+                // Kiểm tra nếu là lỗi quyền truy cập
+                if (error.isPermissionError || error.status === 403 ||
+                    (error.message && (error.message.includes('quyền') || error.message.includes('OWNER') || error.message.includes('ANALYST')))) {
+                    // Hiển thị thông báo lỗi quyền và không cho phép export
+                    const permissionErrorMessage = error.message || 'Bạn không có quyền xem báo cáo. Chỉ chủ sở hữu (OWNER) và phân tích viên (ANALYST) mới có quyền xem báo cáo.';
+                    setError(permissionErrorMessage);
+                    setPreviewStats(prev => ({
+                        ...prev,
+                        loading: false
+                    }));
+                    return; // Không fallback nếu là lỗi quyền
+                }
+
+                // Fallback: Lấy từ listResponses để có total count (chỉ khi không phải lỗi quyền)
                 try {
                     const responseData = await exportReportService.listResponses(surveyId, {
                         page: 0,
@@ -176,6 +189,12 @@ const ExportReportPage = () => {
     const handleExport = async () => {
         if (!selectedFormat || !surveyId) {
             setError('Vui lòng chọn định dạng xuất báo cáo');
+            return;
+        }
+
+        // Kiểm tra quyền trước khi export
+        if (error && (error.includes('quyền') || error.includes('OWNER') || error.includes('ANALYST'))) {
+            setError('Bạn không có quyền xuất báo cáo. Chỉ chủ sở hữu (OWNER) và phân tích viên (ANALYST) mới có quyền xem báo cáo.');
             return;
         }
 
@@ -541,11 +560,24 @@ const ExportReportPage = () => {
                     <p>{selectedFormat ? `Đã chọn định dạng: ${formats.find(f => f.id === selectedFormat)?.title}` : 'Vui lòng chọn định dạng báo cáo ở trên'}</p>
                     <button
                         className="btn-download"
-                        disabled={!selectedFormat || loading}
+                        disabled={!selectedFormat || loading || (error && (error.includes('quyền') || error.includes('OWNER') || error.includes('ANALYST')))}
                         onClick={handleExport}
                     >
                         {loading ? 'Đang xuất...' : 'Tải xuống ngay'}
                     </button>
+                    {error && (error.includes('quyền') || error.includes('OWNER') || error.includes('ANALYST')) && (
+                        <p style={{
+                            marginTop: '12px',
+                            padding: '8px 12px',
+                            background: '#fee2e2',
+                            border: '1px solid #ef4444',
+                            borderRadius: '6px',
+                            color: '#991b1b',
+                            fontSize: '14px'
+                        }}>
+                            ⚠️ Bạn không có quyền xuất báo cáo này
+                        </p>
+                    )}
                 </div>
             </div>
 
