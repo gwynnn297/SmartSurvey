@@ -99,7 +99,7 @@ export default function DashboardReportPage() {
             multipleChoice: questions.filter(q => q.question_type === 'multiple_choice').length,
             singleChoice: questions.filter(q => q.question_type === 'single_choice').length,
             openEnded: questions.filter(q => q.question_type === 'open_ended').length,
-            boolean: questions.filter(q => q.question_type === 'boolean_' || q.question_type === 'yes_no').length,
+            boolean: questions.filter(q => q.question_type === 'boolean' || q.question_type === 'yes_no').length,
             ranking: questions.filter(q => q.question_type === 'ranking').length,
             rating: questions.filter(q => q.question_type === 'rating').length,
             dateTime: questions.filter(q => q.question_type === 'date_time').length,
@@ -379,7 +379,7 @@ export default function DashboardReportPage() {
             'single_choice': 'Trắc nghiệm một lựa chọn',
             'open_ended': 'Câu hỏi mở',
             'rating': 'Đánh giá sao',
-            'boolean_': 'Đúng/Sai',
+            'boolean': 'Đúng/Sai',
             'ranking': 'Xếp hạng',
             'file_upload': 'Tải file',
             'date_time': 'Ngày/Giờ'
@@ -394,7 +394,7 @@ export default function DashboardReportPage() {
             'single_choice': 'purple',
             'open_ended': 'green',
             'rating': 'yellow',
-            'boolean_': 'blue',
+            'boolean': 'blue',
             'ranking': 'orange',
             'file_upload': 'red',
             'date_time': 'teal'
@@ -423,7 +423,7 @@ export default function DashboardReportPage() {
             case 'boolean_':
             case 'yes_no':
             case 'true_false':
-                return 'boolean_';
+                return 'boolean';
             case 'ranking':
             case 'rank':
                 return 'ranking';
@@ -448,7 +448,7 @@ export default function DashboardReportPage() {
             'single_choice',
             'open_ended',
             'rating',
-            'boolean_',
+            'boolean',
             'ranking',
             'file_upload',
             'date_time'
@@ -654,7 +654,7 @@ export default function DashboardReportPage() {
                                             'single_choice': surveyStats.singleChoice || 0,
                                             'open_ended': surveyStats.openEnded || 0,
                                             'rating': surveyStats.rating || 0,
-                                            'boolean_': surveyStats.boolean || 0,
+                                            'boolean': surveyStats.boolean || 0,
                                             'ranking': surveyStats.ranking || 0,
                                             'file_upload': surveyStats.fileUpload || 0,
                                             'date_time': surveyStats.dateTime || 0

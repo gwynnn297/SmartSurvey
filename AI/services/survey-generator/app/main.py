@@ -34,6 +34,10 @@ from .models.survey_schemas import (
     CATEGORY_MAPPING
 )
 from .core.gemini_client import create_gemini_client, GeminiClient
+from .core.openai_client import create_openai_client, OpenAIClient
+
+# Determine AI provider
+AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini").lower()
 
 def suggest_followups(q_text: str, q_type: str) -> list[str]:
     t = (q_type or "").lower()
@@ -57,9 +61,9 @@ PARALLEL_WORKERS = int(os.getenv("SURVEY_AI_WORKERS", "2"))
 SINGLE_TIMEOUT   = int(os.getenv("SURVEY_AI_SINGLE_TIMEOUT", "18"))
 MIN_SCORE        = int(os.getenv("SURVEY_AI_MIN_SCORE", "55"))
 
-def _gen_one_safe(client: GeminiClient, req: SurveyGenerationRequest, qtype: Optional[str]):
+def _gen_one_safe(client, req: SurveyGenerationRequest, qtype: Optional[str]):
+    """Generate one question safely - works with both Gemini and OpenAI clients"""
     try:
-        # Gọi generate_one_question với đúng signature
         result = client.generate_one_question(
             title=req.title,
             category=req.category_name or "general",
@@ -75,7 +79,7 @@ def _gen_one_safe(client: GeminiClient, req: SurveyGenerationRequest, qtype: Opt
         return {}
 
 
-def parallel_generate_exact_n(client: GeminiClient, req: SurveyGenerationRequest) -> list[dict]:
+def parallel_generate_exact_n(client, req: SurveyGenerationRequest) -> list[dict]:
     """Sinh đúng N câu bằng cách bắn nhiều request 1-câu song song theo 'waves' cho tới khi đủ."""
     N = int(req.number_of_questions)
     priorities = getattr(req, "question_type_priorities", None)
@@ -653,37 +657,66 @@ app.add_middleware(
 )
 
 
-# Global Gemini client
-_gemini_client: GeminiClient = None
+# Global AI client (Gemini or OpenAI)
+_ai_client = None
 
-def get_gemini_client() -> GeminiClient:
-    """Dependency để lấy Gemini client"""
-    global _gemini_client
-    if _gemini_client is None:
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise HTTPException(
-                status_code=500,
-                detail="Chưa cấu hình Gemini API key"
-            )
-        _gemini_client = create_gemini_client(api_key)
-    return _gemini_client
+def get_ai_client():
+    """Dependency để lấy AI client (Gemini hoặc OpenAI)"""
+    global _ai_client
+    if _ai_client is None:
+        provider = os.getenv("AI_PROVIDER", "gemini").lower()
+        
+        if provider == "openai":
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Chưa cấu hình OpenAI API key"
+                )
+            _ai_client = create_openai_client(api_key)
+            logger.info("✅ Sử dụng OpenAI API")
+        else:
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Chưa cấu hình Gemini API key"
+                )
+            _ai_client = create_gemini_client(api_key)
+            logger.info("✅ Sử dụng Gemini API")
+    
+    return _ai_client
+
+# Backward compatibility alias
+def get_gemini_client():
+    """Deprecated: Use get_ai_client() instead"""
+    return get_ai_client()
 
 @app.on_event("startup")
 async def startup_event():
+    """Khởi tạo các dịch vụ khi startup"""
     import logging
     logging.getLogger("app.core.gemini_client").setLevel(logging.DEBUG)
-    logging.getLogger().setLevel(logging.INFO)  # giữ INFO cho global, DEBUG riêng gemini_client
-
-    """Khởi tạo các dịch vụ khi startup"""
-    logger.info("Dịch vụ Tạo Khảo sát đang khởi động...")
+    logging.getLogger("app.core.openai_client").setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.INFO)
     
-    # Xác minh Gemini API key có sẵn
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        logger.warning("Chưa thiết lập biến môi trường GEMINI_API_KEY")
+    logger.info("🚀 Dịch vụ Tạo Khảo sát đang khởi động...")
+    
+    # Xác minh AI provider và API key
+    provider = os.getenv("AI_PROVIDER", "gemini").lower()
+    
+    if provider == "openai":
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            logger.warning("⚠️ Chưa thiết lập OPENAI_API_KEY")
+        else:
+            logger.info("✅ Sử dụng OpenAI API")
     else:
-        logger.info("Đã cấu hình thành công Gemini API key")
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            logger.warning("⚠️ Chưa thiết lập GEMINI_API_KEY")
+        else:
+            logger.info("✅ Sử dụng Gemini API")
 
 @app.get("/health")
 async def health_check():

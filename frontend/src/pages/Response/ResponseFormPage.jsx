@@ -84,7 +84,7 @@ const ResponseFormPage = ({ survey: surveyProp, mode = 'respondent', isView: isV
             type = choiceType === 'multiple' ? 'multiple-choice-multiple' : 'multiple-choice-single';
           } else if (backendType === 'single_choice') {
             type = 'multiple-choice-single';
-          } else if (backendType === 'boolean' || backendType === 'boolean_' || backendType === 'yes_no') {
+          } else if (backendType === 'boolean' || backendType === 'boolean' || backendType === 'yes_no') {
             type = 'boolean';
           } else if (backendType === 'rating') {
             type = 'rating-scale';

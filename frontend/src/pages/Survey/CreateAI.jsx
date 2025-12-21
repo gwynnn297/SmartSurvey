@@ -171,12 +171,13 @@ const normalizeQuestionData = (rawQuestion) => {
 
     if (normalizedType === 'boolean_' || normalizedType === 'yes_no') {
         const rawOptions = rawQuestion.options || [];
-        const mappedOptions = rawOptions.length >= 2
+        // Giữ nguyên options từ AI nếu có, không override thành Có/Không
+        const mappedOptions = rawOptions.length > 0
             ? rawOptions.map(opt => ({
                 id: opt?.id || `temp_option_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
                 option_text: opt?.option_text ?? opt?.optionText ?? opt?.text ?? ''
             }))
-            : createYesNoOptions();
+            : createYesNoOptions(); // Chỉ fallback khi không có options
         return {
             ...base,
             options: mappedOptions
@@ -637,16 +638,29 @@ export default function CreateAI() {
             if (aiResponse.success && (aiResponse.generated_survey || aiResponse.generatedSurvey)) {
                 // Map response từ backend về format frontend
                 const surveyData = aiResponse.generated_survey || aiResponse.generatedSurvey;
-                const mappedQuestions = surveyData.questions.map((q, index) => ({
-                    id: `temp_${Date.now()}_${index}`,
-                    question_text: q.question_text || q.questionText,
-                    question_type: mapTypeFromBackend(q.question_type || q.questionType),
-                    is_required: q.is_required ?? q.isRequired ?? true,
-                    options: q.options ? q.options.map((opt, optIndex) => ({
+                const mappedQuestions = surveyData.questions.map((q, index) => {
+                    const mappedType = mapTypeFromBackend(q.question_type || q.questionType);
+                    const mappedOptions = q.options ? q.options.map((opt, optIndex) => ({
                         id: `temp_option_${Date.now()}_${optIndex}`,
                         option_text: opt.option_text || opt.optionText
-                    })) : []
-                }));
+                    })) : [];
+
+                    console.log(`🔍 Q${index + 1} [${mappedType}]:`, {
+                        rawType: q.question_type || q.questionType,
+                        mappedType,
+                        hasOptions: !!q.options,
+                        optionsCount: mappedOptions.length,
+                        options: mappedOptions
+                    });
+
+                    return {
+                        id: `temp_${Date.now()}_${index}`,
+                        question_text: q.question_text || q.questionText,
+                        question_type: mappedType,
+                        is_required: q.is_required ?? q.isRequired ?? true,
+                        options: mappedOptions
+                    };
+                });
 
                 setQuestions(mappedQuestions);
                 console.log("✅ AI generated questions:", mappedQuestions);
@@ -776,97 +790,103 @@ export default function CreateAI() {
         setProgress(0);
     };
 
-  const handleAcceptAIResult = async () => {
-    console.log("✅ User accepted AI result, saving to database...");
+    const handleAcceptAIResult = async () => {
+        console.log("✅ User accepted AI result, saving to database...");
 
-    try {
-        setLoading(true);
+        try {
+            setLoading(true);
 
-        // Gọi API lưu survey sau khi user accept
-        const response = await fetch('http://localhost:8080/ai/save-accepted-survey', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify({
-            
-                title: aiPreviewData?.surveyTitle || form.title || 'AI Generated Survey',
+            // Gọi API lưu survey sau khi user accept
+            const response = await fetch('http://localhost:8080/ai/save-accepted-survey', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
 
-                description: aiPreviewData?.description || form.ai_context || 'Khảo sát được tạo bởi AI',
-                aiPrompt: aiPreviewData?.originalPrompt || form.ai_context || '',
+                    title: aiPreviewData?.surveyTitle || form.title || 'AI Generated Survey',
 
-               
-                categoryId: form.category_id ? Number(form.category_id) : null,
+                    description: aiPreviewData?.description || form.ai_context || 'Khảo sát được tạo bởi AI',
+                    aiPrompt: aiPreviewData?.originalPrompt || form.ai_context || '',
 
-                numberOfQuestions: aiGeneratedQuestions.length,
-                questionTypePriorities: form.question_type_priorities,
 
-              
-                aiGeneratedData: {
-                    success: aiPreviewData.success,
-                    message: aiPreviewData.message,
-                    survey_id: aiPreviewData.surveyId,
-                    generated_survey: aiPreviewData.generatedSurvey ? {
-                        title: aiPreviewData.generatedSurvey.title,
-                        description: aiPreviewData.generatedSurvey.description,
-                        questions: aiPreviewData.generatedSurvey.questions?.map(q => ({
-                            question_text: q.questionText || q.question_text,
-                            question_type: q.questionType || q.question_type,
-                            is_required: q.isRequired !== undefined
-                                ? q.isRequired
-                                : (q.is_required !== undefined ? q.is_required : true),
-                            display_order: q.displayOrder !== undefined
-                                ? q.displayOrder
-                                : q.display_order,
-                            options: q.options?.map(opt => ({
-                                option_text: opt.optionText || opt.option_text,
-                                display_order: opt.displayOrder !== undefined
-                                    ? opt.displayOrder
-                                    : opt.display_order
+                    categoryId: form.category_id ? Number(form.category_id) : null,
+
+                    numberOfQuestions: aiGeneratedQuestions.length,
+                    questionTypePriorities: form.question_type_priorities,
+
+
+                    aiGeneratedData: {
+                        success: aiPreviewData.success,
+                        message: aiPreviewData.message,
+                        survey_id: aiPreviewData.surveyId,
+                        generated_survey: aiPreviewData.generatedSurvey ? {
+                            title: aiPreviewData.generatedSurvey.title,
+                            description: aiPreviewData.generatedSurvey.description,
+                            questions: aiPreviewData.generatedSurvey.questions?.map(q => ({
+                                question_text: q.questionText || q.question_text,
+                                question_type: q.questionType || q.question_type,
+                                is_required: q.isRequired !== undefined
+                                    ? q.isRequired
+                                    : (q.is_required !== undefined ? q.is_required : true),
+                                display_order: q.displayOrder !== undefined
+                                    ? q.displayOrder
+                                    : q.display_order,
+                                options: q.options?.map(opt => ({
+                                    option_text: opt.optionText || opt.option_text,
+                                    display_order: opt.displayOrder !== undefined
+                                        ? opt.displayOrder
+                                        : opt.display_order
+                                }))
                             }))
-                        }))
-                    } : null
-                }
-            })
-        });
+                        } : null
+                    }
+                })
+            });
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Failed to save survey');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to save survey');
+            }
+
+            const result = await response.json();
+
+            const surveyId = result.surveyId ?? result.survey_id;
+
+            if (!surveyId) {
+                throw new Error('Backend không trả về surveyId');
+            }
+
+            setSavedSurveyId(surveyId);
+            setIsEditMode(true);
+
+
+            console.log("💾 Survey saved successfully:", result);
+
+            // Giữ nguyên luồng UI
+            const normalizedQuestions = aiGeneratedQuestions.map(q => {
+                console.log("🔍 Question before normalize:", q.question_type, "options:", q.options);
+                const normalized = normalizeQuestionData(q);
+                console.log("✅ Question after normalize:", normalized.question_type, "options:", normalized.options);
+                return normalized;
+            });
+            setQuestions(normalizedQuestions);
+            setShowAIPreviewModal(false);
+            setShowForm(false);
+
+            showNotification(
+                'success',
+                '✅ Đã lưu khảo sát thành công! Bạn có thể chỉnh sửa câu hỏi ngay bây giờ.'
+            );
+
+        } catch (error) {
+            console.error("❌ Error saving accepted survey:", error);
+            showNotification('error', '❌ Lỗi khi lưu khảo sát: ' + error.message);
+        } finally {
+            setLoading(false);
         }
-
-       const result = await response.json();
-
-const surveyId = result.surveyId ?? result.survey_id;
-
-if (!surveyId) {
-    throw new Error('Backend không trả về surveyId');
-}
-
-setSavedSurveyId(surveyId);
-setIsEditMode(true);
-
-
-        console.log("💾 Survey saved successfully:", result);
-
-        // Giữ nguyên luồng UI
-        setQuestions(aiGeneratedQuestions);
-        setShowAIPreviewModal(false);
-        setShowForm(false);
-
-        showNotification(
-            'success',
-            '✅ Đã lưu khảo sát thành công! Bạn có thể chỉnh sửa câu hỏi ngay bây giờ.'
-        );
-
-    } catch (error) {
-        console.error("❌ Error saving accepted survey:", error);
-        showNotification('error', '❌ Lỗi khi lưu khảo sát: ' + error.message);
-    } finally {
-        setLoading(false);
-    }
-};
+    };
 
 
     const handleRejectAIResult = () => {
@@ -1173,19 +1193,19 @@ setIsEditMode(true);
                 aiPrompt: form.ai_context
             };
 
-         
-if (!savedSurveyId) {
-    throw new Error('Survey chưa được khởi tạo. Vui lòng tạo khảo sát bằng AI trước.');
-}
 
-const surveyId = savedSurveyId;
+            if (!savedSurveyId) {
+                throw new Error('Survey chưa được khởi tạo. Vui lòng tạo khảo sát bằng AI trước.');
+            }
 
-console.log('🔄 Saving AI survey (draft):', surveyId, surveyPayload);
+            const surveyId = savedSurveyId;
 
-await surveyService.updateSurvey(surveyId, {
-    ...surveyPayload,
-    status: 'draft'
-});
+            console.log('🔄 Saving AI survey (draft):', surveyId, surveyPayload);
+
+            await surveyService.updateSurvey(surveyId, {
+                ...surveyPayload,
+                status: 'draft'
+            });
 
 
             setSavedSurveyId(surveyId);
@@ -1331,19 +1351,19 @@ await surveyService.updateSurvey(surveyId, {
 
         setLoading(true);
         try {
-if (!savedSurveyId) {
-    throw new Error('Survey chưa được khởi tạo. Vui lòng lưu khảo sát trước khi chia sẻ.');
-}
+            if (!savedSurveyId) {
+                throw new Error('Survey chưa được khởi tạo. Vui lòng lưu khảo sát trước khi chia sẻ.');
+            }
 
-const surveyId = savedSurveyId;
+            const surveyId = savedSurveyId;
 
-await surveyService.updateSurvey(surveyId, {
-    title: form.title,
-    description: form.description,
-    categoryId: form.category_id ? Number(form.category_id) : 1,
-    status: 'published',
-    aiPrompt: form.ai_context
-});
+            await surveyService.updateSurvey(surveyId, {
+                title: form.title,
+                description: form.description,
+                categoryId: form.category_id ? Number(form.category_id) : 1,
+                status: 'published',
+                aiPrompt: form.ai_context
+            });
 
 
             // Đồng bộ câu hỏi giống trong handleSaveSurvey
@@ -2160,17 +2180,21 @@ await surveyService.updateSurvey(surveyId, {
                                                         <span className="section-title">Tuỳ chỉnh nhãn</span>
                                                     </div>
                                                     <div className="options-list two-column">
-                                                        {activeQuestion.options?.map((opt, oIdx) => (
-                                                            <div key={opt.id || oIdx} className="option-item soft">
-                                                                <span className="option-index">{oIdx === 0 ? 'Yes' : 'No'}</span>
-                                                                <input
-                                                                    className={`option-input ${activeQuestionOptionError ? 'error' : ''}`}
-                                                                    value={opt.option_text}
-                                                                    onChange={(e) => handleOptionChange(activeQuestionIndex, oIdx, e.target.value)}
-                                                                    placeholder={oIdx === 0 ? 'Có' : 'Không'}
-                                                                />
-                                                            </div>
-                                                        ))}
+                                                        {(activeQuestion.options && activeQuestion.options.length > 0) ? (
+                                                            activeQuestion.options.map((opt, oIdx) => (
+                                                                <div key={opt.id || oIdx} className="option-item soft">
+                                                                    <span className="option-index">{oIdx === 0 ? 'Yes' : 'No'}</span>
+                                                                    <input
+                                                                        className={`option-input ${activeQuestionOptionError ? 'error' : ''}`}
+                                                                        value={opt.option_text}
+                                                                        onChange={(e) => handleOptionChange(activeQuestionIndex, oIdx, e.target.value)}
+                                                                        placeholder={oIdx === 0 ? 'Đúng' : 'Sai'}
+                                                                    />
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            <div className="empty-state">Không có lựa chọn. Vui lòng tạo lại câu hỏi.</div>
+                                                        )}
                                                     </div>
                                                     {activeQuestionOptionError && (
                                                         <p className="error-message">{activeQuestionOptionError}</p>

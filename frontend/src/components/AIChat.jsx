@@ -71,16 +71,16 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
             const response = await aiChatService.getChatHistory(surveyId, 20);
             if (response && response.chat_history) {
                 console.log('[AIChat] Chat history loaded:', response.chat_history);
-                
+
                 // Loại bỏ duplicates dựa trên chat_id
-                const uniqueHistory = response.chat_history.filter((item, index, self) => 
+                const uniqueHistory = response.chat_history.filter((item, index, self) =>
                     index === self.findIndex(t => (t.chat_id || t.chatId) === (item.chat_id || item.chatId))
                 );
                 console.log('[AIChat] Unique chat history:', uniqueHistory);
-                
+
                 // Cập nhật chatHistory cho sidebar
                 setChatHistory(uniqueHistory);
-                
+
                 // Chỉ format và update messages khi cần (lần đầu load hoặc reset)
                 if (updateMessages) {
                     const formattedMessages = uniqueHistory
@@ -235,14 +235,14 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
         const selectedIndex = chatHistory.findIndex(item =>
             (item.chat_id || item.chatId) === chatId
         );
-        
+
         // Loại bỏ duplicates dựa trên chat_id trước khi xử lý
         const uniqueHistory = chatHistory
             .slice(0, selectedIndex + 1)
-            .filter((item, index, self) => 
+            .filter((item, index, self) =>
                 index === self.findIndex(t => (t.chat_id || t.chatId) === (item.chat_id || item.chatId))
             );
-        
+
         const messagesToShow = uniqueHistory
             .sort((a, b) => new Date(a.created_at || a.createdAt) - new Date(b.created_at || b.createdAt))
             .flatMap(item => [
