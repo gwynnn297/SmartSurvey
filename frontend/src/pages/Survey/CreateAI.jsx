@@ -776,71 +776,98 @@ export default function CreateAI() {
         setProgress(0);
     };
 
-    const handleAcceptAIResult = async () => {
-        console.log("✅ User accepted AI result, saving to database...");
+  const handleAcceptAIResult = async () => {
+    console.log("✅ User accepted AI result, saving to database...");
 
-        try {
-            setLoading(true);
+    try {
+        setLoading(true);
 
-            // Gọi API lưu survey sau khi user accept
-            const response = await fetch('http://localhost:8080/ai/save-accepted-survey', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({
-                    // ✅ Map đúng field names như backend expect
-                    title: aiPreviewData?.surveyTitle || form.survey_name || 'AI Generated Survey',
-                    description: aiPreviewData?.description || form.ai_context || 'Khảo sát được tạo bởi AI',
-                    aiPrompt: aiPreviewData?.originalPrompt || form.ai_context || '',
-                    categoryId: form.category_id,
-                    numberOfQuestions: aiGeneratedQuestions.length,
-                    questionTypePriorities: form.question_type_priorities,
-                    // ✅ Convert camelCase to snake_case for backend DTO
-                    aiGeneratedData: {
-                        success: aiPreviewData.success,
-                        message: aiPreviewData.message,
-                        survey_id: aiPreviewData.surveyId,
-                        generated_survey: aiPreviewData.generatedSurvey ? {
-                            title: aiPreviewData.generatedSurvey.title,
-                            description: aiPreviewData.generatedSurvey.description,
-                            questions: aiPreviewData.generatedSurvey.questions?.map(q => ({
-                                question_text: q.questionText || q.question_text,
-                                question_type: q.questionType || q.question_type,
-                                is_required: q.isRequired !== undefined ? q.isRequired : (q.is_required !== undefined ? q.is_required : true),
-                                display_order: q.displayOrder !== undefined ? q.displayOrder : q.display_order,
-                                options: q.options?.map(opt => ({
-                                    option_text: opt.optionText || opt.option_text,
-                                    display_order: opt.displayOrder !== undefined ? opt.displayOrder : opt.display_order
-                                }))
+        // Gọi API lưu survey sau khi user accept
+        const response = await fetch('http://localhost:8080/ai/save-accepted-survey', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({
+            
+                title: aiPreviewData?.surveyTitle || form.title || 'AI Generated Survey',
+
+                description: aiPreviewData?.description || form.ai_context || 'Khảo sát được tạo bởi AI',
+                aiPrompt: aiPreviewData?.originalPrompt || form.ai_context || '',
+
+               
+                categoryId: form.category_id ? Number(form.category_id) : null,
+
+                numberOfQuestions: aiGeneratedQuestions.length,
+                questionTypePriorities: form.question_type_priorities,
+
+              
+                aiGeneratedData: {
+                    success: aiPreviewData.success,
+                    message: aiPreviewData.message,
+                    survey_id: aiPreviewData.surveyId,
+                    generated_survey: aiPreviewData.generatedSurvey ? {
+                        title: aiPreviewData.generatedSurvey.title,
+                        description: aiPreviewData.generatedSurvey.description,
+                        questions: aiPreviewData.generatedSurvey.questions?.map(q => ({
+                            question_text: q.questionText || q.question_text,
+                            question_type: q.questionType || q.question_type,
+                            is_required: q.isRequired !== undefined
+                                ? q.isRequired
+                                : (q.is_required !== undefined ? q.is_required : true),
+                            display_order: q.displayOrder !== undefined
+                                ? q.displayOrder
+                                : q.display_order,
+                            options: q.options?.map(opt => ({
+                                option_text: opt.optionText || opt.option_text,
+                                display_order: opt.displayOrder !== undefined
+                                    ? opt.displayOrder
+                                    : opt.display_order
                             }))
-                        } : null
-                    }
-                })
-            });
+                        }))
+                    } : null
+                }
+            })
+        });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to save survey');
-            }
-
-            const result = await response.json();
-            console.log("💾 Survey saved successfully:", result);
-
-            // Load questions vào editor
-            setQuestions(aiGeneratedQuestions);
-            setShowAIPreviewModal(false);
-            setShowForm(false);
-            showNotification('success', '✅ Đã lưu khảo sát thành công! Bạn có thể chỉnh sửa câu hỏi ngay bây giờ.');
-
-        } catch (error) {
-            console.error("❌ Error saving accepted survey:", error);
-            showNotification('error', '❌ Lỗi khi lưu khảo sát: ' + error.message);
-        } finally {
-            setLoading(false);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to save survey');
         }
-    };
+
+       const result = await response.json();
+
+const surveyId = result.surveyId ?? result.survey_id;
+
+if (!surveyId) {
+    throw new Error('Backend không trả về surveyId');
+}
+
+setSavedSurveyId(surveyId);
+setIsEditMode(true);
+
+
+        console.log("💾 Survey saved successfully:", result);
+
+        // Giữ nguyên luồng UI
+        setQuestions(aiGeneratedQuestions);
+        setShowAIPreviewModal(false);
+        setShowForm(false);
+
+        showNotification(
+            'success',
+            '✅ Đã lưu khảo sát thành công! Bạn có thể chỉnh sửa câu hỏi ngay bây giờ.'
+        );
+
+    } catch (error) {
+        console.error("❌ Error saving accepted survey:", error);
+        showNotification('error', '❌ Lỗi khi lưu khảo sát: ' + error.message);
+    } finally {
+        setLoading(false);
+    }
+};
+
 
     const handleRejectAIResult = () => {
         console.log("🔄 User rejected AI result, returning to prompt form");
@@ -1146,25 +1173,20 @@ export default function CreateAI() {
                 aiPrompt: form.ai_context
             };
 
-            let surveyId = savedSurveyId;
-            let savedSurvey;
+         
+if (!savedSurveyId) {
+    throw new Error('Survey chưa được khởi tạo. Vui lòng tạo khảo sát bằng AI trước.');
+}
 
-            if (surveyId) {
-                console.log('🔄 Updating AI survey:', surveyId, surveyPayload);
-                savedSurvey = await surveyService.updateSurvey(surveyId, {
-                    ...surveyPayload,
-                    status: 'draft'
-                });
-            } else {
-                console.log('🔄 Creating AI survey draft:', surveyPayload);
-                savedSurvey = await surveyService.createSurvey(surveyPayload);
-                if (!savedSurvey || !savedSurvey.id) {
-                    throw new Error('Không thể lưu khảo sát');
-                }
-                surveyId = savedSurvey.id;
-                // đưa survey về trạng thái draft
-                await surveyService.updateSurvey(surveyId, { status: 'draft' });
-            }
+const surveyId = savedSurveyId;
+
+console.log('🔄 Saving AI survey (draft):', surveyId, surveyPayload);
+
+await surveyService.updateSurvey(surveyId, {
+    ...surveyPayload,
+    status: 'draft'
+});
+
 
             setSavedSurveyId(surveyId);
             setIsEditMode(true);
@@ -1309,33 +1331,20 @@ export default function CreateAI() {
 
         setLoading(true);
         try {
-            let surveyId = savedSurveyId;
+if (!savedSurveyId) {
+    throw new Error('Survey chưa được khởi tạo. Vui lòng lưu khảo sát trước khi chia sẻ.');
+}
 
-            if (!surveyId) {
-                const payload = {
-                    title: form.title,
-                    description: form.description,
-                    categoryId: form.category_id ? Number(form.category_id) : 1,
-                    aiPrompt: form.ai_context
-                };
+const surveyId = savedSurveyId;
 
-                const savedSurvey = await surveyService.createSurvey(payload);
-                if (!savedSurvey || !savedSurvey.id) {
-                    throw new Error('Không thể tạo khảo sát. Vui lòng thử lại.');
-                }
+await surveyService.updateSurvey(surveyId, {
+    title: form.title,
+    description: form.description,
+    categoryId: form.category_id ? Number(form.category_id) : 1,
+    status: 'published',
+    aiPrompt: form.ai_context
+});
 
-                surveyId = savedSurvey.id;
-                setSavedSurveyId(surveyId);
-                setIsEditMode(true);
-            } else {
-                await surveyService.updateSurvey(surveyId, {
-                    title: form.title,
-                    description: form.description,
-                    categoryId: form.category_id ? Number(form.category_id) : 1,
-                    status: 'published',
-                    aiPrompt: form.ai_context
-                });
-            }
 
             // Đồng bộ câu hỏi giống trong handleSaveSurvey
             let existingQuestions = [];
