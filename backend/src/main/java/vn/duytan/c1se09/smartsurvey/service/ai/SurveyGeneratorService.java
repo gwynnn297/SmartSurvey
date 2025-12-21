@@ -111,12 +111,12 @@ public class SurveyGeneratorService {
         }
 
         // 4. Save to database
-        Survey savedSurvey = saveSurveyToDatabase(currentUser, category, request, aiResponse);
+       // Survey savedSurvey = saveSurveyToDatabase(currentUser, category, request, aiResponse);
 
-        log.info("✅ Saved accepted AI survey with ID: {}", savedSurvey.getSurveyId());
+       // log.info("✅ Saved accepted AI survey with ID: {}", savedSurvey.getSurveyId());
 
         // 5. Trả về response
-        aiResponse.setSurveyId(savedSurvey.getSurveyId());
+       // aiResponse.setSurveyId(savedSurvey.getSurveyId());
         return aiResponse;
     }
 
@@ -428,16 +428,16 @@ public class SurveyGeneratorService {
     /**
      * Lưu survey vào database
      */
-    private Survey saveSurveyToDatabase(User user, Category category,
-            SurveyGenerationRequestDTO request,
-            SurveyGenerationResponseDTO aiResponse) throws Exception {
-        try {
-            return surveyService.saveAiGeneratedSurvey(user, category, request, aiResponse);
-        } catch (Exception e) {
-            log.error("Error saving survey to database: {}", e.getMessage(), e);
-            throw new Exception("Lỗi khi lưu khảo sát vào database: " + e.getMessage());
-        }
-    }
+    // private Survey saveSurveyToDatabase(User user, Category category,
+    //         SurveyGenerationRequestDTO request,
+    //         SurveyGenerationResponseDTO aiResponse) throws Exception {
+    //     try {
+    //         return surveyService.saveAiGeneratedSurvey(user, category, request, aiResponse);
+    //     } catch (Exception e) {
+    //         log.error("Error saving survey to database: {}", e.getMessage(), e);
+    //         throw new Exception("Lỗi khi lưu khảo sát vào database: " + e.getMessage());
+    //     }
+    // }
 
     /**
      * Kiểm tra trạng thái AI service
