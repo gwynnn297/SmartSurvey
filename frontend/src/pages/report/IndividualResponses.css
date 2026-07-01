@@ -712,7 +712,9 @@
 }
 
 .file-name[data-file-type*="excel"]::before {
-    content: "📊";
+    content: "\f080";
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
 }
 
 .file-name[data-file-type*="zip"]::before {

@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import { individualResponseService } from '../../services/individualResponseService';
 import { surveyService } from '../../services/surveyService';
 import { questionService, optionService } from '../../services/questionSurvey';
 import ToolbarResult from '../../components/ToolbarResult';
 import AIChat, { AIChatButton } from '../../components/AIChat';
+import { teamManagementService } from '../../services/teamManagementService';
+import { dashboardReportService } from '../../services/dashboardReportService';
 import './IndividualResponses.css';
 
 const IndividualResponsesPage = () => {
     const location = useLocation();
+    const navigate = useNavigate();
     const [showAIChat, setShowAIChat] = useState(false);
 
     // Lấy surveyId từ location.state
@@ -172,6 +175,22 @@ const IndividualResponsesPage = () => {
 
         return 'Chưa trả lời';
     };
+
+    // Kiểm tra quyền xem danh sách phản hồi (Chỉ OWNER và ANALYST)
+    useEffect(() => {
+        if (!surveyId) return;
+        const checkPermission = async () => {
+            try {
+                await dashboardReportService.getSurveyOverview(surveyId);
+            } catch (err) {
+                if (err.response?.status === 403) {
+                    alert('Bạn không có quyền xem danh sách phản hồi. Chỉ OWNER và ANALYST mới có quyền.');
+                    navigate('/dashboard');
+                }
+            }
+        };
+        checkPermission();
+    }, [surveyId, navigate]);
 
     // Reset khi surveyId thay đổi
     useEffect(() => {

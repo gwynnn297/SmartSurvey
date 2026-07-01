@@ -4,6 +4,8 @@ import MainLayout from '../../layouts/MainLayout';
 import { surveyService } from '../../services/surveyService';
 import { questionService, optionService } from '../../services/questionSurvey';
 import { aiSurveyService } from '../../services/aiSurveyService';
+import { teamManagementService } from '../../services/teamManagementService';
+import { dashboardReportService } from '../../services/dashboardReportService';
 import NotificationModal from '../../components/NotificationModal';
 import AddUserSurvey from '../../components/AddUserSurvey';
 import AIChat, { AIChatButton } from '../../components/AIChat';
@@ -727,6 +729,7 @@ const CreateSurvey = () => {
     const [notification, setNotification] = useState(null); // State để quản lý notification
     const [showInviteModal, setShowInviteModal] = useState(false);
     const [showAIChat, setShowAIChat] = useState(false);
+    const [checkingPermission, setCheckingPermission] = useState(false);
 
     const [surveyData, setSurveyData] = useState({
         title: '',
@@ -2032,6 +2035,30 @@ const CreateSurvey = () => {
                 return;
             }
 
+            // Gọi API kiểm tra quyền trước khi chuyển trang
+            setCheckingPermission(true);
+            let hasPermission = false;
+            try {
+                // Gọi API overview để mượn logic phân quyền của backend (StatisticsService)
+                // Backend sẽ ném lỗi 403 nếu user (không phải OWNER, không phải ANALYST) cố truy cập
+                await dashboardReportService.getSurveyOverview(editSurveyId);
+                hasPermission = true;
+            } catch (err) {
+                if (err.response?.status === 403) {
+                    hasPermission = false;
+                } else {
+                    hasPermission = true; // Lỗi khác (vd server lỗi) cho qua để trang report hiện lỗi
+                }
+            } finally {
+                setCheckingPermission(false);
+            }
+
+            // Chặn nếu không đủ quyền
+            if (hasPermission === false) {
+                showNotification('error', 'Bạn không có quyền xem báo cáo. Chỉ OWNER và ANALYST mới có quyền.');
+                return;
+            }
+
             // Lưu survey trước (nếu chưa có)
             let surveyId = editSurveyId;
             if (surveyId.toString().startsWith('temp_')) {
@@ -2226,7 +2253,7 @@ const CreateSurvey = () => {
                                 >
                                     <div className="refresh-type-label">{type.label}</div>
                                     {selectedRefreshType === type.value && (
-                                        <div className="refresh-type-check">✓</div>
+                                        <div className="refresh-type-check"><i className="fa-solid fa-check"></i></div>
                                     )}
                                 </button>
                             ))}
@@ -2362,7 +2389,7 @@ const CreateSurvey = () => {
                             className="btn-report"
                             type="button"
                             onClick={handleReport}
-                            disabled={loading || !editSurveyId || surveyData.status === 'draft'}
+                            disabled={loading || checkingPermission || !editSurveyId || surveyData.status === 'draft'}
                             title={
                                 !editSurveyId
                                     ? "Cần lưu khảo sát trước khi xem báo cáo"
@@ -2371,8 +2398,12 @@ const CreateSurvey = () => {
                                         : "Xem báo cáo phân tích"
                             }
                         >
-                            <i className="fa-solid fa-file-lines" aria-hidden="true"></i>
-                            <span> Báo cáo</span>
+                            {checkingPermission ? (
+                                <i className="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                            ) : (
+                                <i className="fa-solid fa-file-lines" aria-hidden="true"></i>
+                            )}
+                            <span> {checkingPermission ? 'Đang kiểm tra...' : 'Báo cáo'}</span>
                         </button>
                         <button
                             className="btn-save"

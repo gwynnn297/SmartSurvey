@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { surveyService } from '../services/surveyService';
 import { responseService } from '../services/responseService';
 import { questionService } from '../services/questionSurvey';
+import { teamManagementService } from '../services/teamManagementService';
+import { dashboardReportService } from '../services/dashboardReportService';
 import ShareSurveyPage from "../pages/Survey/ShareSurveyPage";
 import NotificationModal from './NotificationModal';
 import CloseSurvey from './CloseSurvey';
@@ -21,6 +23,10 @@ const ListSurvey = () => {
     const [isCloseSurveyModalOpen, setIsCloseSurveyModalOpen] = useState(false);
     const [surveyToClose, setSurveyToClose] = useState(null);
     const [isClosingSurvey, setIsClosingSurvey] = useState(false);
+
+    // Cache quyền đã kiểm tra để không gọi API lặp
+    const [surveyPermissionsCache, setSurveyPermissionsCache] = useState({});
+    const [checkingPermission, setCheckingPermission] = useState(null);
 
     // Hàm helper để hiển thị notification
     const showNotification = (type, message) => {
@@ -367,11 +373,47 @@ const ListSurvey = () => {
                                     </div>
                                 </div>
                                 <div className="survey-right">
+                                    {/* Báo cáo: kiểm tra quyền thực sự qua API trước khi vào */}
                                     <button
                                         className="action-btn"
-                                        onClick={(e) => {
+                                        disabled={checkingPermission === (s.id || s._id)}
+                                        title="Báo cáo"
+                                        onClick={async (e) => {
                                             e.stopPropagation();
                                             const surveyId = s.id || s._id;
+
+                                            let hasPermission = surveyPermissionsCache[surveyId];
+
+                                            if (hasPermission === undefined) {
+                                                try {
+                                                    setCheckingPermission(surveyId);
+                                                    
+                                                    // Gọi API overview để mượn logic phân quyền của backend (StatisticsService)
+                                                    // Backend sẽ ném lỗi 403 nếu user (không phải OWNER, không phải ANALYST) cố truy cập
+                                                    await dashboardReportService.getSurveyOverview(surveyId);
+                                                    
+                                                    hasPermission = true;
+                                                    setSurveyPermissionsCache(prev => ({ ...prev, [surveyId]: true }));
+                                                } catch (err) {
+                                                    // Nếu backend ném lỗi 403 Forbidden -> Không có quyền
+                                                    if (err.response?.status === 403) {
+                                                        hasPermission = false;
+                                                        setSurveyPermissionsCache(prev => ({ ...prev, [surveyId]: false }));
+                                                    } else {
+                                                        // Nếu lỗi khác (server down, etc.), cứ cho qua để trang report tự hiển thị lỗi
+                                                        hasPermission = true; 
+                                                    }
+                                                } finally {
+                                                    setCheckingPermission(null);
+                                                }
+                                            }
+
+                                            // Chặn nếu không đủ quyền
+                                            if (hasPermission === false) {
+                                                showNotification('error', 'Bạn không có quyền xem báo cáo. Chỉ OWNER và ANALYST mới có quyền.');
+                                                return;
+                                            }
+
                                             navigate('/report', {
                                                 state: {
                                                     surveyId: surveyId,
@@ -383,9 +425,11 @@ const ListSurvey = () => {
                                                 }
                                             });
                                         }}
-                                        title="Báo cáo"
                                     >
-                                        <i className="fa-solid fa-chart-simple"></i>
+                                        {checkingPermission === (s.id || s._id)
+                                            ? <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: 14 }}></i>
+                                            : <i className="fa-solid fa-chart-simple"></i>
+                                        }
                                     </button>
                                     <button
                                         className="action-btn"

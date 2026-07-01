@@ -717,7 +717,9 @@
 
 /* Icon check cho list */
 .create-option ul li::before {
-    content: "✓";
+    content: "\f00c";
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
     position: absolute;
     left: 0;
     top: 0;

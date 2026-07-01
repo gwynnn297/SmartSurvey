@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import MainLayout from "../../layouts/MainLayout";
 import ToolbarResult from "../../components/ToolbarResult";
 import AIChat, { AIChatButton } from "../../components/AIChat";
@@ -7,6 +7,9 @@ import "./SentimentPage.css";
 import { aiAnalysisService } from "../../services/aiAnalysisService";
 import { responseService } from "../../services/responseService";
 import { statisticsService } from "../../services/statisticsService";
+import { surveyService } from "../../services/surveyService";
+import { dashboardReportService } from "../../services/dashboardReportService";
+import { teamManagementService } from "../../services/teamManagementService";
 import MultipleChoiceChart from "../../components/Results/MultipleChoiceChart";
 import RatingChart from "../../components/Results/RatingChart";
 import BooleanChart from "../../components/Results/BooleanChart";
@@ -23,10 +26,12 @@ import { normalizeAiText, normalizeAiTextArray } from "../../utils/normalizeAiTe
 
 const SentimentPage = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [showAIChat, setShowAIChat] = useState(false);
   // Guards to prevent duplicate API calls (StrictMode and concurrent clicks)
   const isFetchingRef = useRef(false);
   const hasLoadedRef = useRef(false);
+  const hasCheckedPermRef = useRef(false);
 
   // State cho dữ liệu sentiment
   const [sentimentData, setSentimentData] = useState(null);
@@ -339,6 +344,26 @@ const SentimentPage = () => {
       isFetchingChartsRef.current = false;
     }
   };
+
+  // Kiểm tra quyền xem trang phân tích (Chỉ OWNER và ANALYST)
+  useEffect(() => {
+    if (hasCheckedPermRef.current) return;
+    hasCheckedPermRef.current = true;
+    const surveyIdCheck = location.state?.surveyId;
+    if (!surveyIdCheck) return;
+    const checkPermission = async () => {
+      try {
+        await dashboardReportService.getSurveyOverview(surveyIdCheck);
+      } catch (err) {
+        if (err.response?.status === 403) {
+          alert('Bạn không có quyền xem phân tích. Chỉ OWNER và ANALYST mới có quyền.');
+          navigate('/dashboard');
+        }
+      }
+    };
+    checkPermission();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Tự động tải dữ liệu khi component mount (chặn StrictMode gọi 2 lần)
   useEffect(() => {
@@ -663,7 +688,7 @@ const SentimentPage = () => {
                 </div>
 
                 <div className="ai-insight">
-                  <strong>🤖 Nhận xét AI</strong>
+                  <strong><i className="fa-solid fa-robot"></i> Nhận xét AI</strong>
                   <p>
                     {stats.total > 0 ? (
                       <>
@@ -681,10 +706,10 @@ const SentimentPage = () => {
         </div>
 
         <section className="ai-analysis">
-          <h2>🤖 Phân tích AI</h2>
+          <h2><i className="fa-solid fa-robot"></i> Phân tích AI</h2>
 
           <div className="ai-content">
-            <h3>🧠 Tóm tắt ý chính</h3>
+            <h3><i className="fa-solid fa-brain"></i> Tóm tắt ý chính</h3>
             {summaryLoading ? (
               <div className="loading-summary">
                 <p>Đang tải tóm tắt...</p>
@@ -769,7 +794,7 @@ const SentimentPage = () => {
         </section>
         {/* Phần thống kê biểu đồ các câu hỏi */}
         <section className="survey-charts-section">
-          <h2>📊 Thống kê các câu hỏi</h2>
+          <h2><i className="fa-solid fa-chart-bar"></i> Thống kê các câu hỏi</h2>
 
           {chartsLoading ? (
             <div className="loading-charts">

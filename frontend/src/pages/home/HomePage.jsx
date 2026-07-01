@@ -49,15 +49,15 @@ const HomePage = () => {
 
                     <div className="hero-features">
                         <div className="hero-feature">
-                            <span className="feature-icon">✓</span>
+                            <span className="feature-icon"><i className="fa-solid fa-check"></i></span>
                             <span>Miễn phí vĩnh viễn</span>
                         </div>
                         <div className="hero-feature">
-                            <span className="feature-icon">✓</span>
+                            <span className="feature-icon"><i className="fa-solid fa-check"></i></span>
                             <span>Không cần thẻ tín dụng</span>
                         </div>
                         <div className="hero-feature">
-                            <span className="feature-icon">✓</span>
+                            <span className="feature-icon"><i className="fa-solid fa-check"></i></span>
                             <span>Hỗ trợ 24/7</span>
                         </div>
                     </div>

@@ -37,36 +37,42 @@ const HeaderComponent = ({ showUserInfo = false, username, surveyId = null, surv
 
     const handleReportClick = async () => {
         if (surveyId) {
-            // Nếu có surveyTitle từ props, sử dụng luôn
-            if (surveyTitle) {
+            try {
+                const { surveyService } = await import('../services/surveyService');
+                const { dashboardReportService } = await import('../services/dashboardReportService');
+
+                let hasPermission = false;
+                
+                try {
+                    // Gọi API overview để mượn logic phân quyền của backend (StatisticsService)
+                    await dashboardReportService.getSurveyOverview(surveyId);
+                    hasPermission = true;
+                } catch (err) {
+                    if (err.response?.status === 403) {
+                        hasPermission = false;
+                    } else {
+                        hasPermission = true;
+                    }
+                }
+
+                // Chặn nếu không đủ quyền
+                if (hasPermission === false) {
+                    alert('Bạn không có quyền xem báo cáo. Chỉ OWNER và ANALYST mới có quyền.');
+                    return;
+                }
+
+                const survey = await surveyService.getSurveyById(surveyId);
+
                 navigate('/report', {
                     state: {
                         surveyId: surveyId,
-                        surveyTitle: surveyTitle,
-                        surveyDescription: surveyDescription || ''
+                        surveyTitle: survey?.title || surveyTitle || 'Khảo sát',
+                        surveyDescription: survey?.description || surveyDescription || ''
                     }
                 });
-            } else {
-                // Nếu không có, thử load từ API
-                try {
-                    const { surveyService } = await import('../services/surveyService');
-                    const survey = await surveyService.getSurveyById(surveyId);
-                    navigate('/report', {
-                        state: {
-                            surveyId: surveyId,
-                            surveyTitle: survey.title || 'Khảo sát',
-                            surveyDescription: survey.description || ''
-                        }
-                    });
-                } catch (error) {
-                    console.error('Error loading survey info:', error);
-                    // Fallback: chỉ truyền surveyId
-                    navigate('/report', {
-                        state: {
-                            surveyId: surveyId
-                        }
-                    });
-                }
+            } catch (error) {
+                console.error('Lỗi khi kiểm tra quyền truy cập báo cáo:', error);
+                alert('Có lỗi xảy ra khi kiểm tra quyền truy cập báo cáo.');
             }
         }
     };

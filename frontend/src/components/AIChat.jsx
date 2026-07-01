@@ -513,7 +513,7 @@ const AIChat = ({ surveyId, surveyTitle, surveyDescription, onClose, isOpen: ext
                         </button>
                     </div>
                     <div className="ai-chat-title">
-                        <span className="ai-chat-logo">🤖</span>
+                        <span className="ai-chat-logo"><i className="fa-solid fa-robot"></i></span>
                         <span>AI Assistant</span>
                     </div>
                     <div className="ai-chat-header-actions">

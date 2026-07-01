@@ -770,7 +770,7 @@ export default function CreateAI() {
             if (errorMessage.includes('Không thể tạo khảo sát') ||
                 errorMessage.includes('prompt khác') ||
                 errorMessage.includes('Vui lòng thử lại với prompt khác')) {
-                errorMessage += '\n\n💡 Gợi ý cải thiện prompt:\n' +
+                errorMessage += '\n\nGợi ý cải thiện prompt:\n' +
                     '• Mô tả rõ mục đích khảo sát\n' +
                     '• Xác định đối tượng khảo sát\n' +
                     '• Nêu chi tiết nội dung cần khảo sát\n\n' +
@@ -895,7 +895,7 @@ export default function CreateAI() {
         setShowAIPreviewModal(false);
         setAiGeneratedQuestions([]);
         setAiPreviewData(null);
-        showNotification('info', '💡 Hãy thử điều chỉnh prompt hoặc thay đổi các thiết lập để có kết quả tốt hơn.');
+        showNotification('info', 'Hãy thử điều chỉnh prompt hoặc thay đổi các thiết lập để có kết quả tốt hơn.');
     };
 
     // Question handling functions
@@ -2330,7 +2330,7 @@ export default function CreateAI() {
                     <div className="ai-processing-content">
                         {/* Header with AI icon and title */}
                         <div className="ai-processing-header">
-                            <div className="ai-icon">💡</div>
+                            <div className="ai-icon"><i className="fa-solid fa-lightbulb"></i></div>
                             <h2>AI đang phân tích và tạo câu hỏi</h2>
                             <p>Đang tạo câu hỏi phù hợp</p>
                         </div>
@@ -2422,7 +2422,7 @@ export default function CreateAI() {
                                 >
                                     <div className="refresh-type-label">{type.label}</div>
                                     {selectedRefreshType === type.value && (
-                                        <div className="refresh-type-check">✓</div>
+                                        <div className="refresh-type-check"><i className="fa-solid fa-check"></i></div>
                                     )}
                                 </button>
                             ))}
@@ -2464,7 +2464,7 @@ export default function CreateAI() {
                     <div className="ai-preview-modal-container">
                         <div className="ai-preview-modal-header">
                             <div className="ai-preview-header-content">
-                                <div className="ai-preview-icon">✨</div>
+                                <div className="ai-preview-icon"><i className="fa-solid fa-wand-magic-sparkles"></i></div>
                                 <div>
                                     <h2>Xem trước khảo sát AI đã tạo</h2>
                                     <p>Kiểm tra các câu hỏi AI đã tạo. Bạn có thể chấp nhận để chỉnh sửa hoặc tạo lại với prompt khác.</p>

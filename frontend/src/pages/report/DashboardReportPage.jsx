@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import MainLayout from '../../layouts/MainLayout';
 import { dashboardReportService } from '../../services/dashboardReportService';
 import { surveyService } from '../../services/surveyService';
+import { teamManagementService } from '../../services/teamManagementService';
 import ToolbarResult from '../../components/ToolbarResult';
 import AIChat, { AIChatButton } from '../../components/AIChat';
 
@@ -107,6 +108,25 @@ export default function DashboardReportPage() {
         };
         return stats;
     }, [questions, questionsCount]);
+
+    // Kiểm tra quyền xem báo cáo của người dùng hiện tại (Chỉ OWNER và ANALYST)
+    useEffect(() => {
+        const checkPermission = async () => {
+            if (!surveyId) return;
+            try {
+                // Gọi API overview để mượn logic phân quyền của backend (StatisticsService)
+                // Backend sẽ ném lỗi 403 nếu user cố truy cập mà không phải OWNER/ANALYST
+                await dashboardReportService.getSurveyOverview(surveyId);
+            } catch (err) {
+                if (err.response?.status === 403) {
+                    alert('Bạn không có quyền xem báo cáo. Chỉ OWNER và ANALYST mới có quyền.');
+                    navigate('/dashboard');
+                }
+            }
+        };
+
+        checkPermission();
+    }, [surveyId, navigate]);
 
     // Effect để load survey info nếu chưa có
     useEffect(() => {
@@ -681,13 +701,13 @@ export default function DashboardReportPage() {
                     {/* <button className="btn blue" onClick={() => navigate('/report/details-statistic', {
                         state: surveyId ? { surveyId, surveyTitle, surveyDescription } : undefined
                     })}>
-                        <span className="btn-icon" aria-hidden="true">📊</span>
+                        <span className="btn-icon" aria-hidden="true"><i className="fa-solid fa-chart-bar"></i></span>
                         Xem thống kê chi tiết
                     </button>
                     <button className="btn green" onClick={() => navigate('/report/individual-responses', {
                         state: surveyId ? { surveyId, surveyTitle, surveyDescription } : undefined
                     })}>
-                        <span className="btn-icon" aria-hidden="true">🧠</span>
+                        <span className="btn-icon" aria-hidden="true"><i className="fa-solid fa-brain"></i></span>
                         Danh sách phản hồi
                     </button>
                     <button className="btn teal" onClick={() => navigate('/report/sentiment', {

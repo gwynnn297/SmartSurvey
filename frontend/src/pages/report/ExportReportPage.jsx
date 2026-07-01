@@ -4,6 +4,7 @@ import MainLayout from "../../layouts/MainLayout";
 import { exportReportService } from "../../services/exportReportService";
 import { surveyService } from "../../services/surveyService";
 import { dashboardReportService } from "../../services/dashboardReportService";
+import { teamManagementService } from "../../services/teamManagementService";
 import AIChat, { AIChatButton } from "../../components/AIChat";
 import "./ExportReportPage.css";
 
@@ -28,6 +29,23 @@ const ExportReportPage = () => {
         completionRate: 0,
         loading: true
     });
+
+    // Kiểm tra quyền xem trang xuất báo cáo (Chỉ OWNER và ANALYST)
+    useEffect(() => {
+        const checkPermission = async () => {
+            if (!surveyId) return;
+            try {
+                // Gọi API overview để mượn logic phân quyền của backend (StatisticsService)
+                await dashboardReportService.getSurveyOverview(surveyId);
+            } catch (err) {
+                if (err.response?.status === 403) {
+                    alert('Bạn không có quyền xuất báo cáo. Chỉ OWNER và ANALYST mới có quyền.');
+                    navigate('/dashboard');
+                }
+            }
+        };
+        checkPermission();
+    }, [surveyId, navigate]);
 
     // Load survey info và lịch sử xuất khi có surveyId
     useEffect(() => {
@@ -140,7 +158,7 @@ const ExportReportPage = () => {
             description: "Báo cáo tổng hợp với biểu đồ và thống kê",
             details: ["Báo cáo chuyên nghiệp", "Kèm biểu đồ trực quan", "Dễ chia sẻ và in ấn"],
             color: "#fef3c7",
-            icon: <div style={{ fontSize: '48px', color: '#d97706' }}>📄</div>,
+            icon: <i className="fa-solid fa-file-pdf" style={{ fontSize: '48px', color: '#d97706' }}></i>,
         },
         {
             id: "excel",
@@ -148,7 +166,7 @@ const ExportReportPage = () => {
             description: "Dữ liệu chi tiết, phù hợp phân tích nâng cao",
             details: ["Có thể chỉnh sửa", "Hỗ trợ xuất biểu mẫu", "Phân tích tiện lợi"],
             color: "#dcfce7",
-            icon: <div style={{ fontSize: '48px', color: '#16a34a' }}>📊</div>,
+            icon: <i className="fa-solid fa-file-excel" style={{ fontSize: '48px', color: '#16a34a' }}></i>,
         },
         {
             id: "csv",
@@ -156,7 +174,7 @@ const ExportReportPage = () => {
             description: "Dữ liệu thô, tương thích mọi phần mềm",
             details: ["Dạng bảng mở rộng", "Dễ tích hợp hệ thống", "Dùng import/export"],
             color: "#dbeafe",
-            icon: <div style={{ fontSize: '48px', color: '#2563eb' }}>📈</div>,
+            icon: <i className="fa-solid fa-chart-line" style={{ fontSize: '48px', color: '#2563eb' }}></i>,
         },
     ];
 
@@ -178,11 +196,11 @@ const ExportReportPage = () => {
     // Lấy icon và tên format
     const getFormatDisplay = (format) => {
         const formatMap = {
-            'pdf': { icon: '📄', name: 'Báo cáo PDF' },
-            'excel': { icon: '📊', name: 'Dữ liệu Excel' },
-            'csv': { icon: '🧾', name: 'Raw Data CSV' }
+            'pdf': { icon: <i className="fa-solid fa-file-pdf"></i>, name: 'Báo cáo PDF' },
+            'excel': { icon: <i className="fa-solid fa-file-excel"></i>, name: 'Dữ liệu Excel' },
+            'csv': { icon: <i className="fa-solid fa-file-csv"></i>, name: 'Raw Data CSV' }
         };
-        return formatMap[format] || { icon: '📄', name: `Báo cáo ${format.toUpperCase()}` };
+        return formatMap[format] || { icon: <i className="fa-solid fa-file"></i>, name: `Báo cáo ${format.toUpperCase()}` };
     };
 
     // Xử lý xuất báo cáo
@@ -388,7 +406,7 @@ const ExportReportPage = () => {
                 </div>
 
                 {/* CHỌN ĐỊNH DẠNG */}
-                <h2 className="section-title">📦 Chọn định dạng xuất báo cáo</h2>
+                <h2 className="section-title"><i className="fa-solid fa-box" style={{ marginRight: '8px' }}></i> Chọn định dạng xuất báo cáo</h2>
                 <div className="format-grid">
                     {formats.map((f) => (
                         <div
@@ -403,7 +421,7 @@ const ExportReportPage = () => {
                             <ul>
                                 {f.details.map((d, i) => (
                                     <li key={i}>
-                                        <span style={{ marginRight: '8px' }}>✓</span> {d}
+                                        <span style={{ marginRight: '8px' }}><i className="fa-solid fa-check"></i></span> {d}
                                     </li>
                                 ))}
                             </ul>
@@ -435,7 +453,7 @@ const ExportReportPage = () => {
                                                     fontSize: '13px',
                                                     color: '#6b7280'
                                                 }}>
-                                                    👁️ {previewStats.totalViews} lượt xem
+                                                    <i className="fa-solid fa-eye" style={{ marginRight: '4px' }}></i> {previewStats.totalViews} lượt xem
                                                 </div>
                                             )}
                                             {previewStats.completionRate > 0 && (
@@ -445,7 +463,7 @@ const ExportReportPage = () => {
                                                     color: '#16a34a',
                                                     fontWeight: 500
                                                 }}>
-                                                    ✓ Tỷ lệ hoàn thành: {previewStats.completionRate.toFixed(1)}%
+                                                    <i className="fa-solid fa-check" style={{ marginRight: '4px' }}></i> Tỷ lệ hoàn thành: {previewStats.completionRate.toFixed(1)}%
                                                 </div>
                                             )}
                                         </>
@@ -472,7 +490,7 @@ const ExportReportPage = () => {
                                             fontSize: '13px',
                                             color: '#92400e'
                                         }}>
-                                            📄 Báo cáo PDF bao gồm biểu đồ và thống kê tổng hợp
+                                            <i className="fa-solid fa-file-pdf" style={{ marginRight: '6px' }}></i> Báo cáo PDF bao gồm biểu đồ và thống kê tổng hợp
                                         </div>
                                     )}
                                 </div>
@@ -486,7 +504,7 @@ const ExportReportPage = () => {
                                         fontSize: '13px',
                                         color: '#0369a1'
                                     }}>
-                                        📊 Báo cáo sẽ chứa {previewStats.totalResponses} phản hồi
+                                        <i className="fa-solid fa-chart-bar" style={{ marginRight: '8px' }}></i> Báo cáo sẽ chứa {previewStats.totalResponses} phản hồi
                                         {selectedFormat === 'pdf'
                                             ? ' với biểu đồ và thống kê tổng hợp'
                                             : (includeAnswers ? ' với câu trả lời chi tiết' : '')}
@@ -556,7 +574,7 @@ const ExportReportPage = () => {
 
                 {/* TẢI XUỐNG */}
                 <div className="export-footer">
-                    <h3>🚀 Sẵn sàng xuất báo cáo</h3>
+                    <h3><i className="fa-solid fa-rocket" style={{ marginRight: '8px' }}></i> Sẵn sàng xuất báo cáo</h3>
                     <p>{selectedFormat ? `Đã chọn định dạng: ${formats.find(f => f.id === selectedFormat)?.title}` : 'Vui lòng chọn định dạng báo cáo ở trên'}</p>
                     <button
                         className="btn-download"
