@@ -1,0 +1,110 @@
+# render.yaml — Render Blueprint
+# Deploy tất cả services SmartSurvey chỉ với 1 click
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  # ────────────────────────────────────────────
+  # 1. BACKEND — Spring Boot
+  # ────────────────────────────────────────────
+  - type: web
+    name: smartsurvey-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: MYSQL_HOST
+        sync: false          # Điền thủ công trên Render dashboard
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false          # Điền sau khi có Vercel URL
+      - key: AI_SENTIMENT_URL
+        sync: false          # URL của smartsurvey-ai-service bên dưới
+      - key: AI_SURVEY_GENERATOR_URL
+        sync: false          # URL của smartsurvey-survey-generator bên dưới
+      - key: AI_SERVICE_URL
+        sync: false
+
+  # ────────────────────────────────────────────
+  # 2. AI SENTIMENT SERVICE — Python FastAPI
+  # ────────────────────────────────────────────
+  - type: web
+    name: smartsurvey-ai-service
+    runtime: docker
+    dockerfilePath: ./AI/ai-service/Dockerfile
+    dockerContext: ./AI/ai-service
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false          # mysql+pymysql://user:pass@host:3306/smartsurvey
+      - key: EXT_SENTI_KEY
+        sync: false          # Gemini API Key
+      - key: EXT_SUMM_URL
+        value: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
+      - key: EXT_SENTI_URL
+        value: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
+      - key: EXT_EMB_KEY
+        sync: false          # Gemini API Key
+      - key: EXT_EMB_URL
+        value: https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent
+      - key: EXT_EMB_MODEL
+        value: gemini-embedding-2
+      - key: EXT_EMB_DIM
+        value: "768"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_CHAT_MODEL
+        value: gpt-4o-mini
+      - key: CHROMA_DB_PATH
+        value: /app/chroma_db
+      - key: CHROMA_COLLECTION
+        value: survey_answers
+      - key: NEUTRAL_THRESHOLD
+        value: "0.6"
+      - key: WRITE_INFERENCES
+        value: "1"
+      - key: USE_KNN_CACHE
+        value: "1"
+      - key: FORCE_EXTERNAL_SENTI
+        value: "1"
+      - key: SENTI_BATCH_SIZE
+        value: "50"
+      - key: RUN_AUTO_INGEST
+        value: "1"
+      - key: AUTO_INGEST_INTERVAL_SEC
+        value: "600"
+      - key: RAG_TOP_K
+        value: "5"
+      - key: FRONTEND_URL
+        sync: false
+
+  # ────────────────────────────────────────────
+  # 3. SURVEY GENERATOR — Python FastAPI
+  # ────────────────────────────────────────────
+  - type: web
+    name: smartsurvey-survey-generator
+    runtime: docker
+    dockerfilePath: ./AI/services/survey-generator/Dockerfile
+    dockerContext: ./AI/services/survey-generator
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: FRONTEND_URL
+        sync: false
+      - key: AI_PROVIDER
+        value: gemini
+      - key: SURVEY_AI_WORKERS
+        value: "2"
+      - key: SURVEY_AI_SINGLE_TIMEOUT
+        value: "18"

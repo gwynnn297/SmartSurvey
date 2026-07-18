@@ -2,8 +2,8 @@ import axios from "axios";
 
 // Tạo axios instance với base config
 const apiClient = axios.create({
-  baseURL: 'http://localhost:8080',
-  timeout: 10000,
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080',
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   }

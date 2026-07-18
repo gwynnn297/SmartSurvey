@@ -1,0 +1,12 @@
+.venv
+__pycache__
+*.pyc
+*.pkl
+*.db
+chroma_db
+.env
+.git
+reports
+*.md
+.vscode
+dev.csv

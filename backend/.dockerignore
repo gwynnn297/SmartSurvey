@@ -1,0 +1,8 @@
+.gradle
+build
+.git
+*.md
+.vscode
+application-local.properties
+uploads/*
+!uploads/.gitkeep

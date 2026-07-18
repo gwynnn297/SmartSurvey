@@ -91,7 +91,7 @@ def parallel_generate_exact_n(client, req: SurveyGenerationRequest) -> list[dict
     seen = set()
     
     # 🔥 SAFETY LIMITS
-    MIN_ACCEPTABLE = max(3, int(N * 0.6))  # Tối thiểu 60% số câu hoặc 3 câu
+    MIN_ACCEPTABLE = min(N, max(3, int(N * 0.6)))  # Tối thiểu 60% số câu hoặc 3 câu (không vượt quá N)
     MAX_RETRIES_PER_QUESTION = 1  # Chỉ retry 1 lần/câu
     QUOTA_ERRORS = 0  # Track số lần gặp 429
     MAX_QUOTA_ERRORS = 3  # Dừng sau 3 lần 429
@@ -648,9 +648,14 @@ def _normalize_type(t: str) -> str:
     return t or "open_ended"
 
 # Add CORS middleware
+_frontend_url = os.getenv("FRONTEND_URL", "")
+_allowed_origins = ["http://localhost:5173", "http://localhost:8080", "http://localhost:3000"]
+if _frontend_url:
+    _allowed_origins.append(_frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:8080"],  # URL Frontend
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -876,7 +881,7 @@ def generate_survey(request: SurveyGenerationRequest):
             # Không pad thêm câu rác, chỉ trả về số có được
         
         # 5c) Nếu quá ít câu (< 50% yêu cầu), trả lỗi thay vì trả câu rác
-        if len(topN) < max(3, N // 2):
+        if len(topN) < min(N, max(3, N // 2)):
             logger.error(f"❌ Chỉ sinh được {len(topN)}/{N} câu ({len(topN)*100//N}%), quá thấp!")
             return SurveyGenerationResponse(
                 success=False,
