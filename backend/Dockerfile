@@ -34,4 +34,4 @@ RUN mkdir -p /app/uploads
 EXPOSE 8080
 
 # JVM tuning cho container 512MB RAM trên Render
-ENTRYPOINT ["sh", "-c", "java -Xmx150m -Xms150m -XX:MaxMetaspaceSize=100m -XX:+UseSerialGC -Xss256k -XX:CICompilerCount=2 -Dserver.port=${PORT:-8080} -jar app.jar"]
+ENTRYPOINT ["sh", "-c", "java -Xmx300m -Xms300m -XX:MaxMetaspaceSize=128m -XX:+UseSerialGC -Xss256k -XX:CICompilerCount=2 -Dserver.port=${PORT:-8080} -jar app.jar"]
