@@ -65,11 +65,13 @@ public class SecurityConfig {
         if (frontendUrl != null && !frontendUrl.isBlank()) {
             configuration.setAllowedOriginPatterns(Arrays.asList(
                 frontendUrl,
+                "https://*.vercel.app",
                 "http://localhost:3000",
                 "http://localhost:5173"
             ));
         } else {
             configuration.setAllowedOriginPatterns(Arrays.asList(
+                "https://*.vercel.app",
                 "http://localhost:3000",
                 "http://localhost:5173"
             ));
